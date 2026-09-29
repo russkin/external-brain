@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v9';
+  var APP_VERSION = 'v10';
   var INDENT_STEP = 28;
   var L = window.EBLogic;
   var state = null;
@@ -305,16 +305,25 @@
     if (indent) div.style.marginLeft = (indent * INDENT_STEP) + 'px';
     var grip = makeGrip();
     div.appendChild(grip);
-    var inp = document.createElement('input');
+    var inp = document.createElement('textarea');
     inp.className = 'tinput';
     inp.value = value || '';
+    inp.rows = 1;
     inp.placeholder = 'Новая задача…';
     inp.autocomplete = 'off';
     inp.setAttribute('aria-label', 'Задача');
     div.appendChild(inp);
+    autosize(inp);
     wireLineInput(div, inp, taskId, isTrailing, indent);
     wireLineDrag(div, grip, inp);
     return div;
+  }
+
+  /* Многострочность: поле растёт за текстом, переносы сохраняются в задачу. */
+  function autosize(ta) {
+    if (!ta || !ta.style) return;
+    ta.style.height = 'auto';
+    try { ta.style.height = ta.scrollHeight + 'px'; } catch (x) {}
   }
 
   function commitLine(taskId, value, isTrailing, indent) {
@@ -341,6 +350,7 @@
   function wireLineInput(div, inp, taskId, isTrailing, indent) {
     var saveTimer = null;
     inp.addEventListener('input', function () {
+      autosize(inp);
       if (isTrailing || !taskId) return;
       if (saveTimer) clearTimeout(saveTimer);
       saveTimer = setTimeout(function () {
@@ -359,7 +369,7 @@
       else renderStatus();
     });
     inp.addEventListener('keydown', function (e) {
-      if (e.key !== 'Enter') return;
+      if (e.key !== 'Enter' || e.shiftKey) return;
       e.preventDefault();
       if (isTrailing) {
         var created = commitLine(null, inp.value, true, indent);
@@ -413,7 +423,7 @@
    * Направление определяется первым движением: горизонталь (|dx|>|dy|*2). */
   function wireLineDrag(div, grip, inp) {
     var pid = null, grabDy = 0, x0 = 0, y0 = 0, mode = null, lastDx = 0;
-    var order = null, shift = {}, ghost = null;
+    var order = null, shift = {}, ghost = null, kids = [];
     var indentCur = 0, indentMax = 0;
     function rowsOf(box) {
       return Array.prototype.slice.call(box.querySelectorAll('.tline'));
@@ -458,6 +468,23 @@
       var h = rect ? rect.height : div.offsetHeight || 56;
       grabDy = rect ? (e.clientY - rect.top) : h / 2;
       order = rowsOf(box);
+      /* Дети (вложенные с большим отступом) прячутся под родителя на время drag. */
+      kids = [];
+      var mine0 = myTask();
+      if (mine0) {
+        var lv0 = lineIndent(mine0);
+        var started = false;
+        for (var k = 0; k < order.length; k++) {
+          if (order[k] === div) { started = true; continue; }
+          if (!started) continue;
+          var kidId = order[k].getAttribute ? order[k].getAttribute('data-id') : null;
+          var kt = kidId ? L.getTask(state.tasks, kidId) : null;
+          if (kt && lineIndent(kt) > lv0) {
+            kids.push(order[k]);
+            order[k].style.display = 'none';
+          } else break;
+        }
+      }
       /* Призрак едет, оригинал держит место — список не прыгает на захвате. */
       ghost = div.cloneNode(true);
       ghost.removeAttribute('data-id');
@@ -470,7 +497,13 @@
       ghost.style.margin = '0';
       ghost.style.pointerEvents = 'none';
       var gInp = ghost.querySelector ? ghost.querySelector('.tinput') : null;
-      if (gInp) { gInp.setAttribute('readonly', 'readonly'); gInp.tabIndex = -1; }
+      if (gInp) {
+        /* cloneNode не копирует введённый текст textarea — переносим вручную. */
+        gInp.value = inp.value;
+        if (inp.offsetHeight) gInp.style.height = inp.offsetHeight + 'px';
+        gInp.setAttribute('readonly', 'readonly');
+        gInp.tabIndex = -1;
+      }
       document.body.appendChild(ghost);
       div.style.visibility = 'hidden';
       box.classList.add('drag-active');
@@ -485,6 +518,7 @@
       y0 = e.clientY;
       lastDx = 0;
       mode = null;
+      kids = [];
       try { grip.setPointerCapture(pid); } catch (x) {}
       if (e.cancelable) e.preventDefault();
     });
@@ -521,7 +555,7 @@
       var idx = order.indexOf(div);
       for (var i = 0; i < order.length; i++) {
         var row = order[i];
-        if (row === div || !row.parentNode) continue;
+        if (row === div || !row.parentNode || row.style.display === 'none') continue;
         var r = row.getBoundingClientRect();
         var off = 0;
         if (i > idx) {
@@ -589,14 +623,21 @@
       if (box && order) {
         for (var i = 0; i < order.length; i++) {
           var row = order[i];
-          if (row === div || !row.parentNode) continue;
+          if (row === div || !row.parentNode || row.style.display === 'none') continue;
           var r = row.getBoundingClientRect();
           var rest = r.top - (shift[i] || 0);
           if (rest + r.height / 2 < cy) below.push(row);
         }
-        /* Переставляем строку в потоке на итоговое место. */
-        if (below.length) box.insertBefore(div, below[below.length - 1].nextSibling);
-        else box.insertBefore(div, box.firstChild);
+        /* Родитель едет вместе с детьми: весь блок встаёт на итоговое место,
+         * дети снова принимают прежний вид вложений. */
+        var anchor = below.length ? below[below.length - 1].nextSibling : box.firstChild;
+        box.insertBefore(div, anchor);
+        var ref = div.nextSibling;
+        for (var m = kids.length - 1; m >= 0; m--) {
+          kids[m].style.display = '';
+          box.insertBefore(kids[m], ref);
+          ref = kids[m];
+        }
       }
       div.classList.remove('dragging');
       /* Мягкая посадка: все доезжают 200мс, затем сохраняем и рисуем. */
@@ -627,6 +668,7 @@
       }
       order = null;
       shift = {};
+      kids = [];
       setTimeout(function () {
         div.style.transition = '';
         div.style.transform = '';
@@ -650,6 +692,9 @@
     /* Хвостовая пустая строка наследует отступ последней — группы растут сами. */
     var tail = tasks.length ? lineIndent(tasks[tasks.length - 1]) : 0;
     box.appendChild(makeLine(null, '', true, tail));
+    /* Раскрыть многострочные по содержимому (в потоке, после вставки). */
+    var areas = box.querySelectorAll ? box.querySelectorAll('.tinput') : [];
+    for (var q = 0; q < areas.length; q++) autosize(areas[q]);
   }
 
   function focusTrailing() {

@@ -120,6 +120,17 @@ describe('логика вызывается с state.tasks', () => {
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
   });
+  it('перенос текста: многострочное поле', () => {
+    assert.ok(appSrc.includes('textarea'), 'нет textarea вместо input');
+    assert.ok(appSrc.includes('autosize'), 'поле не растёт за текстом');
+    assert.ok(appSrc.includes('shiftKey'), 'Shift+Enter не отделён от Enter');
+    assert.ok(html.includes('resize: none'), 'поле можно растягивать вручную');
+    assert.ok(html.includes('overflow-y'), 'нет скрытия скролла поля');
+  });
+  it('групповой drag: дети прячутся под родителя и едут с ним', () => {
+    assert.ok(appSrc.includes('kids'), 'дети не собираются при drag');
+    assert.ok(appSrc.includes('gInp.value'), 'призрак не копирует текст многострочного поля');
+  });
   it('перетаскивание: сосед едет под наездом сразу, без перескока', () => {
     assert.ok(appSrc.includes('pointerdown'), 'нет pointerdown на grip');
     assert.ok(appSrc.includes('pointermove'), 'нет pointermove для живого drag');
