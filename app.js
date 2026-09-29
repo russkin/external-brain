@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v6';
+  var APP_VERSION = 'v7';
   var L = window.EBLogic;
   var state = null;
   var syncStatus = '';
@@ -394,45 +394,15 @@
     save();
   }
 
-  /* Плавное перетаскивание за grip: строка вынимается из потока и едет
-   * под пальцем/мышью, а соседи медленно (FLIP-анимация 250мс) разъезжаются,
-   * освобождая место: placeholder показывает, куда строка встанет.
+  /* Плавное перетаскивание за grip: строка едет под пальцем/мышью, а сосед,
+   * на которого она начинает наезжать, тут же начинает двигаться под ней —
+   * отъезжает пропорционально глубине наезда (1:1 за пальцем, без перескока).
+   * Фиксация места — когда центр тянущейся проходит середину соседа.
    * Pointer Events едины для мыши и тача; ввод в поле не мешает. */
   function wireLineDrag(div, grip, inp) {
-    var pid = null, ph = null, grabDy = 0;
+    var pid = null, grabDy = 0, order = null, shift = {};
     function rowsOf(box) {
       return Array.prototype.slice.call(box.querySelectorAll('.tline'));
-    }
-    /* FLIP: соседи плавно доезжают на новые места вместо перескока. */
-    function flipRows(box, moving) {
-      var rows = rowsOf(box);
-      var first = {};
-      rows.forEach(function (row, i) {
-        if (row === moving) return;
-        try { first[i] = row.getBoundingClientRect().top; } catch (x) { first[i] = 0; }
-      });
-      return function play() {
-        rows.forEach(function (row, i) {
-          if (row === moving) return;
-          var oldTop = first[i];
-          if (oldTop == null) return;
-          var newTop = 0;
-          try { newTop = row.getBoundingClientRect().top; } catch (x) { return; }
-          var dy = oldTop - newTop;
-          if (!dy) return;
-          row.style.transition = 'none';
-          row.style.transform = 'translateY(' + dy + 'px)';
-          void row.offsetHeight;
-          row.style.transition = 'transform .25s ease';
-          row.style.transform = '';
-          (function (r) {
-            setTimeout(function () {
-              r.style.transition = '';
-              r.style.transform = '';
-            }, 280);
-          })(row);
-        });
-      };
     }
     grip.addEventListener('pointerdown', function (e) {
       if (pid != null) return;
@@ -440,15 +410,13 @@
       var box = el('lines');
       if (!box) return;
       pid = e.pointerId;
+      shift = {};
       try { grip.setPointerCapture(pid); } catch (x) {}
       var rect = null;
       try { rect = div.getBoundingClientRect(); } catch (x) { rect = null; }
       var h = rect ? rect.height : div.offsetHeight || 56;
       grabDy = rect ? (e.clientY - rect.top) : h / 2;
-      ph = document.createElement('div');
-      ph.className = 'phold';
-      ph.style.height = h + 'px';
-      box.insertBefore(ph, div.nextSibling);
+      order = rowsOf(box);
       div.classList.add('dragging');
       div.style.position = 'fixed';
       div.style.width = (rect ? rect.width : div.offsetWidth) + 'px';
@@ -458,23 +426,35 @@
       if (e.cancelable) e.preventDefault();
     });
     grip.addEventListener('pointermove', function (e) {
-      if (pid == null || e.pointerId !== pid || !ph) return;
+      if (pid == null || e.pointerId !== pid || !order) return;
       var box = el('lines');
       if (!box) return;
       div.style.top = (e.clientY - grabDy) + 'px';
-      /* Куда встанет строка: ищем поPlaceholder-соседям (без тянущейся). */
-      var rows = rowsOf(box);
-      var after = null;
-      for (var i = 0; i < rows.length; i++) {
-        if (rows[i] === div || rows[i] === ph) continue;
-        var r = rows[i].getBoundingClientRect();
-        if (e.clientY > r.top + r.height / 2) after = rows[i];
-      }
-      var target = after ? after.nextSibling : box.firstChild;
-      if (target !== ph && target !== ph.nextSibling) {
-        var play = flipRows(box, div);
-        box.insertBefore(ph, target);
-        play();
+      var d = null;
+      try { d = div.getBoundingClientRect(); } catch (x) { return; }
+      var idx = order.indexOf(div);
+      for (var i = 0; i < order.length; i++) {
+        var row = order[i];
+        if (row === div || !row.parentNode) continue;
+        var r = row.getBoundingClientRect();
+        var off = 0;
+        if (i > idx) {
+          /* Сосед снизу: низ тянущейся въехал в него — едет вверх под неё. */
+          var pen = d.bottom - r.top;
+          if (pen > 0) off = -Math.min(pen, r.height + 10);
+        } else {
+          /* Сосед сверху: верх тянущейся въехал в него — едет вниз под неё. */
+          var pen2 = r.bottom - d.top;
+          if (pen2 > 0) off = Math.min(pen2, r.height + 10);
+        }
+        shift[i] = off;
+        if (off) {
+          row.style.transition = 'none';
+          row.style.transform = 'translateY(' + off + 'px)';
+        } else {
+          row.style.transition = '';
+          row.style.transform = '';
+        }
       }
       /* Автопрокрутка у краёв экрана. */
       try {
@@ -488,20 +468,62 @@
       if (e && e.pointerId != null && e.pointerId !== pid) return;
       pid = null;
       var box = el('lines');
-      if (box && ph && ph.parentNode === box) {
-        box.insertBefore(div, ph);
-        ph.parentNode.removeChild(ph);
+      var firstDiv = null;
+      try { firstDiv = div.getBoundingClientRect(); } catch (x) { firstDiv = null; }
+      /* Итоговое место: сколько соседей (по их местам в покое) выше центра. */
+      var cy = firstDiv ? firstDiv.top + firstDiv.height / 2 : 0;
+      var below = [];
+      if (box && order) {
+        for (var i = 0; i < order.length; i++) {
+          var row = order[i];
+          if (row === div || !row.parentNode) continue;
+          var r = row.getBoundingClientRect();
+          var rest = r.top - (shift[i] || 0);
+          if (rest + r.height / 2 < cy) below.push(row);
+        }
+        /* Переставляем тянущуюся в поток на итоговое место. */
+        if (below.length) box.insertBefore(div, below[below.length - 1].nextSibling);
+        else box.insertBefore(div, box.firstChild);
       }
-      ph = null;
       div.style.position = '';
       div.style.top = '';
       div.style.left = '';
       div.style.width = '';
-      div.style.transform = '';
       div.classList.remove('dragging');
-      if (box) box.classList.remove('drag-active');
-      persistLineOrder();
-      render();
+      /* Мягкая посадка: все доезжают 200мс, затем сохраняем и рисуем. */
+      if (box && order) {
+        if (firstDiv) {
+          var newDiv = null;
+          try { newDiv = div.getBoundingClientRect(); } catch (x) { newDiv = null; }
+          if (newDiv) {
+            var dy = firstDiv.top - newDiv.top;
+            if (dy) {
+              div.style.transition = 'none';
+              div.style.transform = 'translateY(' + dy + 'px)';
+              void div.offsetHeight;
+              div.style.transition = 'transform .2s ease';
+              div.style.transform = '';
+            }
+          }
+        }
+        for (var j = 0; j < order.length; j++) {
+          var rw = order[j];
+          if (rw === div || !rw.parentNode) continue;
+          if (shift[j]) {
+            rw.style.transition = 'transform .2s ease';
+            rw.style.transform = '';
+          }
+        }
+        box.classList.remove('drag-active');
+      }
+      order = null;
+      shift = {};
+      setTimeout(function () {
+        div.style.transition = '';
+        div.style.transform = '';
+        persistLineOrder();
+        render();
+      }, 220);
     }
     grip.addEventListener('pointerup', finish);
     grip.addEventListener('pointercancel', finish);
