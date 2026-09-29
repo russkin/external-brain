@@ -2,9 +2,11 @@
  * Совместимость: ES2017 без optional chaining, работает в Node и в браузере.
  * Модель (джедайские техники, упрощённо):
  *   task = { id, title, status, project, frog, slicesTotal, slicesDone,
- *            createdAt, updatedAt, doneAt, ts, deleted }
+ *            indent, createdAt, updatedAt, doneAt, ts, deleted }
  *   status: 'inbox' (сбор) | 'next' (следующие действия) | 'waiting' (ожидание) |
  *           'someday' (когда-нибудь) | 'done' (готово)
+ *   indent: уровень отступа 0..8 — задача с отступом входит в группу задачи
+ *           без отступа (или с меньшим отступом) сверху.
  * Правила:
  *   - всё новое падает в инбокс (capture), цель — пустой инбокс;
  *   - прояснение (clarify) раскладывает инбокс по статусам/проектам;
@@ -33,6 +35,15 @@ function isStatus(s) {
 function toInt(n, fallback) {
   var v = parseInt(n, 10);
   if (!(v >= 0)) return fallback;
+  return v;
+}
+
+var MAX_INDENT = 8;
+
+/* Уровень отступа 0..MAX_INDENT. Мусор (строки, минусы, null) — в 0. */
+function normIndent(n) {
+  var v = toInt(n, 0);
+  if (v > MAX_INDENT) return MAX_INDENT;
   return v;
 }
 
@@ -68,6 +79,7 @@ function createTask(tasks, title, nowMs, opts) {
     frog: !!opts.frog,
     slicesTotal: toInt(opts.slicesTotal, 0),
     slicesDone: 0,
+    indent: normIndent(opts.indent),
     createdAt: now,
     updatedAt: now,
     doneAt: 0,
@@ -80,7 +92,7 @@ function createTask(tasks, title, nowMs, opts) {
 }
 
 /* Прояснение: разложить задачу из инбокса (или любую) по полям.
- * patch: { status, project, frog, slicesTotal, title }. Невалидный status игнорируется. */
+ * patch: { status, project, frog, slicesTotal, title, indent }. Невалидный status игнорируется. */
 function clarifyTask(tasks, id, patch, nowMs) {
   var task = getTask(tasks, id);
   if (!task || task.deleted) return null;
@@ -105,6 +117,7 @@ function clarifyTask(tasks, id, patch, nowMs) {
     var nt = normTitle(patch.title);
     if (nt) task.title = nt;
   }
+  if (patch.indent != null) task.indent = normIndent(patch.indent);
   task.updatedAt = now;
   task.ts = now;
   return task;
@@ -162,6 +175,19 @@ function setSlices(tasks, id, total, nowMs) {
   if (st > 1000) st = 1000;
   task.slicesTotal = st;
   if (task.slicesDone > st) task.slicesDone = st;
+  task.updatedAt = now;
+  task.ts = now;
+  return task;
+}
+
+/* Отступ: задача с отступом входит в группу задачи сверху.
+ * Уровень ограничен 0..MAX_INDENT; правило «не глубже соседа сверху +1»
+ * держит UI, сюда приходит уже проверенное значение. */
+function setIndent(tasks, id, level, nowMs) {
+  var task = getTask(tasks, id);
+  if (!task || task.deleted) return null;
+  var now = toInt(nowMs, Date.now());
+  task.indent = normIndent(level);
   task.updatedAt = now;
   task.ts = now;
   return task;
@@ -268,7 +294,9 @@ function shareText(tasks) {
     if (lines.length) lines.push('');
     lines.push(g[0] + ':');
     g[1].forEach(function (t) {
-      var s = '- ' + t.title;
+      var pad = '';
+      for (var k = 0; k < normIndent(t.indent); k++) pad += '  ';
+      var s = pad + '- ' + t.title;
       if (t.project) s += ' [' + t.project + ']';
       if (t.frog) s += ' ' + FROG;
       if (t.slicesTotal > 0) s += ' (' + t.slicesDone + '/' + t.slicesTotal + ')';
@@ -293,6 +321,7 @@ function normalizeTask(t) {
   var updatedAt = toInt(t.updatedAt, 0);
   var doneAt = (status === 'done') ? toInt(t.doneAt, updatedAt) : 0;
   var ts = toInt(t.ts, updatedAt);
+  var indent = normIndent(t.indent);
   return {
     id: id.slice(0, 64),
     title: normTitle(t.title),
@@ -301,6 +330,7 @@ function normalizeTask(t) {
     frog: !!t.frog,
     slicesTotal: slicesTotal,
     slicesDone: slicesDone,
+    indent: indent,
     createdAt: createdAt,
     updatedAt: updatedAt,
     doneAt: doneAt,
@@ -332,7 +362,8 @@ function normalizeTasks(tasks) {
 function cloneTask(t) {
   return {
     id: t.id, title: t.title, status: t.status, project: t.project, frog: t.frog,
-    slicesTotal: t.slicesTotal, slicesDone: t.slicesDone, createdAt: t.createdAt,
+    slicesTotal: t.slicesTotal, slicesDone: t.slicesDone, indent: normIndent(t.indent),
+    createdAt: t.createdAt,
     updatedAt: t.updatedAt, doneAt: t.doneAt, ts: t.ts || 0, deleted: !!t.deleted
   };
 }
@@ -407,6 +438,8 @@ var api = {
   removeTask: removeTask,
   setFrog: setFrog,
   setSlices: setSlices,
+  setIndent: setIndent,
+  MAX_INDENT: MAX_INDENT,
   completeSlice: completeSlice,
   inboxList: inboxList,
   nextList: nextList,

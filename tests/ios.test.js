@@ -86,11 +86,11 @@ describe('устойчивость к рассинхрону кэшей', () => 
 
 describe('логика вызывается с state.tasks', () => {
   it('мутации получают state.tasks, а не state', () => {
-    const fns = ['createTask', 'clarifyTask', 'completeTask', 'reopenTask', 'removeTask', 'setFrog', 'setSlices', 'completeSlice'];
+    const fns = ['createTask', 'clarifyTask', 'completeTask', 'reopenTask', 'removeTask', 'setFrog', 'setSlices', 'completeSlice', 'setIndent'];
     for (const fn of fns) {
       assert.ok(!new RegExp('L\\.' + fn + '\\(state[^.]').test(appSrc), 'найден вызов ' + fn + '(state, …)');
     }
-    for (const fn of ['createTask', 'clarifyTask', 'removeTask', 'getTask']) {
+    for (const fn of ['createTask', 'clarifyTask', 'removeTask', 'getTask', 'setIndent']) {
       assert.ok(appSrc.includes('L.' + fn + '(state.tasks,'), 'нет вызова ' + fn + '(state.tasks, …)');
     }
   });
@@ -109,6 +109,16 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes("className = 'tline'") || appSrc.includes('tline'), 'нет tline в app.js');
     assert.ok(appSrc.includes("className = 'tinput'") || appSrc.includes('tinput'), 'нет tinput в app.js');
     assert.ok(appSrc.includes('Enter'), 'нет Enter для новой строки');
+  });
+  it('группы отступом: сдвиг за grip, наследование, потолок +1', () => {
+    assert.ok(appSrc.includes('INDENT_STEP'), 'нет шага отступа');
+    assert.ok(appSrc.includes('marginLeft'), 'отступ не применяется к строке');
+    assert.ok(appSrc.includes('lineIndent'), 'нет чтения уровня отступа');
+    assert.ok(appSrc.includes('indentBounds'), 'нет потолка «сосед сверху +1»');
+    assert.ok(appSrc.includes('{ indent:'), 'новая строка не наследует отступ');
+  });
+  it('компактные строки: высота уменьшена', () => {
+    assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
   });
   it('перетаскивание: сосед едет под наездом сразу, без перескока', () => {
     assert.ok(appSrc.includes('pointerdown'), 'нет pointerdown на grip');

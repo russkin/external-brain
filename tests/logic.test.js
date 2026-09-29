@@ -342,3 +342,54 @@ describe('слияние LWW', () => {
     assert.equal(L.mergeDecision({ tasks: [{ id: 'a', title: 'T' }], updatedAt: 100 }, { tasks: [{ id: 'b', title: 'U' }], updatedAt: 100 }), 'in-sync');
   });
 });
+
+describe('отступ (группы)', () => {
+  it('createTask берёт indent из opts, по умолчанию 0', () => {
+    const t = L.blankTasks();
+    const a = mk(t, 'Верх', 1000, { id: 'a' });
+    const b = mk(t, 'Внутрь', 2000, { id: 'b', indent: 1 });
+    assert.equal(a.indent, 0);
+    assert.equal(b.indent, 1);
+  });
+  it('setIndent ставит уровень, клампит 0..8, ставит ts', () => {
+    const t = L.blankTasks();
+    mk(t, 'Дело', 1000, { id: 'a' });
+    assert.equal(L.setIndent(t, 'a', 1, 2000).indent, 1);
+    assert.equal(L.setIndent(t, 'a', 99, 3000).indent, 8);
+    assert.equal(L.setIndent(t, 'a', -5, 4000).indent, 0);
+    assert.equal(L.getTask(t, 'a').ts, 4000);
+    assert.equal(L.setIndent(t, 'nope', 1, 5000), null);
+    L.removeTask(t, 'a', 6000);
+    assert.equal(L.setIndent(t, 'a', 1, 7000), null);
+  });
+  it('clarify принимает patch.indent', () => {
+    const t = L.blankTasks();
+    mk(t, 'Дело', 1000, { id: 'a' });
+    L.clarifyTask(t, 'a', { indent: 2 }, 2000);
+    assert.equal(L.getTask(t, 'a').indent, 2);
+  });
+  it('нормализация чинит мусор indent', () => {
+    assert.equal(L.normalizeTask({ id: 'a', title: 'T', indent: 'x' }).indent, 0);
+    assert.equal(L.normalizeTask({ id: 'a', title: 'T', indent: -2 }).indent, 0);
+    assert.equal(L.normalizeTask({ id: 'a', title: 'T', indent: 99 }).indent, 8);
+    assert.equal(L.normalizeTask({ id: 'a', title: 'T' }).indent, 0);
+  });
+  it('слияние везёт indent свежей версии', () => {
+    const m = L.mergeTasks(
+      [{ id: 'a', title: 'A', ts: 100, createdAt: 100, updatedAt: 100, indent: 0 }],
+      [{ id: 'a', title: 'A', ts: 200, createdAt: 100, updatedAt: 200, indent: 1 }]
+    );
+    assert.equal(m[0].indent, 1);
+    assert.equal(L.tasksEqual(
+      [{ id: 'a', title: 'A', ts: 1, createdAt: 1, updatedAt: 1, indent: 0 }],
+      [{ id: 'a', title: 'A', ts: 1, createdAt: 1, updatedAt: 1, indent: 1 }]
+    ), false);
+  });
+  it('shareText показывает отступ пробелами', () => {
+    const t = L.blankTasks();
+    mk(t, 'Верх', 1000, { id: 'a' });
+    mk(t, 'Внутрь', 2000, { id: 'b', indent: 1 });
+    const txt = L.shareText(t);
+    assert.ok(txt.includes('\n  - Внутрь'), 'нет отступа у вложенной:\n' + txt);
+  });
+});

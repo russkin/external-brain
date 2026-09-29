@@ -27,9 +27,9 @@
     #syncLight.alert { background: #f44336; }
     button { font-size: 16px; padding: 8px 12px; cursor: pointer; }
     main { padding: 12px 14px 60px; max-width: 720px; margin: 0 auto; }
-    #lines { display: flex; flex-direction: column; gap: 10px; }
+    #lines { display: flex; flex-direction: column; gap: 8px; }
     .tline { display: flex; align-items: center; gap: 10px; }
-    .grip { flex: none; width: 24px; height: 30px; display: grid;
+    .grip { flex: none; width: 24px; height: 26px; display: grid;
       grid-template-columns: repeat(2, 6px); grid-template-rows: repeat(3, 6px);
       justify-content: center; align-content: center; gap: 4px;
       cursor: grab; touch-action: none; color: #999; }
@@ -38,7 +38,7 @@
     .tline.dragging { position: fixed; z-index: 10; opacity: .96; margin: 0;
       box-shadow: 0 8px 24px rgba(0,0,0,.25); }
     #lines.drag-active .tline:not(.dragging) { will-change: transform; }
-    .tinput { flex: 1; font-size: 18px; padding: 12px; border: 2px solid #4a90e2;
+    .tinput { flex: 1; font-size: 18px; padding: 6px 12px; border: 2px solid #4a90e2;
       border-radius: 10px; background: #fff; min-width: 0; }
     .tinput::placeholder { color: #aaa; }
     .group { margin-bottom: 14px; border: 1px solid #eee; border-radius: 8px; padding: 8px 10px; }

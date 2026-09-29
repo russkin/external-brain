@@ -2,7 +2,8 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v8';
+  var APP_VERSION = 'v9';
+  var INDENT_STEP = 28;
   var L = window.EBLogic;
   var state = null;
   var syncStatus = '';
@@ -277,7 +278,7 @@
   function makeGrip() {
     var g = document.createElement('span');
     g.className = 'grip';
-    g.title = 'Перетащить';
+    g.title = 'Перетащить (вверх/вниз — порядок, вправо/влево — отступ)';
     g.setAttribute('aria-label', 'Перетащить');
     for (var i = 0; i < 6; i++) {
       var d = document.createElement('span');
@@ -287,11 +288,21 @@
     return g;
   }
 
-  function makeLine(taskId, value, isTrailing) {
+  /* Отступ строки в пикселях. Задача с отступом входит в группу задачи сверху. */
+  function lineIndent(t) {
+    var v = parseInt(t && t.indent, 10);
+    if (!(v >= 0)) return 0;
+    if (v > 8) return 8;
+    return v;
+  }
+
+  function makeLine(taskId, value, isTrailing, indent) {
     var div = document.createElement('div');
     div.className = 'tline';
     if (taskId) div.setAttribute('data-id', taskId);
     else div.setAttribute('data-trailing', '1');
+    indent = lineIndent({ indent: indent });
+    if (indent) div.style.marginLeft = (indent * INDENT_STEP) + 'px';
     var grip = makeGrip();
     div.appendChild(grip);
     var inp = document.createElement('input');
@@ -301,17 +312,18 @@
     inp.autocomplete = 'off';
     inp.setAttribute('aria-label', 'Задача');
     div.appendChild(inp);
-    wireLineInput(div, inp, taskId, isTrailing);
+    wireLineInput(div, inp, taskId, isTrailing, indent);
     wireLineDrag(div, grip, inp);
     return div;
   }
 
-  function commitLine(taskId, value, isTrailing) {
+  function commitLine(taskId, value, isTrailing, indent) {
     var title = String(value == null ? '' : value).trim();
     if (isTrailing || !taskId) {
       if (!title) return null;
       var created = null;
-      mutate(function () { created = L.createTask(state.tasks, title); });
+      /* Новая строка наследует отступ строки сверху — так собираются группы. */
+      mutate(function () { created = L.createTask(state.tasks, title, Date.now(), { indent: indent || 0 }); });
       return created;
     }
     var task = L.getTask(state.tasks, taskId);
@@ -326,7 +338,7 @@
     return task;
   }
 
-  function wireLineInput(div, inp, taskId, isTrailing) {
+  function wireLineInput(div, inp, taskId, isTrailing, indent) {
     var saveTimer = null;
     inp.addEventListener('input', function () {
       if (isTrailing || !taskId) return;
@@ -350,7 +362,7 @@
       if (e.key !== 'Enter') return;
       e.preventDefault();
       if (isTrailing) {
-        var created = commitLine(null, inp.value, true);
+        var created = commitLine(null, inp.value, true, indent);
         if (created) {
           render();
           focusTrailing();
@@ -394,25 +406,53 @@
     save();
   }
 
-  /* Плавное перетаскивание за grip: в момент захвата список НЕ прыгает —
-   * оригинал остаётся в потоке (невидимый, держит место), а под пальцем/мышью
-   * едет его клон-призрак. Сосед, на которого призрак начинает наезжать, тут же
-   * начинает двигаться под ним — отъезжает пропорционально глубине наезда
-   * (1:1 за пальцем, без перескока). Фиксация места — когда центр призрака
-   * проходит середину соседа. Pointer Events едины для мыши и тача. */
+  /* Перетаскивание за grip двумя жестами (Pointer Events — мышь и тач):
+   * - вверх/вниз: плавный вертикальный drag (призрак + соседи едут);
+   * - вправо/влево: сдвиг на ширину отступа — задача входит в группу
+   *   задачи сверху (уровень не глубже соседа сверху +1, первая — всегда 0).
+   * Направление определяется первым движением: горизонталь (|dx|>|dy|*2). */
   function wireLineDrag(div, grip, inp) {
-    var pid = null, grabDy = 0, order = null, shift = {}, ghost = null;
+    var pid = null, grabDy = 0, x0 = 0, y0 = 0, mode = null, lastDx = 0;
+    var order = null, shift = {}, ghost = null;
+    var indentCur = 0, indentMax = 0;
     function rowsOf(box) {
       return Array.prototype.slice.call(box.querySelectorAll('.tline'));
     }
-    grip.addEventListener('pointerdown', function (e) {
-      if (pid != null) return;
-      if (e.button != null && e.button !== 0) return;
+    function myTask() {
+      var id = div.getAttribute ? div.getAttribute('data-id') : null;
+      return id ? L.getTask(state.tasks, id) : null;
+    }
+    /* Потолок отступа: первая строка — 0, иначе отступ соседа сверху +1. */
+    function indentBounds() {
+      var cur = 0, prev = 0, first = true;
+      var box = el('lines');
+      if (box) {
+        var rows = rowsOf(box);
+        for (var i = 0; i < rows.length; i++) {
+          if (rows[i] === div) break;
+          first = false;
+          var id = rows[i].getAttribute ? rows[i].getAttribute('data-id') : null;
+          var t = id ? L.getTask(state.tasks, id) : null;
+          prev = t ? lineIndent(t) : 0;
+        }
+      }
+      var mine = myTask();
+      cur = mine ? lineIndent(mine) : 0;
+      var max = first ? 0 : prev + 1;
+      if (max > 8) max = 8;
+      return { cur: cur, max: max };
+    }
+    function startIndent() {
+      var b = indentBounds();
+      indentCur = b.cur;
+      indentMax = b.max;
+      mode = 'indent';
+    }
+    function startVertical(e) {
       var box = el('lines');
       if (!box || !document.body) return;
-      pid = e.pointerId;
+      mode = 'vertical';
       shift = {};
-      try { grip.setPointerCapture(pid); } catch (x) {}
       var rect = null;
       try { rect = div.getBoundingClientRect(); } catch (x) { rect = null; }
       var h = rect ? rect.height : div.offsetHeight || 56;
@@ -434,12 +474,47 @@
       document.body.appendChild(ghost);
       div.style.visibility = 'hidden';
       box.classList.add('drag-active');
+    }
+    grip.addEventListener('pointerdown', function (e) {
+      if (pid != null) return;
+      if (e.button != null && e.button !== 0) return;
+      var box = el('lines');
+      if (!box) return;
+      pid = e.pointerId;
+      x0 = e.clientX;
+      y0 = e.clientY;
+      lastDx = 0;
+      mode = null;
+      try { grip.setPointerCapture(pid); } catch (x) {}
       if (e.cancelable) e.preventDefault();
     });
     grip.addEventListener('pointermove', function (e) {
-      if (pid == null || e.pointerId !== pid || !order || !ghost) return;
+      if (pid == null || e.pointerId !== pid) return;
+      var dx = e.clientX - x0;
+      var dy = e.clientY - y0;
+      if (!mode) {
+        if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 2) {
+          if (!myTask()) return;
+          startIndent();
+        } else if (Math.abs(dy) > 10) {
+          startVertical(e);
+          if (mode !== 'vertical') return;
+        } else return;
+      }
       var box = el('lines');
       if (!box) return;
+      if (mode === 'indent') {
+        lastDx = dx;
+        /* Живой предпросмотр: строка едет за пальцем в пределах уровней. */
+        var lo = -indentCur * INDENT_STEP;
+        var hi = (indentMax - indentCur) * INDENT_STEP;
+        var cx = dx < lo ? lo : (dx > hi ? hi : dx);
+        div.style.transition = 'none';
+        div.style.transform = 'translateX(' + cx + 'px)';
+        if (e.cancelable) e.preventDefault();
+        return;
+      }
+      if (!order || !ghost) return;
       ghost.style.top = (e.clientY - grabDy) + 'px';
       var d = null;
       try { d = ghost.getBoundingClientRect(); } catch (x) { return; }
@@ -478,6 +553,24 @@
       if (pid == null) return;
       if (e && e.pointerId != null && e.pointerId !== pid) return;
       pid = null;
+      if (mode === 'indent') {
+        mode = null;
+        div.style.transition = '';
+        div.style.transform = '';
+        var bou = indentBounds();
+        var lvl = bou.cur + Math.round(lastDx / INDENT_STEP);
+        if (lvl < 0) lvl = 0;
+        if (lvl > bou.max) lvl = bou.max;
+        var task = myTask();
+        if (task && lvl !== bou.cur) {
+          (function (id, l) {
+            mutate(function () { L.setIndent(state.tasks, id, l); });
+          })(task.id, lvl);
+        }
+        render();
+        return;
+      }
+      mode = null;
       var box = el('lines');
       var firstTop = null, firstH = 0;
       if (ghost) {
@@ -552,9 +645,11 @@
     box.innerHTML = '';
     var tasks = lineTasks();
     tasks.forEach(function (t) {
-      box.appendChild(makeLine(t.id, t.title, false));
+      box.appendChild(makeLine(t.id, t.title, false, lineIndent(t)));
     });
-    box.appendChild(makeLine(null, '', true));
+    /* Хвостовая пустая строка наследует отступ последней — группы растут сами. */
+    var tail = tasks.length ? lineIndent(tasks[tasks.length - 1]) : 0;
+    box.appendChild(makeLine(null, '', true, tail));
   }
 
   function focusTrailing() {
