@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v10';
+  var APP_VERSION = 'v11';
   var INDENT_STEP = 28;
   var L = window.EBLogic;
   var state = null;
@@ -416,6 +416,37 @@
     save();
   }
 
+  /* Отступ строки после вертикального перетаскивания: смотрят соседи
+   * на новом месте. Нет соседа сверху — уровень родителей (0).
+   * Сосед сверху без отступа, а следующий уходит вглубь — встаём первым
+   * вложенным (отступ соседа +1). Иначе — отступ соседа сверху.
+   * Весь перетащенный блок (родитель + дети) сдвигается на одну дельту. */
+  function applyDropIndent(box, sibs, di, kids) {
+    function indOf(row) {
+      var id = row.getAttribute ? row.getAttribute('data-id') : null;
+      var t = id ? L.getTask(state.tasks, id) : null;
+      return t ? lineIndent(t) : 0;
+    }
+    var prevRow = di > 0 ? sibs[di - 1] : null;
+    var nextRow = di < sibs.length - 1 ? sibs[di + 1] : null;
+    var prevInd = prevRow ? indOf(prevRow) : 0;
+    var nextInd = nextRow ? indOf(nextRow) : -1;
+    var want = !prevRow ? 0 : (nextInd === prevInd + 1 ? nextInd : prevInd);
+    var myRow = sibs[di];
+    var myId = myRow.getAttribute ? myRow.getAttribute('data-id') : null;
+    var myT = myId ? L.getTask(state.tasks, myId) : null;
+    if (!myT) return;
+    var delta = want - lineIndent(myT);
+    if (!delta) return;
+    L.setIndent(state.tasks, myId, want);
+    /* Дети едут вместе с родителем на ту же дельту (setIndent клампит 0..8). */
+    for (var i = 0; i < kids.length; i++) {
+      var kid = kids[i];
+      var kidId = kid.getAttribute ? kid.getAttribute('data-id') : null;
+      var kt = kidId ? L.getTask(state.tasks, kidId) : null;
+      if (kt) L.setIndent(state.tasks, kidId, lineIndent(kt) + delta);
+    }
+  }
   /* Перетаскивание за grip двумя жестами (Pointer Events — мышь и тач):
    * - вверх/вниз: плавный вертикальный drag (призрак + соседи едут);
    * - вправо/влево: сдвиг на ширину отступа — задача входит в группу
@@ -630,6 +661,11 @@
         }
         /* Родитель едет вместе с детьми: весь блок встаёт на итоговое место,
          * дети снова принимают прежний вид вложений. */
+        var sibs0 = box.querySelectorAll ? box.querySelectorAll('.tline[data-id]') : [];
+        var oldPos = -1;
+        for (var p0 = 0; p0 < sibs0.length; p0++) {
+          if (sibs0[p0] === div) oldPos = p0;
+        }
         var anchor = below.length ? below[below.length - 1].nextSibling : box.firstChild;
         box.insertBefore(div, anchor);
         var ref = div.nextSibling;
@@ -637,6 +673,17 @@
           kids[m].style.display = '';
           box.insertBefore(kids[m], ref);
           ref = kids[m];
+        }
+        /* Отступ по новому месту (только если блок реально переехал):
+         * на уровне родителей — убираем, внутри чужого вложения —
+         * берём отступ соседа сверху; весь блок сдвигается целиком. */
+        var sibs = box.querySelectorAll ? box.querySelectorAll('.tline[data-id]') : [];
+        var di = -1;
+        for (var p1 = 0; p1 < sibs.length; p1++) {
+          if (sibs[p1] === div) di = p1;
+        }
+        if (di !== -1 && di !== oldPos) {
+          applyDropIndent(box, sibs, di, kids);
         }
       }
       div.classList.remove('dragging');

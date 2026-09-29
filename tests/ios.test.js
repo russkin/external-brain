@@ -110,6 +110,11 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes("className = 'tinput'") || appSrc.includes('tinput'), 'нет tinput в app.js');
     assert.ok(appSrc.includes('Enter'), 'нет Enter для новой строки');
   });
+  it('отступ по месту отпускания: родители→0, внутри→от соседа', () => {
+    assert.ok(appSrc.includes('applyDropIndent'), 'нет пересчёта отступа при drop');
+    assert.ok(appSrc.includes('prevInd'), 'не смотрим соседа сверху');
+    assert.ok(appSrc.includes('nextInd'), 'не смотрим соседа снизу');
+  });
   it('группы отступом: сдвиг за grip, наследование, потолок +1', () => {
     assert.ok(appSrc.includes('INDENT_STEP'), 'нет шага отступа');
     assert.ok(appSrc.includes('marginLeft'), 'отступ не применяется к строке');
