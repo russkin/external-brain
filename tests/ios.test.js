@@ -110,6 +110,15 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes("className = 'tinput'") || appSrc.includes('tinput'), 'нет tinput в app.js');
     assert.ok(appSrc.includes('Enter'), 'нет Enter для новой строки');
   });
+  it('перетаскивание живое: строка встаёт между строк при протягивании', () => {
+    assert.ok(appSrc.includes('pointerdown'), 'нет pointerdown на grip');
+    assert.ok(appSrc.includes('pointermove'), 'нет pointermove для живого drag');
+    assert.ok(appSrc.includes('pointerup'), 'нет pointerup для завершения drag');
+    assert.ok(appSrc.includes('setPointerCapture'), 'нет захвата указателя');
+    assert.ok(appSrc.includes('translateY'), 'строка не следует за указателем');
+    assert.ok(appSrc.includes('drag-active'), 'нет drag-active состояния');
+    assert.ok(appSrc.includes('persistLineOrder'), 'порядок не сохраняется');
+  });
   it('быстрый ввод и фокус дня убраны из оболочки', () => {
     assert.ok(!html.includes('id="focus"'), 'focus остался в index.html');
     assert.ok(!html.includes('id="quick"'), 'quick остался в index.html');

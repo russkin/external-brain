@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v3';
+  var APP_VERSION = 'v4';
   var L = window.EBLogic;
   var state = null;
   var syncStatus = '';
@@ -279,7 +279,6 @@
     g.className = 'grip';
     g.title = 'Перетащить';
     g.setAttribute('aria-label', 'Перетащить');
-    g.setAttribute('draggable', 'true');
     for (var i = 0; i < 6; i++) {
       var d = document.createElement('span');
       d.className = 'dot';
@@ -386,55 +385,60 @@
     save();
   }
 
+  /* Живое перетаскивание за grip: строка едет за пальцем/мышью и тут же
+   * встаёт в списке между теми строками, где сейчас находится указатель.
+   * Pointer Events едины для мыши и тача; захват — на grip, ввод в поле не мешает. */
   function wireLineDrag(div, grip, inp) {
-    grip.addEventListener('dragstart', function (e) {
+    var pid = null, y0 = 0;
+    grip.addEventListener('pointerdown', function (e) {
+      if (pid != null) return;
+      if (e.button != null && e.button !== 0) return;
+      pid = e.pointerId;
+      y0 = e.clientY;
+      try { grip.setPointerCapture(pid); } catch (x) {}
+      var box = el('lines');
+      if (box) box.classList.add('drag-active');
       div.classList.add('dragging');
-      try {
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', div.getAttribute('data-id') || 'trailing');
-      } catch (x) {}
-    });
-    grip.addEventListener('dragend', function () {
-      div.classList.remove('dragging');
-      persistLineOrder();
-      render();
-    });
-    /* Тач-перетаскивание за grip (мобильные, где HTML5 DnD нет). */
-    var touchId = null, startY = 0;
-    grip.addEventListener('touchstart', function (e) {
-      if (e.touches.length !== 1) return;
-      touchId = e.touches[0].identifier;
-      startY = e.touches[0].clientY;
-      div.classList.add('dragging');
-    }, { passive: true });
-    grip.addEventListener('touchmove', function (e) {
-      if (touchId == null) return;
-      var t = null;
-      for (var i = 0; i < e.touches.length; i++) {
-        if (e.touches[i].identifier === touchId) t = e.touches[i];
-      }
-      if (!t) return;
       if (e.cancelable) e.preventDefault();
+    });
+    grip.addEventListener('pointermove', function (e) {
+      if (pid == null || e.pointerId !== pid) return;
       var box = el('lines');
       if (!box) return;
+      var dy = e.clientY - y0;
+      div.style.transform = 'translateY(' + dy + 'px) scale(1.02)';
+      /* Живая вставка: ищем, между какими строками сейчас указатель. */
       var rows = Array.prototype.slice.call(box.querySelectorAll('.tline'));
       var after = null;
-      for (var j = 0; j < rows.length; j++) {
-        if (rows[j] === div) continue;
-        var r = rows[j].getBoundingClientRect();
-        if (t.clientY > r.top + r.height / 2) after = rows[j];
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i] === div) continue;
+        var r = rows[i].getBoundingClientRect();
+        if (e.clientY > r.top + r.height / 2) after = rows[i];
       }
-      if (after) box.insertBefore(div, after.nextSibling);
-      else box.insertBefore(div, box.firstChild);
-    }, { passive: false });
-    grip.addEventListener('touchend', function () {
-      if (touchId == null) return;
-      touchId = null;
+      var target = after ? after.nextSibling : box.firstChild;
+      if (target !== div && target !== div.nextSibling) {
+        box.insertBefore(div, target);
+      }
+      /* Автопрокрутка у краёв экрана. */
+      try {
+        if (e.clientY < 90) window.scrollBy(0, -10);
+        else if (e.clientY > (window.innerHeight || 800) - 90) window.scrollBy(0, 10);
+      } catch (x) {}
+      if (e.cancelable) e.preventDefault();
+    });
+    function finish(e) {
+      if (pid == null) return;
+      if (e && e.pointerId != null && e.pointerId !== pid) return;
+      pid = null;
+      div.style.transform = '';
       div.classList.remove('dragging');
+      var box = el('lines');
+      if (box) box.classList.remove('drag-active');
       persistLineOrder();
       render();
-      if (inp && inp.focus) inp.focus();
-    });
+    }
+    grip.addEventListener('pointerup', finish);
+    grip.addEventListener('pointercancel', finish);
   }
 
   function renderLines() {
@@ -446,28 +450,6 @@
       box.appendChild(makeLine(t.id, t.title, false));
     });
     box.appendChild(makeLine(null, '', true));
-    /* HTML5 DnD: переупорядочивание строк. */
-    if (!box._dndWired) {
-      box._dndWired = true;
-      box.addEventListener('dragover', function (e) {
-        e.preventDefault();
-        var drag = box.querySelector('.tline.dragging');
-        if (!drag) return;
-        var rows = Array.prototype.slice.call(box.querySelectorAll('.tline:not(.dragging)'));
-        var after = null;
-        for (var i = 0; i < rows.length; i++) {
-          var r = rows[i].getBoundingClientRect();
-          if (e.clientY > r.top + r.height / 2) after = rows[i];
-        }
-        if (after) box.insertBefore(drag, after.nextSibling);
-        else box.insertBefore(drag, box.firstChild);
-      });
-      box.addEventListener('drop', function (e) {
-        e.preventDefault();
-        persistLineOrder();
-        render();
-      });
-    }
   }
 
   function focusTrailing() {
