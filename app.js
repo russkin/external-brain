@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v1';
+  var APP_VERSION = 'v2';
   var L = window.EBLogic;
   var state = null;
   var syncStatus = '';
@@ -252,19 +252,6 @@
     if (v) v.textContent = APP_VERSION;
     var v2 = el('appVer');
     if (v2) v2.textContent = APP_VERSION;
-    var f = L.focusTask(state.tasks);
-    var fb = el('focus');
-    if (fb) {
-      fb.innerHTML = '';
-      var fh = document.createElement('div');
-      fh.className = 'group-title';
-      fh.textContent = 'Фокус дня';
-      fb.appendChild(fh);
-      var fp = document.createElement('div');
-      fp.className = 'focus-text';
-      fp.textContent = f ? (f.title + (f.project ? ' [' + f.project + ']' : '')) : 'Инбокс пуст, следующих нет — можно отдыхать';
-      fb.appendChild(fp);
-    }
     var inboxBtns = function (t) {
       return [
         ['Next', 'В следующие', function (x) { mutate(function () { L.clarifyTask(state.tasks, x.id, { status: 'next' }); }); }],
@@ -357,20 +344,6 @@
   }
 
   function wire() {
-    on('quickAdd', 'click', function () {
-      var inp = el('quickInput');
-      if (!inp) return;
-      var title = inp.value;
-      var t = mutate(function () { return L.createTask(state.tasks, title); });
-      if (t) { inp.value = ''; lastAction = 'в инбоксе: ' + t.title; }
-      render();
-    });
-    on('quickInput', 'keydown', function (e) {
-      if (e.key === 'Enter') {
-        var b = el('quickAdd');
-        if (b) b.click();
-      }
-    });
     var gear = el('gearMenu');
     on('gearBtn', 'click', function () {
       if (gear) gear.classList.toggle('open');

@@ -90,14 +90,21 @@ describe('логика вызывается с state.tasks', () => {
     for (const fn of fns) {
       assert.ok(!new RegExp('L\\.' + fn + '\\(state[^.]').test(appSrc), 'найден вызов ' + fn + '(state, …)');
     }
-    for (const fn of ['createTask', 'clarifyTask']) {
+    for (const fn of ['clarifyTask']) {
       assert.ok(appSrc.includes('L.' + fn + '(state.tasks,'), 'нет вызова ' + fn + '(state.tasks, …)');
     }
   });
-  it('списки и фокус читаются из state.tasks', () => {
-    for (const fn of ['inboxList', 'nextList', 'waitingList', 'somedayList', 'doneList', 'focusTask', 'stats', 'shareText']) {
+  it('списки читаются из state.tasks (без фокуса дня)', () => {
+    for (const fn of ['inboxList', 'nextList', 'waitingList', 'somedayList', 'doneList', 'stats', 'shareText']) {
       assert.ok(appSrc.includes('L.' + fn + '(state.tasks'), 'нет ' + fn + '(state.tasks');
     }
+    assert.ok(!appSrc.includes('focusTask(state.tasks'), 'фокус дня должен быть убран из UI');
+  });
+  it('быстрый ввод и фокус дня убраны из оболочки', () => {
+    assert.ok(!html.includes('id="focus"'), 'focus остался в index.html');
+    assert.ok(!html.includes('id="quick"'), 'quick остался в index.html');
+    assert.ok(!html.includes('id="quickInput"'), 'quickInput остался в index.html');
+    assert.ok(!html.includes('id="quickAdd"'), 'quickAdd остался в index.html');
   });
 });
 
