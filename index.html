@@ -27,6 +27,17 @@
     #syncLight.alert { background: #f44336; }
     button { font-size: 16px; padding: 8px 12px; cursor: pointer; }
     main { padding: 12px 14px 60px; max-width: 720px; margin: 0 auto; }
+    #lines { display: flex; flex-direction: column; gap: 10px; }
+    .tline { display: flex; align-items: center; gap: 10px; }
+    .grip { flex: none; width: 24px; height: 30px; display: grid;
+      grid-template-columns: repeat(2, 6px); grid-template-rows: repeat(3, 6px);
+      justify-content: center; align-content: center; gap: 4px;
+      cursor: grab; touch-action: none; color: #999; }
+    .grip .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .tline.dragging { opacity: .4; }
+    .tinput { flex: 1; font-size: 18px; padding: 12px; border: 2px solid #4a90e2;
+      border-radius: 10px; background: #fff; min-width: 0; }
+    .tinput::placeholder { color: #aaa; }
     .group { margin-bottom: 14px; border: 1px solid #eee; border-radius: 8px; padding: 8px 10px; }
     .group-title { font-weight: bold; margin-bottom: 6px; }
     .row { display: flex; gap: 8px; align-items: center; padding: 8px 0;
@@ -86,11 +97,7 @@
   </div>
 
   <main>
-    <div class="group" id="gInbox"></div>
-    <div class="group" id="gNext"></div>
-    <div class="group" id="gWaiting"></div>
-    <div class="group" id="gSomeday"></div>
-    <div class="group" id="gDone"></div>
+    <div id="lines"></div>
   </main>
 
   <footer id="status">Загрузка…</footer>

@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v2';
+  var APP_VERSION = 'v3';
   var L = window.EBLogic;
   var state = null;
   var syncStatus = '';
@@ -252,68 +252,246 @@
     if (v) v.textContent = APP_VERSION;
     var v2 = el('appVer');
     if (v2) v2.textContent = APP_VERSION;
-    var inboxBtns = function (t) {
-      return [
-        ['Next', 'В следующие', function (x) { mutate(function () { L.clarifyTask(state.tasks, x.id, { status: 'next' }); }); }],
-        ['Wait', 'В ожидание', function (x) { mutate(function () { L.clarifyTask(state.tasks, x.id, { status: 'waiting' }); }); }],
-        ['Someday', 'В когда-нибудь', function (x) { mutate(function () { L.clarifyTask(state.tasks, x.id, { status: 'someday' }); }); }],
-        ['Proj', 'Проект', function (x) {
-          askText('Проект для «' + x.title + '»', x.project || '', true).then(function (p) {
-            if (p == null) return;
-            mutate(function () { L.clarifyTask(state.tasks, x.id, { project: p, status: 'next' }); });
-          });
-        }],
-        ['X', 'Удалить', function (x) {
-          askConfirm('Удалить «' + x.title + '»?').then(function (ok) {
-            if (ok) mutate(function () { L.removeTask(state.tasks, x.id); });
-          });
-        }]
-      ];
-    };
-    var nextBtns = function (t) {
-      var arr = [
-        [t.frog ? 'Unfrog' : 'Frog', 'Лягушка дня', function (x) { mutate(function () { L.setFrog(state.tasks, x.id, !x.frog); }); }],
-        ['+1', 'Съесть бифштекс', function (x) { mutate(function () { L.completeSlice(state.tasks, x.id); }); }],
-        ['Slices', 'Нарезать слона', function (x) {
-          askText('Сколько бифштексов в слоне «' + x.title + '»? (0 — без нарезки)', String(x.slicesTotal || 0), false).then(function (p) {
-            if (p == null) return;
-            mutate(function () { L.setSlices(state.tasks, x.id, parseInt(p, 10) || 0); });
-          });
-        }],
-        ['X', 'Удалить', function (x) {
-          askConfirm('Удалить «' + x.title + '»?').then(function (ok) {
-            if (ok) mutate(function () { L.removeTask(state.tasks, x.id); });
-          });
-        }]
-      ];
-      return arr;
-    };
-    var simpleBtns = function (t) {
-      return [
-        ['Next', 'В следующие', function (x) { mutate(function () { L.clarifyTask(state.tasks, x.id, { status: 'next' }); }); }],
-        ['X', 'Удалить', function (x) {
-          askConfirm('Удалить «' + x.title + '»?').then(function (ok) {
-            if (ok) mutate(function () { L.removeTask(state.tasks, x.id); });
-          });
-        }]
-      ];
-    };
-    var doneBtns = function (t) {
-      return [
-        ['Reopen', 'Вернуть', function (x) { mutate(function () { L.reopenTask(state.tasks, x.id); }); }],
-        ['X', 'Удалить', function (x) {
-          askConfirm('Удалить «' + x.title + '»?').then(function (ok) {
-            if (ok) mutate(function () { L.removeTask(state.tasks, x.id); });
-          });
-        }]
-      ];
-    };
-    renderGroup('gInbox', 'Инбокс — прояснить', L.inboxList(state.tasks), inboxBtns);
-    renderGroup('gNext', 'Следующие', L.nextList(state.tasks), nextBtns);
-    renderGroup('gWaiting', 'Ожидание', L.waitingList(state.tasks), simpleBtns);
-    renderGroup('gSomeday', 'Когда-нибудь', L.somedayList(state.tasks), simpleBtns);
-    renderGroup('gDone', 'Готово', L.doneList(state.tasks).slice(0, 30), doneBtns);
+    renderLines();
     renderStatus();
+  }
+
+  /* --- Стартовый экран: строки «grip 6 точек + поле ввода» --- */
+
+  function lineTasks() {
+    var out = [];
+    for (var i = 0; i < state.tasks.length; i++) {
+      var t = state.tasks[i];
+      if (!t || t.deleted || !String(t.title || '').trim()) continue;
+      if (t.status === 'done') continue;
+      out.push(t);
+    }
+    out.sort(function (a, b) {
+      var ca = a.createdAt || 0, cb = b.createdAt || 0;
+      if (ca !== cb) return ca - cb;
+      return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
+    });
+    return out;
+  }
+
+  function makeGrip() {
+    var g = document.createElement('span');
+    g.className = 'grip';
+    g.title = 'Перетащить';
+    g.setAttribute('aria-label', 'Перетащить');
+    g.setAttribute('draggable', 'true');
+    for (var i = 0; i < 6; i++) {
+      var d = document.createElement('span');
+      d.className = 'dot';
+      g.appendChild(d);
+    }
+    return g;
+  }
+
+  function makeLine(taskId, value, isTrailing) {
+    var div = document.createElement('div');
+    div.className = 'tline';
+    if (taskId) div.setAttribute('data-id', taskId);
+    else div.setAttribute('data-trailing', '1');
+    var grip = makeGrip();
+    div.appendChild(grip);
+    var inp = document.createElement('input');
+    inp.className = 'tinput';
+    inp.value = value || '';
+    inp.placeholder = 'Новая задача…';
+    inp.autocomplete = 'off';
+    inp.setAttribute('aria-label', 'Задача');
+    div.appendChild(inp);
+    wireLineInput(div, inp, taskId, isTrailing);
+    wireLineDrag(div, grip, inp);
+    return div;
+  }
+
+  function commitLine(taskId, value, isTrailing) {
+    var title = String(value == null ? '' : value).trim();
+    if (isTrailing || !taskId) {
+      if (!title) return null;
+      var created = null;
+      mutate(function () { created = L.createTask(state.tasks, title); });
+      return created;
+    }
+    var task = L.getTask(state.tasks, taskId);
+    if (!task) return null;
+    if (!title) {
+      mutate(function () { L.removeTask(state.tasks, taskId); });
+      return 'removed';
+    }
+    if (title !== task.title) {
+      mutate(function () { L.clarifyTask(state.tasks, taskId, { title: title }); });
+    }
+    return task;
+  }
+
+  function wireLineInput(div, inp, taskId, isTrailing) {
+    var saveTimer = null;
+    inp.addEventListener('input', function () {
+      if (isTrailing || !taskId) return;
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(function () {
+        var title = inp.value.trim();
+        if (!title || title === (L.getTask(state.tasks, taskId) || {}).title) return;
+        L.clarifyTask(state.tasks, taskId, { title: title });
+        save();
+        renderStatus();
+      }, 800);
+    });
+    inp.addEventListener('change', function () {
+      if (isTrailing || !taskId) return;
+      if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+      var r = commitLine(taskId, inp.value, false);
+      if (r === 'removed') render();
+      else renderStatus();
+    });
+    inp.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      if (isTrailing) {
+        var created = commitLine(null, inp.value, true);
+        if (created) {
+          render();
+          focusTrailing();
+        }
+        return;
+      }
+      commitLine(taskId, inp.value, false);
+      render();
+      focusLineAfter(taskId);
+    });
+  }
+
+  function persistLineOrder() {
+    var box = el('lines');
+    if (!box || !state) return;
+    var ids = [];
+    var rows = box.querySelectorAll ? box.querySelectorAll('.tline[data-id]') : [];
+    for (var i = 0; i < rows.length; i++) {
+      var id = rows[i].getAttribute('data-id');
+      if (id && L.getTask(state.tasks, id)) ids.push(id);
+    }
+    if (!ids.length) return;
+    var now = Date.now();
+    var byId = {};
+    state.tasks.forEach(function (t) { if (t) byId[t.id] = t; });
+    var ordered = [];
+    ids.forEach(function (id) { if (byId[id]) { ordered.push(byId[id]); delete byId[id]; } });
+    Object.keys(byId).forEach(function (id) { ordered.push(byId[id]); });
+    var base = now - ordered.length;
+    ordered.forEach(function (t, i) { t.createdAt = base + i; t.ts = now; t.updatedAt = now; });
+    state.tasks = ordered;
+    save();
+  }
+
+  function wireLineDrag(div, grip, inp) {
+    grip.addEventListener('dragstart', function (e) {
+      div.classList.add('dragging');
+      try {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', div.getAttribute('data-id') || 'trailing');
+      } catch (x) {}
+    });
+    grip.addEventListener('dragend', function () {
+      div.classList.remove('dragging');
+      persistLineOrder();
+      render();
+    });
+    /* Тач-перетаскивание за grip (мобильные, где HTML5 DnD нет). */
+    var touchId = null, startY = 0;
+    grip.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1) return;
+      touchId = e.touches[0].identifier;
+      startY = e.touches[0].clientY;
+      div.classList.add('dragging');
+    }, { passive: true });
+    grip.addEventListener('touchmove', function (e) {
+      if (touchId == null) return;
+      var t = null;
+      for (var i = 0; i < e.touches.length; i++) {
+        if (e.touches[i].identifier === touchId) t = e.touches[i];
+      }
+      if (!t) return;
+      if (e.cancelable) e.preventDefault();
+      var box = el('lines');
+      if (!box) return;
+      var rows = Array.prototype.slice.call(box.querySelectorAll('.tline'));
+      var after = null;
+      for (var j = 0; j < rows.length; j++) {
+        if (rows[j] === div) continue;
+        var r = rows[j].getBoundingClientRect();
+        if (t.clientY > r.top + r.height / 2) after = rows[j];
+      }
+      if (after) box.insertBefore(div, after.nextSibling);
+      else box.insertBefore(div, box.firstChild);
+    }, { passive: false });
+    grip.addEventListener('touchend', function () {
+      if (touchId == null) return;
+      touchId = null;
+      div.classList.remove('dragging');
+      persistLineOrder();
+      render();
+      if (inp && inp.focus) inp.focus();
+    });
+  }
+
+  function renderLines() {
+    var box = el('lines');
+    if (!box || !state) return;
+    box.innerHTML = '';
+    var tasks = lineTasks();
+    tasks.forEach(function (t) {
+      box.appendChild(makeLine(t.id, t.title, false));
+    });
+    box.appendChild(makeLine(null, '', true));
+    /* HTML5 DnD: переупорядочивание строк. */
+    if (!box._dndWired) {
+      box._dndWired = true;
+      box.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        var drag = box.querySelector('.tline.dragging');
+        if (!drag) return;
+        var rows = Array.prototype.slice.call(box.querySelectorAll('.tline:not(.dragging)'));
+        var after = null;
+        for (var i = 0; i < rows.length; i++) {
+          var r = rows[i].getBoundingClientRect();
+          if (e.clientY > r.top + r.height / 2) after = rows[i];
+        }
+        if (after) box.insertBefore(drag, after.nextSibling);
+        else box.insertBefore(drag, box.firstChild);
+      });
+      box.addEventListener('drop', function (e) {
+        e.preventDefault();
+        persistLineOrder();
+        render();
+      });
+    }
+  }
+
+  function focusTrailing() {
+    var box = el('lines');
+    if (!box || !box.querySelector) return;
+    var inp = box.querySelector('.tline[data-trailing] .tinput');
+    if (inp && inp.focus) {
+      try { inp.focus(); } catch (x) {}
+    }
+  }
+
+  function focusLineAfter(taskId) {
+    var box = el('lines');
+    if (!box || !box.querySelectorAll) { focusTrailing(); return; }
+    var rows = box.querySelectorAll('.tline');
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].getAttribute && rows[i].getAttribute('data-id') === taskId) {
+        var next = rows[i + 1];
+        var inp = next ? next.querySelector('.tinput') : null;
+        if (inp && inp.focus) { try { inp.focus(); return; } catch (x) {} }
+        break;
+      }
+    }
+    focusTrailing();
   }
 
   function renderStatus() {

@@ -90,15 +90,25 @@ describe('логика вызывается с state.tasks', () => {
     for (const fn of fns) {
       assert.ok(!new RegExp('L\\.' + fn + '\\(state[^.]').test(appSrc), 'найден вызов ' + fn + '(state, …)');
     }
-    for (const fn of ['clarifyTask']) {
+    for (const fn of ['createTask', 'clarifyTask', 'removeTask', 'getTask']) {
       assert.ok(appSrc.includes('L.' + fn + '(state.tasks,'), 'нет вызова ' + fn + '(state.tasks, …)');
     }
   });
-  it('списки читаются из state.tasks (без фокуса дня)', () => {
-    for (const fn of ['inboxList', 'nextList', 'waitingList', 'somedayList', 'doneList', 'stats', 'shareText']) {
+  it('стартовый экран: строки читаются из state.tasks', () => {
+    for (const fn of ['stats', 'shareText', 'doneList']) {
       assert.ok(appSrc.includes('L.' + fn + '(state.tasks'), 'нет ' + fn + '(state.tasks');
     }
+    assert.ok(appSrc.includes('renderLines'), 'нет renderLines');
+    assert.ok(appSrc.includes("el('lines')"), 'нет lines в app.js');
     assert.ok(!appSrc.includes('focusTask(state.tasks'), 'фокус дня должен быть убран из UI');
+  });
+  it('стартовый экран: grip 6 точек + поле ввода', () => {
+    assert.ok(html.includes('id="lines"'), 'нет lines в index.html');
+    assert.ok(html.includes("class=\"grip\"") || html.includes('.grip'), 'нет grip в index.html');
+    assert.ok(html.includes('tinput'), 'нет tinput в index.html/app');
+    assert.ok(appSrc.includes("className = 'tline'") || appSrc.includes('tline'), 'нет tline в app.js');
+    assert.ok(appSrc.includes("className = 'tinput'") || appSrc.includes('tinput'), 'нет tinput в app.js');
+    assert.ok(appSrc.includes('Enter'), 'нет Enter для новой строки');
   });
   it('быстрый ввод и фокус дня убраны из оболочки', () => {
     assert.ok(!html.includes('id="focus"'), 'focus остался в index.html');
