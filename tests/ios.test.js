@@ -116,6 +116,8 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('pointerup'), 'нет pointerup для завершения drag');
     assert.ok(appSrc.includes('setPointerCapture'), 'нет захвата указателя');
     assert.ok(!appSrc.includes('phold'), 'placeholder даёт скачок вместо плавного наезда');
+    assert.ok(appSrc.includes('cloneNode'), 'нет призрака: захват будет дёргать список');
+    assert.ok(appSrc.includes('visibility'), 'оригинал не держит место на захвате');
     assert.ok(appSrc.includes('drag-active'), 'нет drag-active состояния');
     assert.ok(appSrc.includes('persistLineOrder'), 'порядок не сохраняется');
     assert.ok(appSrc.includes('lostpointercapture'), 'нет страховки завершения drag');

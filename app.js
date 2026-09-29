@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v7';
+  var APP_VERSION = 'v8';
   var L = window.EBLogic;
   var state = null;
   var syncStatus = '';
@@ -394,13 +394,14 @@
     save();
   }
 
-  /* Плавное перетаскивание за grip: строка едет под пальцем/мышью, а сосед,
-   * на которого она начинает наезжать, тут же начинает двигаться под ней —
-   * отъезжает пропорционально глубине наезда (1:1 за пальцем, без перескока).
-   * Фиксация места — когда центр тянущейся проходит середину соседа.
-   * Pointer Events едины для мыши и тача; ввод в поле не мешает. */
+  /* Плавное перетаскивание за grip: в момент захвата список НЕ прыгает —
+   * оригинал остаётся в потоке (невидимый, держит место), а под пальцем/мышью
+   * едет его клон-призрак. Сосед, на которого призрак начинает наезжать, тут же
+   * начинает двигаться под ним — отъезжает пропорционально глубине наезда
+   * (1:1 за пальцем, без перескока). Фиксация места — когда центр призрака
+   * проходит середину соседа. Pointer Events едины для мыши и тача. */
   function wireLineDrag(div, grip, inp) {
-    var pid = null, grabDy = 0, order = null, shift = {};
+    var pid = null, grabDy = 0, order = null, shift = {}, ghost = null;
     function rowsOf(box) {
       return Array.prototype.slice.call(box.querySelectorAll('.tline'));
     }
@@ -408,7 +409,7 @@
       if (pid != null) return;
       if (e.button != null && e.button !== 0) return;
       var box = el('lines');
-      if (!box) return;
+      if (!box || !document.body) return;
       pid = e.pointerId;
       shift = {};
       try { grip.setPointerCapture(pid); } catch (x) {}
@@ -417,21 +418,31 @@
       var h = rect ? rect.height : div.offsetHeight || 56;
       grabDy = rect ? (e.clientY - rect.top) : h / 2;
       order = rowsOf(box);
-      div.classList.add('dragging');
-      div.style.position = 'fixed';
-      div.style.width = (rect ? rect.width : div.offsetWidth) + 'px';
-      div.style.left = (rect ? rect.left : 0) + 'px';
-      div.style.top = (e.clientY - grabDy) + 'px';
+      /* Призрак едет, оригинал держит место — список не прыгает на захвате. */
+      ghost = div.cloneNode(true);
+      ghost.removeAttribute('data-id');
+      ghost.removeAttribute('data-trailing');
+      ghost.classList.add('dragging');
+      ghost.style.position = 'fixed';
+      ghost.style.width = (rect ? rect.width : div.offsetWidth) + 'px';
+      ghost.style.left = (rect ? rect.left : 0) + 'px';
+      ghost.style.top = (e.clientY - grabDy) + 'px';
+      ghost.style.margin = '0';
+      ghost.style.pointerEvents = 'none';
+      var gInp = ghost.querySelector ? ghost.querySelector('.tinput') : null;
+      if (gInp) { gInp.setAttribute('readonly', 'readonly'); gInp.tabIndex = -1; }
+      document.body.appendChild(ghost);
+      div.style.visibility = 'hidden';
       box.classList.add('drag-active');
       if (e.cancelable) e.preventDefault();
     });
     grip.addEventListener('pointermove', function (e) {
-      if (pid == null || e.pointerId !== pid || !order) return;
+      if (pid == null || e.pointerId !== pid || !order || !ghost) return;
       var box = el('lines');
       if (!box) return;
-      div.style.top = (e.clientY - grabDy) + 'px';
+      ghost.style.top = (e.clientY - grabDy) + 'px';
       var d = null;
-      try { d = div.getBoundingClientRect(); } catch (x) { return; }
+      try { d = ghost.getBoundingClientRect(); } catch (x) { return; }
       var idx = order.indexOf(div);
       for (var i = 0; i < order.length; i++) {
         var row = order[i];
@@ -439,11 +450,11 @@
         var r = row.getBoundingClientRect();
         var off = 0;
         if (i > idx) {
-          /* Сосед снизу: низ тянущейся въехал в него — едет вверх под неё. */
+          /* Сосед снизу: низ призрака въехал в него — едет вверх под него. */
           var pen = d.bottom - r.top;
           if (pen > 0) off = -Math.min(pen, r.height + 10);
         } else {
-          /* Сосед сверху: верх тянущейся въехал в него — едет вниз под неё. */
+          /* Сосед сверху: верх призрака въехал в него — едет вниз под него. */
           var pen2 = r.bottom - d.top;
           if (pen2 > 0) off = Math.min(pen2, r.height + 10);
         }
@@ -468,10 +479,19 @@
       if (e && e.pointerId != null && e.pointerId !== pid) return;
       pid = null;
       var box = el('lines');
-      var firstDiv = null;
-      try { firstDiv = div.getBoundingClientRect(); } catch (x) { firstDiv = null; }
+      var firstTop = null, firstH = 0;
+      if (ghost) {
+        try {
+          var gr = ghost.getBoundingClientRect();
+          firstTop = gr.top;
+          firstH = gr.height;
+        } catch (x) { firstTop = null; }
+        if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
+      }
+      ghost = null;
+      div.style.visibility = '';
       /* Итоговое место: сколько соседей (по их местам в покое) выше центра. */
-      var cy = firstDiv ? firstDiv.top + firstDiv.height / 2 : 0;
+      var cy = (firstTop != null) ? firstTop + firstH / 2 : 0;
       var below = [];
       if (box && order) {
         for (var i = 0; i < order.length; i++) {
@@ -481,22 +501,18 @@
           var rest = r.top - (shift[i] || 0);
           if (rest + r.height / 2 < cy) below.push(row);
         }
-        /* Переставляем тянущуюся в поток на итоговое место. */
+        /* Переставляем строку в потоке на итоговое место. */
         if (below.length) box.insertBefore(div, below[below.length - 1].nextSibling);
         else box.insertBefore(div, box.firstChild);
       }
-      div.style.position = '';
-      div.style.top = '';
-      div.style.left = '';
-      div.style.width = '';
       div.classList.remove('dragging');
       /* Мягкая посадка: все доезжают 200мс, затем сохраняем и рисуем. */
       if (box && order) {
-        if (firstDiv) {
-          var newDiv = null;
-          try { newDiv = div.getBoundingClientRect(); } catch (x) { newDiv = null; }
-          if (newDiv) {
-            var dy = firstDiv.top - newDiv.top;
+        if (firstTop != null) {
+          var newR = null;
+          try { newR = div.getBoundingClientRect(); } catch (x) { newR = null; }
+          if (newR) {
+            var dy = firstTop - newR.top;
             if (dy) {
               div.style.transition = 'none';
               div.style.transform = 'translateY(' + dy + 'px)';
