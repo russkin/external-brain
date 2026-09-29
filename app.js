@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v5';
+  var APP_VERSION = 'v6';
   var L = window.EBLogic;
   var state = null;
   var syncStatus = '';
@@ -373,6 +373,15 @@
       if (id && L.getTask(state.tasks, id)) ids.push(id);
     }
     if (!ids.length) return;
+    /* Порядок не менялся (тап без движения) — метки не трогаем, синк не дёргаем. */
+    var cur = lineTasks().map(function (t) { return t.id; });
+    if (cur.length === ids.length) {
+      var same = true;
+      for (var k = 0; k < ids.length; k++) {
+        if (ids[k] !== cur[k]) { same = false; break; }
+      }
+      if (same) return;
+    }
     var now = Date.now();
     var byId = {};
     state.tasks.forEach(function (t) { if (t) byId[t.id] = t; });
@@ -385,37 +394,87 @@
     save();
   }
 
-  /* Живое перетаскивание за grip: строка остаётся в потоке и тут же
-   * переставляется в DOM между теми строками, где сейчас указатель —
-   * без translateY (он давал двойное смещение: сдвиг + перестановка,
-   * строки визуально наслаивались). Pointer Events едины для мыши и тача. */
+  /* Плавное перетаскивание за grip: строка вынимается из потока и едет
+   * под пальцем/мышью, а соседи медленно (FLIP-анимация 250мс) разъезжаются,
+   * освобождая место: placeholder показывает, куда строка встанет.
+   * Pointer Events едины для мыши и тача; ввод в поле не мешает. */
   function wireLineDrag(div, grip, inp) {
-    var pid = null;
+    var pid = null, ph = null, grabDy = 0;
+    function rowsOf(box) {
+      return Array.prototype.slice.call(box.querySelectorAll('.tline'));
+    }
+    /* FLIP: соседи плавно доезжают на новые места вместо перескока. */
+    function flipRows(box, moving) {
+      var rows = rowsOf(box);
+      var first = {};
+      rows.forEach(function (row, i) {
+        if (row === moving) return;
+        try { first[i] = row.getBoundingClientRect().top; } catch (x) { first[i] = 0; }
+      });
+      return function play() {
+        rows.forEach(function (row, i) {
+          if (row === moving) return;
+          var oldTop = first[i];
+          if (oldTop == null) return;
+          var newTop = 0;
+          try { newTop = row.getBoundingClientRect().top; } catch (x) { return; }
+          var dy = oldTop - newTop;
+          if (!dy) return;
+          row.style.transition = 'none';
+          row.style.transform = 'translateY(' + dy + 'px)';
+          void row.offsetHeight;
+          row.style.transition = 'transform .25s ease';
+          row.style.transform = '';
+          (function (r) {
+            setTimeout(function () {
+              r.style.transition = '';
+              r.style.transform = '';
+            }, 280);
+          })(row);
+        });
+      };
+    }
     grip.addEventListener('pointerdown', function (e) {
       if (pid != null) return;
       if (e.button != null && e.button !== 0) return;
+      var box = el('lines');
+      if (!box) return;
       pid = e.pointerId;
       try { grip.setPointerCapture(pid); } catch (x) {}
-      var box = el('lines');
-      if (box) box.classList.add('drag-active');
+      var rect = null;
+      try { rect = div.getBoundingClientRect(); } catch (x) { rect = null; }
+      var h = rect ? rect.height : div.offsetHeight || 56;
+      grabDy = rect ? (e.clientY - rect.top) : h / 2;
+      ph = document.createElement('div');
+      ph.className = 'phold';
+      ph.style.height = h + 'px';
+      box.insertBefore(ph, div.nextSibling);
       div.classList.add('dragging');
+      div.style.position = 'fixed';
+      div.style.width = (rect ? rect.width : div.offsetWidth) + 'px';
+      div.style.left = (rect ? rect.left : 0) + 'px';
+      div.style.top = (e.clientY - grabDy) + 'px';
+      box.classList.add('drag-active');
       if (e.cancelable) e.preventDefault();
     });
     grip.addEventListener('pointermove', function (e) {
-      if (pid == null || e.pointerId !== pid) return;
+      if (pid == null || e.pointerId !== pid || !ph) return;
       var box = el('lines');
       if (!box) return;
-      /* Живая вставка в потоке: ищем, между какими строками сейчас указатель. */
-      var rows = Array.prototype.slice.call(box.querySelectorAll('.tline'));
+      div.style.top = (e.clientY - grabDy) + 'px';
+      /* Куда встанет строка: ищем поPlaceholder-соседям (без тянущейся). */
+      var rows = rowsOf(box);
       var after = null;
       for (var i = 0; i < rows.length; i++) {
-        if (rows[i] === div) continue;
+        if (rows[i] === div || rows[i] === ph) continue;
         var r = rows[i].getBoundingClientRect();
         if (e.clientY > r.top + r.height / 2) after = rows[i];
       }
       var target = after ? after.nextSibling : box.firstChild;
-      if (target !== div && target !== div.nextSibling) {
-        box.insertBefore(div, target);
+      if (target !== ph && target !== ph.nextSibling) {
+        var play = flipRows(box, div);
+        box.insertBefore(ph, target);
+        play();
       }
       /* Автопрокрутка у краёв экрана. */
       try {
@@ -428,9 +487,18 @@
       if (pid == null) return;
       if (e && e.pointerId != null && e.pointerId !== pid) return;
       pid = null;
+      var box = el('lines');
+      if (box && ph && ph.parentNode === box) {
+        box.insertBefore(div, ph);
+        ph.parentNode.removeChild(ph);
+      }
+      ph = null;
+      div.style.position = '';
+      div.style.top = '';
+      div.style.left = '';
+      div.style.width = '';
       div.style.transform = '';
       div.classList.remove('dragging');
-      var box = el('lines');
       if (box) box.classList.remove('drag-active');
       persistLineOrder();
       render();
