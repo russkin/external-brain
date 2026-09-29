@@ -115,8 +115,9 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('pointermove'), 'нет pointermove для живого drag');
     assert.ok(appSrc.includes('pointerup'), 'нет pointerup для завершения drag');
     assert.ok(appSrc.includes('setPointerCapture'), 'нет захвата указателя');
-    assert.ok(appSrc.includes('translateY'), 'строка не следует за указателем');
+    assert.ok(!appSrc.includes('translateY('), 'динамический сдвиг даёт двойное смещение и наложение строк');
     assert.ok(appSrc.includes('drag-active'), 'нет drag-active состояния');
+    assert.ok(appSrc.includes('lostpointercapture'), 'нет страховки завершения drag');
     assert.ok(appSrc.includes('persistLineOrder'), 'порядок не сохраняется');
   });
   it('быстрый ввод и фокус дня убраны из оболочки', () => {

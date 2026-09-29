@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v4';
+  var APP_VERSION = 'v5';
   var L = window.EBLogic;
   var state = null;
   var syncStatus = '';
@@ -385,16 +385,16 @@
     save();
   }
 
-  /* Живое перетаскивание за grip: строка едет за пальцем/мышью и тут же
-   * встаёт в списке между теми строками, где сейчас находится указатель.
-   * Pointer Events едины для мыши и тача; захват — на grip, ввод в поле не мешает. */
+  /* Живое перетаскивание за grip: строка остаётся в потоке и тут же
+   * переставляется в DOM между теми строками, где сейчас указатель —
+   * без translateY (он давал двойное смещение: сдвиг + перестановка,
+   * строки визуально наслаивались). Pointer Events едины для мыши и тача. */
   function wireLineDrag(div, grip, inp) {
-    var pid = null, y0 = 0;
+    var pid = null;
     grip.addEventListener('pointerdown', function (e) {
       if (pid != null) return;
       if (e.button != null && e.button !== 0) return;
       pid = e.pointerId;
-      y0 = e.clientY;
       try { grip.setPointerCapture(pid); } catch (x) {}
       var box = el('lines');
       if (box) box.classList.add('drag-active');
@@ -405,9 +405,7 @@
       if (pid == null || e.pointerId !== pid) return;
       var box = el('lines');
       if (!box) return;
-      var dy = e.clientY - y0;
-      div.style.transform = 'translateY(' + dy + 'px) scale(1.02)';
-      /* Живая вставка: ищем, между какими строками сейчас указатель. */
+      /* Живая вставка в потоке: ищем, между какими строками сейчас указатель. */
       var rows = Array.prototype.slice.call(box.querySelectorAll('.tline'));
       var after = null;
       for (var i = 0; i < rows.length; i++) {
@@ -439,6 +437,7 @@
     }
     grip.addEventListener('pointerup', finish);
     grip.addEventListener('pointercancel', finish);
+    grip.addEventListener('lostpointercapture', finish);
   }
 
   function renderLines() {
