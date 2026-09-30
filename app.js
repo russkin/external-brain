@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v22';
+  var APP_VERSION = 'v23';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -394,10 +394,17 @@
     try { ta.style.height = ta.scrollHeight + 'px'; } catch (x) {}
   }
 
-  /* Свайп строки справа налево: открыть флаг «Выполнено». */
+  /* Свайп строки справа налево: открыть флаг «Выполнено».
+   * Тап по открытой строке (без сдвига) — закрыть флаг обратно. */
   function wireLineSwipe(div, taskId) {
-    var swPid = null, swX0 = 0, swY0 = 0, swOpen = false;
+    var swPid = null, swX0 = 0, swY0 = 0;
+    var tapX0 = 0, tapY0 = 0;
+    /* Состояние — на элементе, а не в closure: свайп делят обработчики
+     * строки и старта drag'а, рассинхрон даёт залипший флаг. */
+    div._swOpen = false;
     div.addEventListener('pointerdown', function (e) {
+      tapX0 = e.clientX;
+      tapY0 = e.clientY;
       if (e.target && e.target.closest && e.target.closest('.grip')) return;
       if (e.button != null && e.button !== 0) return;
       swPid = e.pointerId;
@@ -408,12 +415,12 @@
       if (e.pointerId !== swPid) return;
       var dx = e.clientX - swX0;
       var dy = e.clientY - swY0;
-      if (!swOpen && dx < -48 && Math.abs(dx) > Math.abs(dy) * 2) {
+      if (!div._swOpen && dx < -48 && Math.abs(dx) > Math.abs(dy) * 2) {
         div.classList.add('swiped');
-        swOpen = true;
-      } else if (swOpen && dx > -16) {
+        div._swOpen = true;
+      } else if (div._swOpen && dx > -16) {
         div.classList.remove('swiped');
-        swOpen = false;
+        div._swOpen = false;
       }
     });
     function swEnd(e) {
@@ -422,6 +429,12 @@
     }
     div.addEventListener('pointerup', swEnd);
     div.addEventListener('pointercancel', swEnd);
+    div.addEventListener('pointerup', function (e) {
+      if (div._swOpen && Math.abs(e.clientX - tapX0) < 12 && Math.abs(e.clientY - tapY0) < 12) {
+        div.classList.remove('swiped');
+        div._swOpen = false;
+      }
+    });
   }
 
   /* Выполнить с анимацией: строка возвращается на место уже зачёркнутой,
@@ -703,6 +716,7 @@
       div.style.margin = '0';
       div.style.pointerEvents = 'none';
       div.classList.remove('swiped');
+      div._swOpen = false;
       box.classList.add('drag-active');
       /* Дыра сразу на месте строки: захват не схлопывает список. */
       setHole(phi);

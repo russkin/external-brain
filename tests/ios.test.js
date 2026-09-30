@@ -138,6 +138,8 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('completeTaskSlide'), 'нет завершения со слайдом');
     assert.ok(appSrc.includes('renderDoneRows') || appSrc.includes('L.doneList(state.tasks)'), 'нет секции выполненных');
     assert.ok(appSrc.includes('is-done'), 'нет зачёркивания');
+    assert.ok(html.includes('user-select'), 'свайп проигрывает выделению текста');
+    assert.ok(appSrc.includes('_swOpen'), 'состояние свайпа рассинхронизировано');
   });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
