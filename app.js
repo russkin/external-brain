@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v17';
+  var APP_VERSION = 'v18';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var L = window.EBLogic;
@@ -454,7 +454,8 @@
     }
   }
   /* Остаток недолётной FLIP-анимации строки: решения принимаем по покою
-   * (замер минус остаток), поэтому соседи не болтают дыру туда-сюда. */
+   * (замер минус остаток), поэтому соседи не болтают дыру туда-сюда.
+   * Анимация линейная — остаток считается точно, без ошибки ease. */
   function glRem(row) {
     var g = row._gl;
     if (!g) return 0;
@@ -482,7 +483,7 @@
       snaps[q].el.style.transition = 'none';
       snaps[q].el.style.transform = 'translateY(' + ddy + 'px)';
       void snaps[q].el.offsetHeight;
-      snaps[q].el.style.transition = 'transform .18s ease';
+      snaps[q].el.style.transition = 'transform .18s linear';
       snaps[q].el.style.transform = '';
     }
     return true;
@@ -638,8 +639,7 @@
        * в покое на PEN px. Триггер смотрят только неподвижные ряды,
        * поэтому обратной связи нет в принципе: ни дрейфа, ни улёта,
        * усилие симметрично вверх и вниз при любой высоте строк. */
-      var PEN = 12;
-      var PEN = 12;
+      var PEN = 14;
       var vis = [];
       var afterPh = false;
       var live = box.children;
@@ -770,7 +770,7 @@
               div.style.transition = 'none';
               div.style.transform = 'translateY(' + dy + 'px)';
               void div.offsetHeight;
-              div.style.transition = 'transform .2s ease';
+              div.style.transition = 'transform .2s linear';
               div.style.transform = '';
             }
           }
@@ -782,7 +782,7 @@
           preTops[q].el.style.transition = 'none';
           preTops[q].el.style.transform = 'translateY(' + ddy + 'px)';
           void preTops[q].el.offsetHeight;
-          preTops[q].el.style.transition = 'transform .2s ease';
+          preTops[q].el.style.transition = 'transform .2s linear';
           preTops[q].el.style.transform = '';
         }
         box.classList.remove('drag-active');

@@ -144,6 +144,7 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('phold'), 'нет путешествующего placeholder');
     assert.ok(appSrc.includes('holeH + LINES_GAP'), 'границы не в покое — вниз будет недотяг');
     assert.ok(appSrc.includes('glRem'), 'недолёт анимации болтает дыру — будет тряска');
+    assert.ok(appSrc.includes('.18s linear'), 'анимация не линейная — вычитание недолёта врёт');
     assert.ok(appSrc.includes('PEN'), 'нет порога въезда ведущим краем');
     assert.ok(appSrc.includes('movePh'), 'дыра не едет за пальцем отдельно');
     assert.ok(appSrc.includes('divH'), 'нет высоты тянущейся для симметрии вверх/вниз');
