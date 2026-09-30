@@ -141,7 +141,7 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('pointermove'), 'нет pointermove для живого drag');
     assert.ok(appSrc.includes('pointerup'), 'нет pointerup для завершения drag');
     assert.ok(appSrc.includes('setPointerCapture'), 'нет захвата указателя');
-    assert.ok(appSrc.includes('applied'), 'замер наезда не по месту в покое — строки улетят');
+    assert.ok(appSrc.includes('gapOpen'), 'нет дыры высотой с призрак — высокий перекроет соседей');
     assert.ok(appSrc.includes('lastY'), 'место drop не по пальцу — высокие встанут мимо');
     assert.ok(!appSrc.includes('phold'), 'placeholder даёт скачок вместо плавного наезда');
     assert.ok(appSrc.includes('cloneNode'), 'нет призрака: захват будет дёргать список');

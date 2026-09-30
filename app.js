@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v13';
+  var APP_VERSION = 'v14';
   var INDENT_STEP = 28;
   var L = window.EBLogic;
   var state = null;
@@ -453,7 +453,7 @@
    *   задачи сверху (уровень не глубже соседа сверху +1, первая — всегда 0).
    * Направление определяется первым движением: горизонталь (|dx|>|dy|*2). */
   function wireLineDrag(div, grip, inp) {
-    var pid = null, grabDy = 0, x0 = 0, y0 = 0, mode = null, lastDx = 0, lastY = null;
+    var pid = null, grabDy = 0, ghostH = 0, x0 = 0, y0 = 0, mode = null, lastDx = 0, lastY = null;
     var order = null, shift = {}, ghost = null, kids = [];
     var indentCur = 0, indentMax = 0;
     function rowsOf(box) {
@@ -498,6 +498,7 @@
       try { rect = div.getBoundingClientRect(); } catch (x) { rect = null; }
       var h = rect ? rect.height : div.offsetHeight || 56;
       grabDy = rect ? (e.clientY - rect.top) : h / 2;
+      ghostH = h;
       order = rowsOf(box);
       /* Дети (вложенные с большим отступом) прячутся под родителя на время drag. */
       kids = [];
@@ -583,37 +584,28 @@
       }
       if (!order || !ghost) return;
       ghost.style.top = (e.clientY - grabDy) + 'px';
-      var d = null;
-      try { d = ghost.getBoundingClientRect(); } catch (x) { return; }
-      var idx = order.indexOf(div);
-      for (var i = 0; i < order.length; i++) {
-        var row = order[i];
-        if (row === div || !row.parentNode || row.style.display === 'none') continue;
-        var r = row.getBoundingClientRect();
-        /* Замер по месту строки в покое: вычитаем уже применённый сдвиг,
-         * иначе ошибка растёт с каждым движением (строки улетают вверх),
-         * а на разной высоте строк (многострочные) место отпускания врёт. */
-        var applied = shift[i] || 0;
-        var rTop = r.top - applied;
-        var rBottom = r.bottom - applied;
-        var off = 0;
-        if (i > idx) {
-          /* Сосед снизу: низ призрака въехал в него — едет вверх под него. */
-          var pen = d.bottom - rTop;
-          if (pen > 0) off = -Math.min(pen, r.height + 10);
-        } else {
-          /* Сосед сверху: верх призрака въехал в него — едет вниз под него. */
-          var pen2 = rBottom - d.top;
-          if (pen2 > 0) off = Math.min(pen2, r.height + 10);
-        }
-        shift[i] = off;
-        if (off) {
-          row.style.transition = 'none';
-          row.style.transform = 'translateY(' + off + 'px)';
-        } else {
-          row.style.transition = '';
-          row.style.transform = '';
-        }
+      /* Дыра под призрак высотой с него: строки ниже пальца отходят вниз —
+       * многострочный пункт ложится в готовое место и не перекрывает соседей.
+       * Замер середин — по местам в покое (минус применённый сдвиг),
+       * поэтому ничего не бегает и не улетает. */
+      var gapOpen = ghostH + 8;
+      var vis = [];
+      for (var vi = 0; vi < order.length; vi++) {
+        var vrow = order[vi];
+        if (vrow === div || !vrow.parentNode || vrow.style.display === 'none') continue;
+        var vr = vrow.getBoundingClientRect();
+        vis.push({ row: vrow, oi: vi, mid: vr.top - (shift[vi] || 0) + vr.height / 2 });
+      }
+      var at = 0;
+      for (var ai = 0; ai < vis.length; ai++) {
+        if (vis[ai].mid < e.clientY) at = ai + 1;
+      }
+      for (var si = 0; si < vis.length; si++) {
+        var want = si >= at ? gapOpen : 0;
+        if ((shift[vis[si].oi] || 0) === want) continue;
+        shift[vis[si].oi] = want;
+        vis[si].row.style.transition = 'transform .15s ease';
+        vis[si].row.style.transform = want ? 'translateY(' + want + 'px)' : '';
       }
       /* Автопрокрутка у краёв экрана. */
       try {
