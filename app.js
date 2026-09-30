@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v16';
+  var APP_VERSION = 'v17';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var L = window.EBLogic;
