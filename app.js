@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v19';
+  var APP_VERSION = 'v20';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var L = window.EBLogic;
@@ -250,12 +250,20 @@
 
   function render() {
     if (!state) return;
+    /* Позиция страницы: перестроение схлопывает список на кадр и браузер
+     * увозит скролл наверх — запоминаем и возвращаем обратно. */
+    var keepY = 0;
+    try { keepY = window.pageYOffset || document.documentElement.scrollTop || 0; } catch (x) { keepY = 0; }
     var v = el('appVerHead');
     if (v) v.textContent = APP_VERSION;
     var v2 = el('appVer');
     if (v2) v2.textContent = APP_VERSION;
     renderLines();
     renderStatus();
+    try {
+      var curY = window.pageYOffset || 0;
+      if (curY !== keepY) window.scrollTo(0, keepY);
+    } catch (x) {}
   }
 
   /* --- Стартовый экран: строки «grip 6 точек + поле ввода» --- */
@@ -460,7 +468,7 @@
    * Направление определяется первым движением: горизонталь (|dx|>|dy|*2). */
   function wireLineDrag(div, grip, inp) {
     var pid = null, grabDy = 0, divH = 0, holeH = 0, holeShift = 0, x0 = 0, y0 = 0;
-    var mode = null, lastDx = 0, phi = 0;
+    var mode = null, lastDx = 0, lastScrollTs = 0, phi = 0;
     var order = null, kids = [], fr = [], frSh = [];
     var indentCur = 0, indentMax = 0;
     var PEN = 14;
@@ -585,6 +593,7 @@
       x0 = e.clientX;
       y0 = e.clientY;
       lastDx = 0;
+      lastScrollTs = 0;
       mode = null;
       kids = [];
       try { grip.setPointerCapture(pid); } catch (x) {}
@@ -638,11 +647,16 @@
         else break;
       }
       if (!advanced) return;
-      /* Автопрокрутка у краёв экрана. */
-      try {
-        if (e.clientY < 90) window.scrollBy(0, -10);
-        else if (e.clientY > (window.innerHeight || 800) - 90) window.scrollBy(0, 10);
-      } catch (x) {}
+      /* Автопрокрутка у краёв — только при уверенном движении (иначе страница
+       * сдвигается от лёгкого касания): дальше 40px от захвата, не чаще 90мс. */
+      var dragDist = Math.abs(e.clientY - y0);
+      var nowMs = Date.now();
+      if (dragDist > 40 && nowMs - lastScrollTs > 90) {
+        try {
+          if (e.clientY < 70) { window.scrollBy(0, -12); lastScrollTs = nowMs; }
+          else if (e.clientY > (window.innerHeight || 800) - 70) { window.scrollBy(0, 12); lastScrollTs = nowMs; }
+        } catch (x) {}
+      }
       if (e.cancelable) e.preventDefault();
     });
     function finish(e) {

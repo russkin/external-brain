@@ -136,6 +136,12 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('kids'), 'дети не собираются при drag');
     assert.ok(appSrc.includes('holeShift'), 'дыра не покрывает весь блок');
   });
+  it('позиция страницы не прыгает, автопрокрутка не дёргает', () => {
+    assert.ok(appSrc.includes('keepY'), 'скролл не сохраняется при перерисовке');
+    assert.ok(appSrc.includes('scrollTo(0, keepY)'), 'скролл не возвращается');
+    assert.ok(appSrc.includes('lastScrollTs'), 'автопрокрутка без троттлинга');
+    assert.ok(appSrc.includes('dragDist'), 'автопрокрутка без порога движения');
+  });
   it('перетаскивание: слепок на захвате, сдвиги соседей, посадка после', () => {
     assert.ok(appSrc.includes('pointerdown'), 'нет pointerdown на grip');
     assert.ok(appSrc.includes('pointermove'), 'нет pointermove для живого drag');
