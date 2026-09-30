@@ -142,7 +142,10 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('pointerup'), 'нет pointerup для завершения drag');
     assert.ok(appSrc.includes('setPointerCapture'), 'нет захвата указателя');
     assert.ok(appSrc.includes('phold'), 'нет путешествующего placeholder');
-    assert.ok(appSrc.includes('lastY'), 'место drop не по пальцу — высокие встанут мимо');
+    assert.ok(appSrc.includes('holeH + LINES_GAP'), 'границы не в покое — вниз будет недотяг');
+    assert.ok(appSrc.includes('PEN'), 'нет порога въезда ведущим краем');
+    assert.ok(appSrc.includes('movePh'), 'дыра не едет за пальцем отдельно');
+    assert.ok(appSrc.includes('divH'), 'нет высоты тянущейся для симметрии вверх/вниз');
     assert.ok(!appSrc.includes('cloneNode'), 'призрак оставляет пустое место исходника');
     assert.ok(appSrc.includes('drag-active'), 'нет drag-active состояния');
     assert.ok(appSrc.includes('persistLineOrder'), 'порядок не сохраняется');

@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v15';
+  var APP_VERSION = 'v16';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var L = window.EBLogic;
@@ -453,13 +453,37 @@
       if (kt) L.setIndent(state.tasks, kidId, lineIndent(kt) + delta);
     }
   }
+  /* Сдвинуть дыру на позицию np с плавным огибанием соседей (FLIP).
+   * Возвращает true, если дыра реально переехала. */
+  function movePh(box, ph, vis, np) {
+    var target = np < vis.length ? vis[np].row : null;
+    var phNext = ph.nextSibling;
+    if ((target === null && phNext === null) || (target !== null && phNext === target)) return false;
+    var snaps = [];
+    for (var s = 0; s < vis.length; s++) {
+      snaps.push({ el: vis[s].row, top: vis[s].row.getBoundingClientRect().top });
+    }
+    box.insertBefore(ph, target);
+    for (var q = 0; q < snaps.length; q++) {
+      var nt = snaps[q].el.getBoundingClientRect().top;
+      var ddy = snaps[q].top - nt;
+      if (!ddy) continue;
+      snaps[q].el.style.transition = 'none';
+      snaps[q].el.style.transform = 'translateY(' + ddy + 'px)';
+      void snaps[q].el.offsetHeight;
+      snaps[q].el.style.transition = 'transform .18s ease';
+      snaps[q].el.style.transform = '';
+    }
+    return true;
+  }
+
   /* Перетаскивание за grip двумя жестами (Pointer Events — мышь и тач):
    * - вверх/вниз: плавный вертикальный drag (призрак + соседи едут);
    * - вправо/влево: сдвиг на ширину отступа — задача входит в группу
    *   задачи сверху (уровень не глубже соседа сверху +1, первая — всегда 0).
    * Направление определяется первым движением: горизонталь (|dx|>|dy|*2). */
   function wireLineDrag(div, grip, inp) {
-    var pid = null, grabDy = 0, holeH = 0, x0 = 0, y0 = 0, mode = null, lastDx = 0, lastY = null;
+    var pid = null, grabDy = 0, divH = 0, holeH = 0, x0 = 0, y0 = 0, mode = null, lastDx = 0;
     var order = null, ph = null, phi = 0, kids = [];
     var indentCur = 0, indentMax = 0;
     function rowsOf(box) {
@@ -503,6 +527,7 @@
       try { rect = div.getBoundingClientRect(); } catch (x) { rect = null; }
       var h = rect ? rect.height : div.offsetHeight || 56;
       grabDy = rect ? (e.clientY - rect.top) : h / 2;
+      divH = h;
       order = rowsOf(box);
       /* Дети (вложенные с большим отступом) прячутся под родителя на время drag.
        * Высоту меряем ДО скрытия, иначе дыра получится маленькой. */
@@ -555,7 +580,6 @@
       x0 = e.clientX;
       y0 = e.clientY;
       lastDx = 0;
-      lastY = e.clientY;
       mode = null;
       kids = [];
       try { grip.setPointerCapture(pid); } catch (x) {}
@@ -563,7 +587,6 @@
     });
     grip.addEventListener('pointermove', function (e) {
       if (pid == null || e.pointerId !== pid) return;
-      lastY = e.clientY;
       var dx = e.clientX - x0;
       var dy = e.clientY - y0;
       if (!mode) {
@@ -589,52 +612,41 @@
         return;
       }
       if (!order || !ph) return;
-      /* Верх тянущейся (а не палец): строка едет со сдвигом grabDy,
-       * и дыра должна лежать ровно под ней, иначе высокая строка верхней
-       * половиной накрывает соседей сверху. lastY хранит верх для посадки. */
+      /* Ведущие края тянущейся: низ идёт за пальцем со сдвигом grabDy. */
       var dt = e.clientY - grabDy;
-      lastY = dt;
       div.style.top = dt + 'px';
-      /* Placeholder путешествует за пальцем: где палец — там дыра высотой
-       * с блок. Соседи плавно огибают её (FLIP), исходное место не пустует. */
+      var db = dt + divH;
+      /* Дыра липкая: стоит, пока ведущий край не въедет в следующий ряд
+       * в покое на PEN px. Триггер смотрят только неподвижные ряды,
+       * поэтому обратной связи нет в принципе: ни дрейфа, ни улёта,
+       * усилие симметрично вверх и вниз при любой высоте строк. */
+      var PEN = 12;
+      var PEN = 12;
       var vis = [];
-      for (var vi = 0; vi < order.length; vi++) {
-        var vrow = order[vi];
-        if (vrow === div || !vrow.parentNode || vrow.style.display === 'none') continue;
+      var afterPh = false;
+      var live = box.children;
+      for (var vi = 0; vi < live.length; vi++) {
+        var vrow = live[vi];
+        if (vrow === ph) { afterPh = true; continue; }
+        if (vrow === div || !vrow.classList || !vrow.classList.contains('tline')) continue;
+        if (vrow.style.display === 'none') continue;
         var vr = vrow.getBoundingClientRect();
-        vis.push({ row: vrow, mid: vr.top + vr.height / 2 });
+        /* Ряды ниже дыры измеряем в покое (минус дыра): иначе вниз
+         * пришлось бы дотягиваться на высоту дыры дальше, чем вверх. */
+        vis.push({ row: vrow, top: vr.top - (afterPh ? holeH + LINES_GAP : 0), h: vr.height });
       }
-      var at = 0;
-      for (var ai = 0; ai < vis.length; ai++) {
-        if (vis[ai].mid < dt) at = ai + 1;
+      var advanced = false;
+      while (phi < vis.length) {
+        var nb = vis[phi];
+        if (db > nb.top + PEN) { movePh(box, ph, vis, phi + 1); phi++; advanced = true; }
+        else break;
       }
-      /* Deadband 6px: дыра едет только при честном пересечении границы —
-       * недолётная анимация и дрожание пальца её не болтают. */
-      if (at > phi && dt < vis[phi].mid + 6) at = phi;
-      else if (at < phi && dt > vis[at].mid - 6) at = phi;
-      if (at === phi) return;
-      phi = at;
-      var target = at < vis.length ? vis[at].row : null;
-      var phNext = ph.nextSibling;
-      if (!((target === null && phNext === null) || (target !== null && phNext === target))) {
-        /* Снимок → двигаем дыру → соседи доезжают. Замер после снэпа чистый,
-         * поэтому многострочные не бегают и не улетают. */
-        var snaps = [];
-        for (var sj = 0; sj < vis.length; sj++) {
-          snaps.push({ el: vis[sj].row, top: vis[sj].row.getBoundingClientRect().top });
-        }
-        box.insertBefore(ph, target);
-        for (var sk = 0; sk < snaps.length; sk++) {
-          var nt = snaps[sk].el.getBoundingClientRect().top;
-          var ddy = snaps[sk].top - nt;
-          if (!ddy) continue;
-          snaps[sk].el.style.transition = 'none';
-          snaps[sk].el.style.transform = 'translateY(' + ddy + 'px)';
-          void snaps[sk].el.offsetHeight;
-          snaps[sk].el.style.transition = 'transform .18s ease';
-          snaps[sk].el.style.transform = '';
-        }
+      while (phi > 0) {
+        var na = vis[phi - 1];
+        if (dt < na.top + na.h - PEN) { movePh(box, ph, vis, phi - 1); phi--; advanced = true; }
+        else break;
       }
+      if (!advanced) return;
       /* Автопрокрутка у краёв экрана. */
       try {
         if (e.clientY < 90) window.scrollBy(0, -10);
@@ -667,10 +679,8 @@
       var box = el('lines');
       var firstTop = null;
       try { firstTop = div.getBoundingClientRect().top; } catch (x) { firstTop = null; }
-      /* Итоговое место — по верху тянущейся (совпадает с дырой-preview).
-       * Снэп недолётной анимации, дыру убираем, строку возвращаем в поток. */
-      var cy = (lastY != null) ? lastY : y0;
-      var below = [];
+      /* Посадка ровно в дыру: где preview — там и место. Пересчёт не нужен,
+       * поэтому промаха между preview и посадкой нет в принципе. */
       var preTops = [];
       if (box && order) {
         for (var i = 0; i < order.length; i++) {
@@ -684,9 +694,14 @@
           if (row2 === div || !row2.parentNode || row2.style.display === 'none') continue;
           var r = row2.getBoundingClientRect();
           preTops.push({ el: row2, top: r.top });
-          if (r.top + r.height / 2 < cy) below.push(row2);
         }
-        if (ph && ph.parentNode === box) box.removeChild(ph);
+        /* Дыру убираем, блок встаёт на её место (якорь — строка под дырой). */
+        var anchor = null;
+        if (ph && ph.parentNode === box) {
+          anchor = ph.nextSibling;
+          if (anchor === div) anchor = div.nextSibling;
+          box.removeChild(ph);
+        }
         ph = null;
         /* Родитель едет вместе с детьми: весь блок встаёт на итоговое место,
          * дети снова принимают прежний вид вложений. */
@@ -695,7 +710,6 @@
         for (var p0 = 0; p0 < sibs0.length; p0++) {
           if (sibs0[p0] === div) oldPos = p0;
         }
-        var anchor = below.length ? below[below.length - 1].nextSibling : box.firstChild;
         box.insertBefore(div, anchor);
         var ref = div.nextSibling;
         for (var m = kids.length - 1; m >= 0; m--) {
