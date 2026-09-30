@@ -2,9 +2,10 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v21';
+  var APP_VERSION = 'v22';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
+  var COLLAPSED_KEY = 'external-brain-collapsed-v1';
   var L = window.EBLogic;
   var state = null;
   var syncStatus = '';
@@ -287,14 +288,54 @@
   function makeGrip() {
     var g = document.createElement('span');
     g.className = 'grip';
-    g.title = 'Перетащить (вверх/вниз — порядок, вправо/влево — отступ)';
-    g.setAttribute('aria-label', 'Перетащить');
+    g.title = 'Тащить / свернуть группу';
+    g.setAttribute('aria-label', 'Тащить');
     for (var i = 0; i < 6; i++) {
       var d = document.createElement('span');
       d.className = 'dot';
       g.appendChild(d);
     }
     return g;
+  }
+
+  /* Свёрнутые группы: локально на устройстве (в синк не ходит). */
+  var collapsed = {};
+  function loadCollapsed() {
+    collapsed = {};
+    try {
+      var raw = null;
+      if (typeof localStorage !== 'undefined') raw = localStorage.getItem(COLLAPSED_KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      for (var i = 0; i < arr.length; i++) collapsed[String(arr[i])] = true;
+    } catch (x) { collapsed = {}; }
+  }
+  function saveCollapsed() {
+    try {
+      if (typeof localStorage === 'undefined') return;
+      var arr = [];
+      for (var id in collapsed) {
+        if (collapsed[id]) arr.push(id);
+      }
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify(arr));
+    } catch (x) {}
+  }
+  function toggleCollapse(id) {
+    if (!id) return;
+    if (collapsed[id]) delete collapsed[id];
+    else collapsed[id] = true;
+    saveCollapsed();
+    render();
+  }
+  function setAllCollapsed(all) {
+    collapsed = {};
+    if (all && state) {
+      var tasks = lineTasks();
+      for (var i = 0; i < tasks.length; i++) {
+        if (L.hasKids(tasks, i)) collapsed[tasks[i].id] = true;
+      }
+    }
+    saveCollapsed();
+    render();
   }
 
   /* Отступ строки в пикселях. Задача с отступом входит в группу задачи сверху. */
@@ -305,15 +346,21 @@
     return v;
   }
 
-  function makeLine(taskId, value, isTrailing, indent) {
+  function makeLine(taskId, value, isTrailing, indent, opts) {
+    opts = opts || {};
     var div = document.createElement('div');
     div.className = 'tline';
     if (taskId) div.setAttribute('data-id', taskId);
     else div.setAttribute('data-trailing', '1');
     indent = lineIndent({ indent: indent });
+    div.setAttribute('data-indent', String(indent));
     if (indent) div.style.marginLeft = (indent * INDENT_STEP) + 'px';
+    if (opts.hidden) div.classList.add('collapsed-kid');
+    var body = document.createElement('div');
+    body.className = 'tbody';
+    div.appendChild(body);
     var grip = makeGrip();
-    div.appendChild(grip);
+    body.appendChild(grip);
     var inp = document.createElement('textarea');
     inp.className = 'tinput';
     inp.value = value || '';
@@ -321,8 +368,20 @@
     inp.placeholder = 'Новая задача…';
     inp.autocomplete = 'off';
     inp.setAttribute('aria-label', 'Задача');
-    div.appendChild(inp);
+    if (opts.doneShown) inp.classList.add('is-done');
+    body.appendChild(inp);
     autosize(inp);
+    if (!isTrailing && !opts.doneShown) {
+      var flag = document.createElement('button');
+      flag.className = 'doneflag';
+      flag.textContent = '✓ Выполнено';
+      flag.setAttribute('aria-label', 'Отметить выполненной');
+      (function (id, fl) {
+        fl.addEventListener('click', function () { completeTaskSlide(id); });
+      })(taskId, flag);
+      div.appendChild(flag);
+      wireLineSwipe(div, taskId);
+    }
     wireLineInput(div, inp, taskId, isTrailing, indent);
     wireLineDrag(div, grip, inp);
     return div;
@@ -333,6 +392,62 @@
     if (!ta || !ta.style) return;
     ta.style.height = 'auto';
     try { ta.style.height = ta.scrollHeight + 'px'; } catch (x) {}
+  }
+
+  /* Свайп строки справа налево: открыть флаг «Выполнено». */
+  function wireLineSwipe(div, taskId) {
+    var swPid = null, swX0 = 0, swY0 = 0, swOpen = false;
+    div.addEventListener('pointerdown', function (e) {
+      if (e.target && e.target.closest && e.target.closest('.grip')) return;
+      if (e.button != null && e.button !== 0) return;
+      swPid = e.pointerId;
+      swX0 = e.clientX;
+      swY0 = e.clientY;
+    });
+    div.addEventListener('pointermove', function (e) {
+      if (e.pointerId !== swPid) return;
+      var dx = e.clientX - swX0;
+      var dy = e.clientY - swY0;
+      if (!swOpen && dx < -48 && Math.abs(dx) > Math.abs(dy) * 2) {
+        div.classList.add('swiped');
+        swOpen = true;
+      } else if (swOpen && dx > -16) {
+        div.classList.remove('swiped');
+        swOpen = false;
+      }
+    });
+    function swEnd(e) {
+      if (e && e.pointerId != null && e.pointerId !== swPid) return;
+      swPid = null;
+    }
+    div.addEventListener('pointerup', swEnd);
+    div.addEventListener('pointercancel', swEnd);
+  }
+
+  /* Выполнить с анимацией: строка возвращается на место уже зачёркнутой,
+   * затем спускается в секцию выполненных под полем ввода. */
+  function completeTaskSlide(taskId) {
+    var task = L.getTask(state.tasks, taskId);
+    if (!task || task.deleted || task.status === 'done') return;
+    var box = el('lines');
+    var row = null;
+    if (box && box.querySelectorAll) {
+      var rows = box.querySelectorAll('.tline[data-id]');
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].getAttribute('data-id') === taskId) { row = rows[i]; break; }
+      }
+    }
+    if (!row || (row.classList && row.classList.contains('sliding-done'))) {
+      if (!row) mutate(function () { L.completeTask(state.tasks, taskId); });
+      return;
+    }
+    row.classList.add('sliding-done');
+    var inp = row.querySelector ? row.querySelector('.tinput') : null;
+    if (inp) inp.classList.add('is-done');
+    row.classList.remove('swiped');
+    setTimeout(function () {
+      mutate(function () { L.completeTask(state.tasks, taskId); });
+    }, 260);
   }
 
   function commitLine(taskId, value, isTrailing, indent) {
@@ -587,6 +702,7 @@
       div.style.top = (e.clientY - grabDy) + 'px';
       div.style.margin = '0';
       div.style.pointerEvents = 'none';
+      div.classList.remove('swiped');
       box.classList.add('drag-active');
       /* Дыра сразу на месте строки: захват не схлопывает список. */
       setHole(phi);
@@ -670,6 +786,16 @@
       if (pid == null) return;
       if (e && e.pointerId != null && e.pointerId !== pid) return;
       pid = null;
+      /* Тап по многоточию родителя (без движения): свернуть/развернуть детей. */
+      if (mode === null && e && e.type === 'pointerup') {
+        var tapped = myTask();
+        if (tapped) {
+          var lt = lineTasks();
+          for (var ti = 0; ti < lt.length; ti++) {
+            if (lt[ti].id === tapped.id && L.hasKids(lt, ti)) { toggleCollapse(tapped.id); return; }
+          }
+        }
+      }
       if (mode === 'indent') {
         mode = null;
         div.style.transition = '';
@@ -786,12 +912,26 @@
     if (!box || !state) return;
     box.innerHTML = '';
     var tasks = lineTasks();
-    tasks.forEach(function (t) {
-      box.appendChild(makeLine(t.id, t.title, false, lineIndent(t)));
-    });
+    /* Полный порядок (включая выполненных) — для наследования зачёркивания:
+     * done-родитель ушёл в секцию ниже, но детей зачёркивает. */
+    var full = L.normalizeTasks(state.tasks).filter(function (t) { return !t.deleted && t.title; });
+    var fullIdx = {};
+    for (var fi = 0; fi < full.length; fi++) fullIdx[full[fi].id] = fi;
+    for (var i = 0; i < tasks.length; i++) {
+      var t = tasks[i];
+      box.appendChild(makeLine(t.id, t.title, false, lineIndent(t), {
+        doneShown: L.isDoneShown(full, fullIdx[t.id]),
+        hidden: L.isHiddenByCollapse(tasks, i, collapsed)
+      }));
+    }
     /* Хвостовая пустая строка наследует отступ последней — группы растут сами. */
     var tail = tasks.length ? lineIndent(tasks[tasks.length - 1]) : 0;
     box.appendChild(makeLine(null, '', true, tail));
+    /* Выполненные — под полем добавления, новые выше старых. */
+    var done = L.doneList(state.tasks);
+    for (var d = 0; d < done.length; d++) {
+      box.appendChild(makeLine(done[d].id, done[d].title, false, lineIndent(done[d]), { doneShown: true }));
+    }
     /* Раскрыть многострочные по содержимому (в потоке, после вставки). */
     var areas = box.querySelectorAll ? box.querySelectorAll('.tinput') : [];
     for (var q = 0; q < areas.length; q++) autosize(areas[q]);
@@ -848,6 +988,16 @@
     ].join('\n');
   }
 
+  /* Удалить выполненные — с подтверждением (кнопка в шапке и в ⚙). */
+  function askClearDone() {
+    askConfirm('Удалить все выполненные задачи?').then(function (ok) {
+      if (!ok) return;
+      mutate(function () {
+        L.doneList(state.tasks).forEach(function (t) { L.removeTask(state.tasks, t.id); });
+      });
+    });
+  }
+
   function wire() {
     var gear = el('gearMenu');
     on('gearBtn', 'click', function () {
@@ -872,14 +1022,10 @@
       else if (navigator.clipboard) navigator.clipboard.writeText(txt).then(function () { lastAction = 'скопировано'; renderStatus(); });
       else askText(txt, '', false).then(function () {});
     });
-    on('clearDone', 'click', function () {
-      askConfirm('Удалить все выполненные задачи?').then(function (ok) {
-        if (!ok) return;
-        mutate(function () {
-          L.doneList(state.tasks).forEach(function (t) { L.removeTask(state.tasks, t.id); });
-        });
-      });
-    });
+    on('clearDone', 'click', function () { askClearDone(); });
+    on('deleteDoneBtn', 'click', function () { askClearDone(); });
+    on('collapseAllBtn', 'click', function () { setAllCollapsed(true); });
+    on('expandAllBtn', 'click', function () { setAllCollapsed(false); });
     on('saveSettings', 'click', function () {
       var repo = el('repoInput');
       var tok = document.getElementById('tokenInput');
@@ -938,6 +1084,7 @@
 
   function boot() {
     wire();
+    loadCollapsed();
     window.EBStore.load().then(function (s) {
       state = s;
       var repo = el('repoInput');

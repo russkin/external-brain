@@ -193,6 +193,50 @@ function setIndent(tasks, id, level, nowMs) {
   return task;
 }
 
+/* --- Группы: работа с упорядоченным массивом (порядок = экран сверху вниз) --- */
+
+function indentOf(t) {
+  return normIndent(t && t.indent);
+}
+
+/* Есть ли у строки idx вложенные (следующие с большим отступом до равного). */
+function hasKids(arr, idx) {
+  if (!arr || idx == null || !arr[idx]) return false;
+  var base = indentOf(arr[idx]);
+  for (var j = idx + 1; j < arr.length; j++) {
+    var v = indentOf(arr[j]);
+    if (v > base) return true;
+    if (v <= base) return false;
+  }
+  return false;
+}
+
+/* Показывать ли зачёркнутой: своя done или done у родителя выше по цепочке. */
+function isDoneShown(arr, idx) {
+  var t = arr ? arr[idx] : null;
+  if (!t) return false;
+  if (t.status === 'done') return true;
+  var ind = indentOf(t);
+  for (var j = idx - 1; j >= 0; j--) {
+    if (indentOf(arr[j]) < ind) return isDoneShown(arr, j);
+  }
+  return false;
+}
+
+/* Спрятана ли строка под свёрнутого родителя (collapsed: {id:true}). */
+function isHiddenByCollapse(arr, idx, collapsed) {
+  if (!arr || !arr[idx]) return false;
+  var ind = indentOf(arr[idx]);
+  for (var j = idx - 1; j >= 0; j--) {
+    var pj = indentOf(arr[j]);
+    if (pj < ind) {
+      if (collapsed && arr[j].id && collapsed[arr[j].id]) return true;
+      ind = pj;
+    }
+  }
+  return false;
+}
+
 /* Съесть один бифштекс. Все съедены (total>0) — задача автоматически готова. */
 function completeSlice(tasks, id, nowMs) {
   var task = getTask(tasks, id);
@@ -440,6 +484,9 @@ var api = {
   setSlices: setSlices,
   setIndent: setIndent,
   MAX_INDENT: MAX_INDENT,
+  hasKids: hasKids,
+  isDoneShown: isDoneShown,
+  isHiddenByCollapse: isHiddenByCollapse,
   completeSlice: completeSlice,
   inboxList: inboxList,
   nextList: nextList,

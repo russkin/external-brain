@@ -12,9 +12,14 @@
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: #fff; color: #222;
       font-family: system-ui, -apple-system, sans-serif; }
-    header { display: flex; align-items: center; gap: 12px; padding: 10px 14px;
-      border-bottom: 1px solid #eee; position: sticky; top: 0; background: #fff; z-index: 5; }
+    header { display: flex; flex-direction: column; align-items: stretch; gap: 6px;
+      padding: 8px 14px 10px; border-bottom: 1px solid #eee;
+      position: sticky; top: 0; background: #fff; z-index: 5; }
+    #titleRow { display: flex; align-items: center; gap: 12px; }
     header h1 { font-size: 18px; margin: 0; flex: 1; }
+    #headActions { display: flex; gap: 8px; }
+    #headActions .hbtn { min-height: 28px; padding: 2px 12px; font-size: 15px;
+      border: 1px solid #ddd; border-radius: 8px; background: #f7f7f7; }
     #appVerHead { font-size: 12px; color: #888; white-space: nowrap; }
     .netwrap { display: inline-flex; flex-direction: column; align-items: center; line-height: 1; }
     #netStatus { font-size: 24px; }
@@ -28,7 +33,23 @@
     button { font-size: 16px; padding: 8px 12px; cursor: pointer; }
     main { padding: 12px 14px 60px; max-width: 720px; margin: 0 auto; }
     #lines { display: flex; flex-direction: column; gap: 8px; }
-    .tline { display: flex; align-items: center; gap: 10px; }
+    .tline { position: relative; touch-action: pan-y; }
+    .tbody { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;
+      transition: transform .2s ease; }
+    .tline.swiped .tbody { transform: translateX(-84px); }
+    .doneflag { display: none; position: absolute; right: 2px; top: 50%;
+      transform: translateY(-50%); background: #4caf50; color: #fff; border: none;
+      border-radius: 8px; padding: 8px 10px; font-size: 13px; white-space: nowrap; }
+    .tline.swiped .doneflag { display: block; }
+    .tline.collapsed-kid { display: none; }
+    .tline[data-indent="1"] .tinput { background: #f4f8ff; }
+    .tline[data-indent="2"] .tinput { background: #f1faf3; }
+    .tline[data-indent="3"] .tinput { background: #fffaef; }
+    .tline[data-indent="4"] .tinput { background: #faf3ff; }
+    .tline[data-indent="5"] .tinput { background: #fff0f3; }
+    .tline[data-indent="6"] .tinput { background: #effafa; }
+    .tline[data-indent="7"] .tinput { background: #f5f5f5; }
+    .tline[data-indent="8"] .tinput { background: #efefef; }
     .grip { flex: none; width: 24px; height: 26px; display: grid;
       grid-template-columns: repeat(2, 6px); grid-template-rows: repeat(3, 6px);
       justify-content: center; align-content: center; gap: 4px;
@@ -43,6 +64,7 @@
       border-radius: 10px; background: #fff; min-width: 0;
       resize: none; overflow-y: hidden; }
     .tinput::placeholder { color: #aaa; }
+    .tinput.is-done { text-decoration: line-through; color: #888; }
     .group { margin-bottom: 14px; border: 1px solid #eee; border-radius: 8px; padding: 8px 10px; }
     .group-title { font-weight: bold; margin-bottom: 6px; }
     .row { display: flex; gap: 8px; align-items: center; padding: 8px 0;
@@ -78,11 +100,18 @@
 </head>
 <body>
   <header>
-    <h1 id="appTitle">Внешний мозг</h1>
-    <span id="appVerHead" title="Версия приложения"></span>
-    <span class="netwrap"><span id="netStatus" title="Сеть">⇅</span><span id="netType"></span></span>
-    <span id="syncLight" title="Синхронизация"></span>
-    <button id="gearBtn" title="Меню" aria-label="Меню">⚙</button>
+    <div id="titleRow">
+      <h1 id="appTitle">Внешний мозг</h1>
+      <span id="appVerHead" title="Версия приложения"></span>
+      <span class="netwrap"><span id="netStatus" title="Сеть">⇅</span><span id="netType"></span></span>
+      <span id="syncLight" title="Синхронизация"></span>
+      <button id="gearBtn" title="Меню" aria-label="Меню">⚙</button>
+    </div>
+    <div id="headActions">
+      <button id="collapseAllBtn" class="hbtn" title="Свернуть все группы" aria-label="Свернуть все группы">📁</button>
+      <button id="expandAllBtn" class="hbtn" title="Развернуть все группы" aria-label="Развернуть все группы">📂</button>
+      <button id="deleteDoneBtn" class="hbtn" title="Удалить выполненные" aria-label="Удалить выполненные">🗑</button>
+    </div>
   </header>
 
   <div id="gearMenu">

@@ -122,6 +122,23 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('indentBounds'), 'нет потолка «сосед сверху +1»');
     assert.ok(appSrc.includes('{ indent:'), 'новая строка не наследует отступ');
   });
+  it('уровни цветом, collapse, шапка с тремя кнопками', () => {
+    assert.ok(html.includes('.tline[data-indent="1"]'), 'нет заливки уровней');
+    assert.ok(html.includes('id="collapseAllBtn"'), 'нет кнопки свернуть всё');
+    assert.ok(html.includes('id="expandAllBtn"'), 'нет кнопки развернуть всё');
+    assert.ok(html.includes('id="deleteDoneBtn"'), 'нет кнопки удалить выполненные');
+    assert.ok(appSrc.includes('toggleCollapse'), 'нет сворачивания по тапу');
+    assert.ok(appSrc.includes('setAllCollapsed'), 'нет свернуть/развернуть всё');
+    assert.ok(appSrc.includes('askClearDone'), 'нет удаления выполненных с подтверждением');
+    assert.ok(appSrc.includes('collapsed-kid'), 'нет скрытия вложенных');
+  });
+  it('свайп-выполнено и секция под полем ввода', () => {
+    assert.ok(html.includes('doneflag') || appSrc.includes('doneflag'), 'нет флага выполнено');
+    assert.ok(appSrc.includes('swiped'), 'нет раскрытия свайпом');
+    assert.ok(appSrc.includes('completeTaskSlide'), 'нет завершения со слайдом');
+    assert.ok(appSrc.includes('renderDoneRows') || appSrc.includes('L.doneList(state.tasks)'), 'нет секции выполненных');
+    assert.ok(appSrc.includes('is-done'), 'нет зачёркивания');
+  });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
   });

@@ -392,4 +392,41 @@ describe('отступ (группы)', () => {
     const txt = L.shareText(t);
     assert.ok(txt.includes('\n  - Внутрь'), 'нет отступа у вложенной:\n' + txt);
   });
+  it('hasKids видит вложенных', () => {
+    const arr = [
+      { id: 'p', title: 'P', indent: 0 },
+      { id: 'a', title: 'A', indent: 1 },
+      { id: 'q', title: 'Q', indent: 0 }
+    ];
+    assert.equal(L.hasKids(arr, 0), true);
+    assert.equal(L.hasKids(arr, 1), false);
+    assert.equal(L.hasKids(arr, 2), false);
+    assert.equal(L.hasKids(arr, 9), false);
+  });
+  it('isDoneShown наследует done родителя, но не соседей', () => {
+    const arr = [
+      { id: 'p', title: 'P', status: 'done', indent: 0 },
+      { id: 'a', title: 'A', status: 'inbox', indent: 1 },
+      { id: 'q', title: 'Q', status: 'inbox', indent: 0 },
+      { id: 'b', title: 'B', status: 'inbox', indent: 1 }
+    ];
+    assert.equal(L.isDoneShown(arr, 0), true);
+    assert.equal(L.isDoneShown(arr, 1), true);
+    assert.equal(L.isDoneShown(arr, 2), false);
+    assert.equal(L.isDoneShown(arr, 3), false);
+  });
+  it('isHiddenByCollapse прячет только свою ветку', () => {
+    const arr = [
+      { id: 'p', title: 'P', indent: 0 },
+      { id: 'a', title: 'A', indent: 1 },
+      { id: 'a1', title: 'A1', indent: 2 },
+      { id: 'q', title: 'Q', indent: 0 }
+    ];
+    assert.equal(L.isHiddenByCollapse(arr, 1, { p: true }), true);
+    assert.equal(L.isHiddenByCollapse(arr, 2, { p: true }), true);
+    assert.equal(L.isHiddenByCollapse(arr, 3, { p: true }), false);
+    assert.equal(L.isHiddenByCollapse(arr, 1, {}), false);
+    assert.equal(L.isHiddenByCollapse(arr, 2, { a: true }), true);
+    assert.equal(L.isHiddenByCollapse(arr, 1, { a: true }), false);
+  });
 });
