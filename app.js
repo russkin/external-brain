@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v12';
+  var APP_VERSION = 'v13';
   var INDENT_STEP = 28;
   var L = window.EBLogic;
   var state = null;
@@ -453,7 +453,7 @@
    *   задачи сверху (уровень не глубже соседа сверху +1, первая — всегда 0).
    * Направление определяется первым движением: горизонталь (|dx|>|dy|*2). */
   function wireLineDrag(div, grip, inp) {
-    var pid = null, grabDy = 0, x0 = 0, y0 = 0, mode = null, lastDx = 0;
+    var pid = null, grabDy = 0, x0 = 0, y0 = 0, mode = null, lastDx = 0, lastY = null;
     var order = null, shift = {}, ghost = null, kids = [];
     var indentCur = 0, indentMax = 0;
     function rowsOf(box) {
@@ -548,6 +548,7 @@
       x0 = e.clientX;
       y0 = e.clientY;
       lastDx = 0;
+      lastY = e.clientY;
       mode = null;
       kids = [];
       try { grip.setPointerCapture(pid); } catch (x) {}
@@ -555,6 +556,7 @@
     });
     grip.addEventListener('pointermove', function (e) {
       if (pid == null || e.pointerId !== pid) return;
+      lastY = e.clientY;
       var dx = e.clientX - x0;
       var dy = e.clientY - y0;
       if (!mode) {
@@ -654,8 +656,10 @@
       }
       ghost = null;
       div.style.visibility = '';
-      /* Итоговое место: сколько соседей (по их местам в покое) выше центра. */
-      var cy = (firstTop != null) ? firstTop + firstH / 2 : 0;
+      /* Итоговое место — по пальцу, а не по центру призрака: у высокой
+       * (многострочной) задачи центр далеко от пальца, иначе она встаёт
+       * на пару строк выше/ниже того места, куда наводили. */
+      var cy = (lastY != null) ? lastY : ((firstTop != null) ? firstTop + firstH / 2 : 0);
       var below = [];
       if (box && order) {
         for (var i = 0; i < order.length; i++) {
