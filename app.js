@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v23';
+  var APP_VERSION = 'v24';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -377,6 +377,22 @@
       flag.textContent = '✓ Выполнено';
       flag.setAttribute('aria-label', 'Отметить выполненной');
       (function (id, fl) {
+        /* Тап срабатывает и по click, и по pointerup: если браузер съел
+         * одно событие — дойдёт второе. Двойное выполнение отсекает guard
+         * внутри completeTaskSlide. Тап со сдвигом (скролл) игнорируется. */
+        var flagDownX = 0, flagDownY = 0, flagDown = false;
+        fl.addEventListener('pointerdown', function (ev) {
+          flagDownX = ev.clientX;
+          flagDownY = ev.clientY;
+          flagDown = true;
+        });
+        fl.addEventListener('pointerup', function (ev) {
+          if (!flagDown) return;
+          flagDown = false;
+          if (Math.abs(ev.clientX - flagDownX) > 12 || Math.abs(ev.clientY - flagDownY) > 12) return;
+          completeTaskSlide(id);
+        });
+        fl.addEventListener('pointercancel', function () { flagDown = false; });
         fl.addEventListener('click', function () { completeTaskSlide(id); });
       })(taskId, flag);
       div.appendChild(flag);
@@ -430,6 +446,8 @@
     div.addEventListener('pointerup', swEnd);
     div.addEventListener('pointercancel', swEnd);
     div.addEventListener('pointerup', function (e) {
+      /* Тап по самому флагу сюда не входит: у него свой обработчик. */
+      if (e.target && e.target.closest && e.target.closest('.doneflag')) return;
       if (div._swOpen && Math.abs(e.clientX - tapX0) < 12 && Math.abs(e.clientY - tapY0) < 12) {
         div.classList.remove('swiped');
         div._swOpen = false;
@@ -458,8 +476,14 @@
     var inp = row.querySelector ? row.querySelector('.tinput') : null;
     if (inp) inp.classList.add('is-done');
     row.classList.remove('swiped');
+    row._swOpen = false;
     setTimeout(function () {
       mutate(function () { L.completeTask(state.tasks, taskId); });
+      /* Курсор не должен остаться в поле: фокус могла увести кнопка. */
+      try {
+        var ae = document.activeElement;
+        if (ae && ae.tagName === 'BUTTON' && ae.blur) ae.blur();
+      } catch (x) {}
     }, 260);
   }
 

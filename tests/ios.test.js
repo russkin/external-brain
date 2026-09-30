@@ -140,6 +140,8 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('is-done'), 'нет зачёркивания');
     assert.ok(html.includes('user-select'), 'свайп проигрывает выделению текста');
     assert.ok(appSrc.includes('_swOpen'), 'состояние свайпа рассинхронизировано');
+    assert.ok(html.includes('translateX(-108px)'), 'флаг наезжает на поле задачи');
+    assert.ok(appSrc.includes('activeElement'), 'курсор остаётся в поле после выполнения');
   });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
