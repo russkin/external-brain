@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v11';
+  var APP_VERSION = 'v12';
   var INDENT_STEP = 28;
   var L = window.EBLogic;
   var state = null;
@@ -588,14 +588,20 @@
         var row = order[i];
         if (row === div || !row.parentNode || row.style.display === 'none') continue;
         var r = row.getBoundingClientRect();
+        /* Замер по месту строки в покое: вычитаем уже применённый сдвиг,
+         * иначе ошибка растёт с каждым движением (строки улетают вверх),
+         * а на разной высоте строк (многострочные) место отпускания врёт. */
+        var applied = shift[i] || 0;
+        var rTop = r.top - applied;
+        var rBottom = r.bottom - applied;
         var off = 0;
         if (i > idx) {
           /* Сосед снизу: низ призрака въехал в него — едет вверх под него. */
-          var pen = d.bottom - r.top;
+          var pen = d.bottom - rTop;
           if (pen > 0) off = -Math.min(pen, r.height + 10);
         } else {
           /* Сосед сверху: верх призрака въехал в него — едет вниз под него. */
-          var pen2 = r.bottom - d.top;
+          var pen2 = rBottom - d.top;
           if (pen2 > 0) off = Math.min(pen2, r.height + 10);
         }
         shift[i] = off;
