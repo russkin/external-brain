@@ -90,7 +90,7 @@ describe('логика вызывается с state.tasks', () => {
     for (const fn of fns) {
       assert.ok(!new RegExp('L\\.' + fn + '\\(state[^.]').test(appSrc), 'найден вызов ' + fn + '(state, …)');
     }
-    for (const fn of ['createTask', 'clarifyTask', 'removeTask', 'getTask', 'setIndent']) {
+    for (const fn of ['createTask', 'clarifyTask', 'removeTask', 'getTask', 'setIndent', 'reopenTask']) {
       assert.ok(appSrc.includes('L.' + fn + '(state.tasks,'), 'нет вызова ' + fn + '(state.tasks, …)');
     }
   });
@@ -135,13 +135,24 @@ describe('логика вызывается с state.tasks', () => {
   it('свайп-выполнено и секция под полем ввода', () => {
     assert.ok(html.includes('doneflag') || appSrc.includes('doneflag'), 'нет флага выполнено');
     assert.ok(appSrc.includes('swiped'), 'нет раскрытия свайпом');
-    assert.ok(appSrc.includes('completeTaskSlide'), 'нет завершения со слайдом');
-    assert.ok(appSrc.includes('renderDoneRows') || appSrc.includes('L.doneList(state.tasks)'), 'нет секции выполненных');
+    assert.ok(appSrc.includes('toggleDoneSlide'), 'нет завершения со слайдом');
+    assert.ok(appSrc.includes('L.doneList(state.tasks)'), 'нет секции выполненных');
+    assert.ok(appSrc.includes('done-sep'), 'нет разделителя выполненных');
     assert.ok(appSrc.includes('is-done'), 'нет зачёркивания');
     assert.ok(html.includes('user-select'), 'свайп проигрывает выделению текста');
     assert.ok(appSrc.includes('_swOpen'), 'состояние свайпа рассинхронизировано');
     assert.ok(html.includes('translateX(-108px)'), 'флаг наезжает на поле задачи');
     assert.ok(appSrc.includes('activeElement'), 'курсор остаётся в поле после выполнения');
+  });
+  it('возврат из выполненных и история undo/redo', () => {
+    assert.ok(appSrc.includes('Не выполнено'), 'нет флага возврата');
+    assert.ok(appSrc.includes('L.reopenTask(state.tasks'), 'нет возврата задачи');
+    assert.ok(html.includes('id="undoBtn"'), 'нет стрелки назад');
+    assert.ok(html.includes('id="redoBtn"'), 'нет стрелки вперёд');
+    assert.ok(appSrc.includes('doUndo'), 'нет undo');
+    assert.ok(appSrc.includes('doRedo'), 'нет redo');
+    assert.ok(appSrc.includes('HISTORY_MAX'), 'история без лимита');
+    assert.ok(appSrc.includes('tombstone') || appSrc.includes('deleted = true'), 'отмена создания не переживёт синк');
   });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');

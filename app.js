@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v24';
+  var APP_VERSION = 'v25';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -91,10 +91,85 @@
   }
 
   function mutate(fn) {
+    return mutateWithHistory(fn);
+  }
+
+  /* --- История изменений (undo/redo стрелками в шапке, локально) ---
+   * Слепок задач до каждой меняющей мутации; отмена применяется как новое
+   * изменение со свежими метками (так честно и для синка): созданное после
+   * превращается в tombstone, удалённое воскресает, правки побеждают. */
+  var undoStack = [];
+  var redoStack = [];
+  var HISTORY_MAX = 50;
+
+  function snapTasks() {
+    try { return JSON.stringify(state.tasks); } catch (x) { return '[]'; }
+  }
+
+  function mutateWithHistory(fn) {
+    if (!state) return null;
+    var before = snapTasks();
     var r = fn();
+    if (snapTasks() !== before) {
+      undoStack.push(before);
+      if (undoStack.length > HISTORY_MAX) undoStack.shift();
+      redoStack = [];
+    }
     render();
     save();
+    updateHistoryButtons();
     return r;
+  }
+
+  function applySnapshot(json) {
+    var now = Date.now(), snap = [];
+    try { snap = JSON.parse(json); } catch (x) { snap = []; }
+    if (!Array.isArray(snap)) snap = [];
+    var keep = {}, out = [], i, t, c;
+    for (i = 0; i < snap.length; i++) {
+      t = snap[i];
+      if (!t || !t.id) continue;
+      keep[t.id] = true;
+      c = L.normalizeTask(t);
+      if (!c) continue;
+      c.ts = now;
+      c.updatedAt = now;
+      out.push(c);
+    }
+    for (i = 0; i < state.tasks.length; i++) {
+      t = state.tasks[i];
+      if (!t || !t.id || keep[t.id] || t.deleted) continue;
+      c = L.normalizeTask(t);
+      if (!c) continue;
+      c.deleted = true;
+      c.ts = now;
+      c.updatedAt = now;
+      out.push(c);
+    }
+    state.tasks = out;
+    save();
+    render();
+    updateHistoryButtons();
+  }
+
+  function doUndo() {
+    if (!state || !undoStack.length) return;
+    redoStack.push(snapTasks());
+    if (redoStack.length > HISTORY_MAX) redoStack.shift();
+    applySnapshot(undoStack.pop());
+  }
+
+  function doRedo() {
+    if (!state || !redoStack.length) return;
+    undoStack.push(snapTasks());
+    if (undoStack.length > HISTORY_MAX) undoStack.shift();
+    applySnapshot(redoStack.pop());
+  }
+
+  function updateHistoryButtons() {
+    var u = el('undoBtn'), r = el('redoBtn');
+    if (u) u.disabled = !undoStack.length;
+    if (r) r.disabled = !redoStack.length;
   }
 
   /* --- single-flight синк: летит один, повтор ждёт очереди --- */
@@ -261,6 +336,7 @@
     if (v2) v2.textContent = APP_VERSION;
     renderLines();
     renderStatus();
+    updateHistoryButtons();
     try {
       var curY = window.pageYOffset || 0;
       if (curY !== keepY) window.scrollTo(0, keepY);
@@ -371,15 +447,20 @@
     if (opts.doneShown) inp.classList.add('is-done');
     body.appendChild(inp);
     autosize(inp);
-    if (!isTrailing && !opts.doneShown) {
+    if (!isTrailing) {
       var flag = document.createElement('button');
       flag.className = 'doneflag';
-      flag.textContent = '✓ Выполнено';
-      flag.setAttribute('aria-label', 'Отметить выполненной');
+      if (opts.doneShown) {
+        flag.textContent = '↩ Не выполнено';
+        flag.setAttribute('aria-label', 'Вернуть в работу');
+      } else {
+        flag.textContent = '✓ Выполнено';
+        flag.setAttribute('aria-label', 'Отметить выполненной');
+      }
       (function (id, fl) {
         /* Тап срабатывает и по click, и по pointerup: если браузер съел
          * одно событие — дойдёт второе. Двойное выполнение отсекает guard
-         * внутри completeTaskSlide. Тап со сдвигом (скролл) игнорируется. */
+         * внутри toggleDoneSlide. Тап со сдвигом (скролл) игнорируется. */
         var flagDownX = 0, flagDownY = 0, flagDown = false;
         fl.addEventListener('pointerdown', function (ev) {
           flagDownX = ev.clientX;
@@ -390,10 +471,10 @@
           if (!flagDown) return;
           flagDown = false;
           if (Math.abs(ev.clientX - flagDownX) > 12 || Math.abs(ev.clientY - flagDownY) > 12) return;
-          completeTaskSlide(id);
+          toggleDoneSlide(id);
         });
         fl.addEventListener('pointercancel', function () { flagDown = false; });
-        fl.addEventListener('click', function () { completeTaskSlide(id); });
+        fl.addEventListener('click', function () { toggleDoneSlide(id); });
       })(taskId, flag);
       div.appendChild(flag);
       wireLineSwipe(div, taskId);
@@ -457,9 +538,14 @@
 
   /* Выполнить с анимацией: строка возвращается на место уже зачёркнутой,
    * затем спускается в секцию выполненных под полем ввода. */
-  function completeTaskSlide(taskId) {
+  /* Выполнить/вернуть с анимацией: строка возвращается на место уже
+   * зачёркнутой (или расчеркнутой), затем переезжает в свою секцию —
+   * выполненные под поле ввода, вернувшаяся — на своё место в списке
+   * (createdAt не трогаем, persist чужие метки не переписывает). */
+  function toggleDoneSlide(taskId) {
     var task = L.getTask(state.tasks, taskId);
-    if (!task || task.deleted || task.status === 'done') return;
+    if (!task || task.deleted) return;
+    var toDone = task.status !== 'done';
     var box = el('lines');
     var row = null;
     if (box && box.querySelectorAll) {
@@ -469,22 +555,30 @@
       }
     }
     if (!row || (row.classList && row.classList.contains('sliding-done'))) {
-      if (!row) mutate(function () { L.completeTask(state.tasks, taskId); });
+      if (!row) mutate(function () { toggleDoneNow(taskId, toDone); });
       return;
     }
     row.classList.add('sliding-done');
     var inp = row.querySelector ? row.querySelector('.tinput') : null;
-    if (inp) inp.classList.add('is-done');
+    if (inp) {
+      if (toDone) inp.classList.add('is-done');
+      else inp.classList.remove('is-done');
+    }
     row.classList.remove('swiped');
     row._swOpen = false;
     setTimeout(function () {
-      mutate(function () { L.completeTask(state.tasks, taskId); });
+      mutate(function () { toggleDoneNow(taskId, toDone); });
       /* Курсор не должен остаться в поле: фокус могла увести кнопка. */
       try {
         var ae = document.activeElement;
         if (ae && ae.tagName === 'BUTTON' && ae.blur) ae.blur();
       } catch (x) {}
     }, 260);
+  }
+
+  function toggleDoneNow(taskId, toDone) {
+    if (toDone) return L.completeTask(state.tasks, taskId);
+    return L.reopenTask(state.tasks, taskId);
   }
 
   function commitLine(taskId, value, isTrailing, indent) {
@@ -546,35 +640,81 @@
     });
   }
 
+  /* Порядок строк после drag: перенумеровываем createdAt ТОЛЬКО уехавшему
+   * блоку, втискивая его между соседями (целыми, с запасом). Чужие метки
+   * не трогаем — поэтому вернувшаяся из выполненных встаёт на своё место,
+   * а синк не дёргается лишний раз. Тесно (зазор исчерпан) — перенумеровать
+   * всех живых. Выполненные и tombstone не трогаем никогда. */
   function persistLineOrder() {
     var box = el('lines');
     if (!box || !state) return;
-    var ids = [];
+    var domAlive = [];
     var rows = box.querySelectorAll ? box.querySelectorAll('.tline[data-id]') : [];
     for (var i = 0; i < rows.length; i++) {
       var id = rows[i].getAttribute('data-id');
-      if (id && L.getTask(state.tasks, id)) ids.push(id);
+      var t = id ? L.getTask(state.tasks, id) : null;
+      if (t && !t.deleted && t.status !== 'done') domAlive.push(id);
     }
-    if (!ids.length) return;
-    /* Порядок не менялся (тап без движения) — метки не трогаем, синк не дёргаем. */
+    if (!domAlive.length) return;
     var cur = lineTasks().map(function (t) { return t.id; });
-    if (cur.length === ids.length) {
+    if (cur.length === domAlive.length) {
       var same = true;
-      for (var k = 0; k < ids.length; k++) {
-        if (ids[k] !== cur[k]) { same = false; break; }
+      for (var k = 0; k < domAlive.length; k++) {
+        if (domAlive[k] !== cur[k]) { same = false; break; }
       }
       if (same) return;
     }
+    /* Уехавший блок — непрерывный отрезок отличий (drag двигает целиком). */
+    var bs = -1, be = -1;
+    for (var d = 0; d < domAlive.length && d < cur.length; d++) {
+      if (domAlive[d] !== cur[d]) { if (bs === -1) bs = d; be = d; }
+    }
+    if (bs === -1) return;
+    var before = snapTasks();
     var now = Date.now();
+    function at(idx) {
+      var tt = L.getTask(state.tasks, domAlive[idx]);
+      return tt ? tt.createdAt : 0;
+    }
+    var m = be - bs + 1;
+    var P = bs > 0 ? at(bs - 1) : null;
+    var N = be < domAlive.length - 1 ? at(be + 1) : null;
+    var vals = null;
+    if (P !== null || N !== null) {
+      if (P === null) { vals = []; for (var a = 0; a < m; a++) vals.push(N - m + a); }
+      else if (N === null) { vals = []; for (var b = 0; b < m; b++) vals.push(P + 1 + b); }
+      else if (N - P > m) { vals = []; for (var c = 0; c < m; c++) vals.push(P + 1 + c); }
+    }
+    if (vals) {
+      for (var v = 0; v < m; v++) {
+        var bt = L.getTask(state.tasks, domAlive[bs + v]);
+        if (!bt) continue;
+        bt.createdAt = vals[v];
+        bt.ts = now;
+        bt.updatedAt = now;
+      }
+    } else {
+      /* Зазор исчерпан: перенумеровать всех живых (выполненных не трогаем). */
+      var base = now - domAlive.length;
+      domAlive.forEach(function (id, idx) {
+        var t2 = L.getTask(state.tasks, id);
+        if (!t2) return;
+        t2.createdAt = base + idx;
+        t2.ts = now;
+        t2.updatedAt = now;
+      });
+    }
     var byId = {};
     state.tasks.forEach(function (t) { if (t) byId[t.id] = t; });
     var ordered = [];
-    ids.forEach(function (id) { if (byId[id]) { ordered.push(byId[id]); delete byId[id]; } });
+    domAlive.forEach(function (id) { if (byId[id]) { ordered.push(byId[id]); delete byId[id]; } });
     Object.keys(byId).forEach(function (id) { ordered.push(byId[id]); });
-    var base = now - ordered.length;
-    ordered.forEach(function (t, i) { t.createdAt = base + i; t.ts = now; t.updatedAt = now; });
     state.tasks = ordered;
+    undoStack.push(before);
+    if (undoStack.length > HISTORY_MAX) undoStack.shift();
+    redoStack = [];
     save();
+    updateHistoryButtons();
   }
 
   /* Отступ строки после вертикального перетаскивания: смотрят соседи
@@ -790,7 +930,6 @@
       /* Ведущие края тянущейся: низ идёт за пальцем со сдвигом grabDy. */
       var dt = e.clientY - grabDy;
       div.style.top = dt + 'px';
-      var db = dt + divH;
       /* Всё в покое: живой верх коробки (несмотря на скролл) + замороженные
        * оффсеты. Замеров рядов нет — недолётным анимациям нечего болтать. */
       var boxTop = 0;
@@ -798,8 +937,11 @@
       /* Дыра липкая: стоит, пока ведущий край не въедет в следующий ряд
        * на PEN px. Усилие симметрично вверх и вниз при любой высоте строк. */
       var advanced = false;
+      /* Дыра липкая: верх дыры следует за верхом тянущейся. Пороги —
+       * замороженные оффсеты, строго монотонны: удерживаемый палец стабилен
+       * всегда, усилие одинаково вверх/вниз при любой высоте строк. */
       while (phi < fr.length) {
-        if (db > boxTop + fr[phi].off + PEN) { phi++; setHole(phi); advanced = true; }
+        if (dt > boxTop + fr[phi].off + PEN) { phi++; setHole(phi); advanced = true; }
         else break;
       }
       while (phi > 0) {
@@ -933,10 +1075,10 @@
       }
       order = null;
       kids = [];
+      persistLineOrder();
       setTimeout(function () {
         div.style.transition = '';
         div.style.transform = '';
-        persistLineOrder();
         render();
       }, 220);
     }
@@ -967,6 +1109,12 @@
     box.appendChild(makeLine(null, '', true, tail));
     /* Выполненные — под полем добавления, новые выше старых. */
     var done = L.doneList(state.tasks);
+    if (done.length) {
+      var sep = document.createElement('div');
+      sep.className = 'done-sep';
+      sep.textContent = 'Выполнено · ' + done.length;
+      box.appendChild(sep);
+    }
     for (var d = 0; d < done.length; d++) {
       box.appendChild(makeLine(done[d].id, done[d].title, false, lineIndent(done[d]), { doneShown: true }));
     }
@@ -1064,6 +1212,8 @@
     on('deleteDoneBtn', 'click', function () { askClearDone(); });
     on('collapseAllBtn', 'click', function () { setAllCollapsed(true); });
     on('expandAllBtn', 'click', function () { setAllCollapsed(false); });
+    on('undoBtn', 'click', function () { doUndo(); });
+    on('redoBtn', 'click', function () { doRedo(); });
     on('saveSettings', 'click', function () {
       var repo = el('repoInput');
       var tok = document.getElementById('tokenInput');

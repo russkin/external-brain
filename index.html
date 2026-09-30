@@ -20,6 +20,10 @@
     #headActions { display: flex; gap: 8px; }
     #headActions .hbtn { min-height: 28px; padding: 2px 12px; font-size: 15px;
       border: 1px solid #ddd; border-radius: 8px; background: #f7f7f7; }
+    #headActions .hbtn:disabled { opacity: .35; }
+    .done-sep { display: flex; align-items: center; gap: 8px; color: #999;
+      font-size: 12px; margin: 4px 2px 0; }
+    .done-sep::before, .done-sep::after { content: ''; flex: 1; height: 1px; background: #e0e0e0; }
     #appVerHead { font-size: 12px; color: #888; white-space: nowrap; }
     .netwrap { display: inline-flex; flex-direction: column; align-items: center; line-height: 1; }
     #netStatus { font-size: 24px; }
@@ -112,6 +116,8 @@
     <div id="headActions">
       <button id="collapseAllBtn" class="hbtn" title="Свернуть все группы" aria-label="Свернуть все группы">📁</button>
       <button id="expandAllBtn" class="hbtn" title="Развернуть все группы" aria-label="Развернуть все группы">📂</button>
+      <button id="undoBtn" class="hbtn" title="Отменить" aria-label="Отменить">↩</button>
+      <button id="redoBtn" class="hbtn" title="Вернуть" aria-label="Вернуть">↪</button>
       <button id="deleteDoneBtn" class="hbtn" title="Удалить выполненные" aria-label="Удалить выполненные">🗑</button>
     </div>
   </header>
