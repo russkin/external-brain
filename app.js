@@ -2,8 +2,9 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v14';
+  var APP_VERSION = 'v15';
   var INDENT_STEP = 28;
+  var LINES_GAP = 8;
   var L = window.EBLogic;
   var state = null;
   var syncStatus = '';
@@ -428,7 +429,12 @@
       return t ? lineIndent(t) : 0;
     }
     var prevRow = di > 0 ? sibs[di - 1] : null;
-    var nextRow = di < sibs.length - 1 ? sibs[di + 1] : null;
+    /* Следующий сосед — вне перетащенного блока: свои дети не считаются
+     * чужим вложением, иначе родитель втянется под соседа. */
+    var nextRow = null;
+    for (var ni = di + 1; ni < sibs.length; ni++) {
+      if (kids.indexOf(sibs[ni]) === -1) { nextRow = sibs[ni]; break; }
+    }
     var prevInd = prevRow ? indOf(prevRow) : 0;
     var nextInd = nextRow ? indOf(nextRow) : -1;
     var want = !prevRow ? 0 : (nextInd === prevInd + 1 ? nextInd : prevInd);
@@ -453,8 +459,8 @@
    *   задачи сверху (уровень не глубже соседа сверху +1, первая — всегда 0).
    * Направление определяется первым движением: горизонталь (|dx|>|dy|*2). */
   function wireLineDrag(div, grip, inp) {
-    var pid = null, grabDy = 0, ghostH = 0, x0 = 0, y0 = 0, mode = null, lastDx = 0, lastY = null;
-    var order = null, shift = {}, ghost = null, kids = [];
+    var pid = null, grabDy = 0, holeH = 0, x0 = 0, y0 = 0, mode = null, lastDx = 0, lastY = null;
+    var order = null, ph = null, phi = 0, kids = [];
     var indentCur = 0, indentMax = 0;
     function rowsOf(box) {
       return Array.prototype.slice.call(box.querySelectorAll('.tline'));
@@ -491,16 +497,16 @@
     }
     function startVertical(e) {
       var box = el('lines');
-      if (!box || !document.body) return;
+      if (!box) return;
       mode = 'vertical';
-      shift = {};
       var rect = null;
       try { rect = div.getBoundingClientRect(); } catch (x) { rect = null; }
       var h = rect ? rect.height : div.offsetHeight || 56;
       grabDy = rect ? (e.clientY - rect.top) : h / 2;
-      ghostH = h;
       order = rowsOf(box);
-      /* Дети (вложенные с большим отступом) прячутся под родителя на время drag. */
+      /* Дети (вложенные с большим отступом) прячутся под родителя на время drag.
+       * Высоту меряем ДО скрытия, иначе дыра получится маленькой. */
+      holeH = h;
       kids = [];
       var mine0 = myTask();
       if (mine0) {
@@ -512,32 +518,32 @@
           var kidId = order[k].getAttribute ? order[k].getAttribute('data-id') : null;
           var kt = kidId ? L.getTask(state.tasks, kidId) : null;
           if (kt && lineIndent(kt) > lv0) {
+            try { holeH += order[k].getBoundingClientRect().height; } catch (x) {}
             kids.push(order[k]);
-            order[k].style.display = 'none';
           } else break;
         }
+        for (var kh = 0; kh < kids.length; kh++) kids[kh].style.display = 'none';
       }
-      /* Призрак едет, оригинал держит место — список не прыгает на захвате. */
-      ghost = div.cloneNode(true);
-      ghost.removeAttribute('data-id');
-      ghost.removeAttribute('data-trailing');
-      ghost.classList.add('dragging');
-      ghost.style.position = 'fixed';
-      ghost.style.width = (rect ? rect.width : div.offsetWidth) + 'px';
-      ghost.style.left = (rect ? rect.left : 0) + 'px';
-      ghost.style.top = (e.clientY - grabDy) + 'px';
-      ghost.style.margin = '0';
-      ghost.style.pointerEvents = 'none';
-      var gInp = ghost.querySelector ? ghost.querySelector('.tinput') : null;
-      if (gInp) {
-        /* cloneNode не копирует введённый текст textarea — переносим вручную. */
-        gInp.value = inp.value;
-        if (inp.offsetHeight) gInp.style.height = inp.offsetHeight + 'px';
-        gInp.setAttribute('readonly', 'readonly');
-        gInp.tabIndex = -1;
+      ph = document.createElement('div');
+      ph.className = 'phold';
+      /* Дыра = блок + съеденные зазоры скрытых детей: иначе список дёрнется
+       * на высоту зазора в момент захвата. */
+      ph.style.height = (holeH + kids.length * LINES_GAP) + 'px';
+      box.insertBefore(ph, div);
+      phi = 0;
+      for (var pi = 0; pi < order.length; pi++) {
+        if (order[pi] === div) break;
+        if (order[pi].style.display === 'none') continue;
+        phi++;
       }
-      document.body.appendChild(ghost);
-      div.style.visibility = 'hidden';
+      /* Сама строка вынимается из потока и едет под пальцем. */
+      div.classList.add('dragging');
+      div.style.position = 'fixed';
+      div.style.width = (rect ? rect.width : div.offsetWidth) + 'px';
+      div.style.left = (rect ? rect.left : 0) + 'px';
+      div.style.top = (e.clientY - grabDy) + 'px';
+      div.style.margin = '0';
+      div.style.pointerEvents = 'none';
       box.classList.add('drag-active');
     }
     grip.addEventListener('pointerdown', function (e) {
@@ -582,30 +588,52 @@
         if (e.cancelable) e.preventDefault();
         return;
       }
-      if (!order || !ghost) return;
-      ghost.style.top = (e.clientY - grabDy) + 'px';
-      /* Дыра под призрак высотой с него: строки ниже пальца отходят вниз —
-       * многострочный пункт ложится в готовое место и не перекрывает соседей.
-       * Замер середин — по местам в покое (минус применённый сдвиг),
-       * поэтому ничего не бегает и не улетает. */
-      var gapOpen = ghostH + 8;
+      if (!order || !ph) return;
+      /* Верх тянущейся (а не палец): строка едет со сдвигом grabDy,
+       * и дыра должна лежать ровно под ней, иначе высокая строка верхней
+       * половиной накрывает соседей сверху. lastY хранит верх для посадки. */
+      var dt = e.clientY - grabDy;
+      lastY = dt;
+      div.style.top = dt + 'px';
+      /* Placeholder путешествует за пальцем: где палец — там дыра высотой
+       * с блок. Соседи плавно огибают её (FLIP), исходное место не пустует. */
       var vis = [];
       for (var vi = 0; vi < order.length; vi++) {
         var vrow = order[vi];
         if (vrow === div || !vrow.parentNode || vrow.style.display === 'none') continue;
         var vr = vrow.getBoundingClientRect();
-        vis.push({ row: vrow, oi: vi, mid: vr.top - (shift[vi] || 0) + vr.height / 2 });
+        vis.push({ row: vrow, mid: vr.top + vr.height / 2 });
       }
       var at = 0;
       for (var ai = 0; ai < vis.length; ai++) {
-        if (vis[ai].mid < e.clientY) at = ai + 1;
+        if (vis[ai].mid < dt) at = ai + 1;
       }
-      for (var si = 0; si < vis.length; si++) {
-        var want = si >= at ? gapOpen : 0;
-        if ((shift[vis[si].oi] || 0) === want) continue;
-        shift[vis[si].oi] = want;
-        vis[si].row.style.transition = 'transform .15s ease';
-        vis[si].row.style.transform = want ? 'translateY(' + want + 'px)' : '';
+      /* Deadband 6px: дыра едет только при честном пересечении границы —
+       * недолётная анимация и дрожание пальца её не болтают. */
+      if (at > phi && dt < vis[phi].mid + 6) at = phi;
+      else if (at < phi && dt > vis[at].mid - 6) at = phi;
+      if (at === phi) return;
+      phi = at;
+      var target = at < vis.length ? vis[at].row : null;
+      var phNext = ph.nextSibling;
+      if (!((target === null && phNext === null) || (target !== null && phNext === target))) {
+        /* Снимок → двигаем дыру → соседи доезжают. Замер после снэпа чистый,
+         * поэтому многострочные не бегают и не улетают. */
+        var snaps = [];
+        for (var sj = 0; sj < vis.length; sj++) {
+          snaps.push({ el: vis[sj].row, top: vis[sj].row.getBoundingClientRect().top });
+        }
+        box.insertBefore(ph, target);
+        for (var sk = 0; sk < snaps.length; sk++) {
+          var nt = snaps[sk].el.getBoundingClientRect().top;
+          var ddy = snaps[sk].top - nt;
+          if (!ddy) continue;
+          snaps[sk].el.style.transition = 'none';
+          snaps[sk].el.style.transform = 'translateY(' + ddy + 'px)';
+          void snaps[sk].el.offsetHeight;
+          snaps[sk].el.style.transition = 'transform .18s ease';
+          snaps[sk].el.style.transform = '';
+        }
       }
       /* Автопрокрутка у краёв экрана. */
       try {
@@ -637,30 +665,29 @@
       }
       mode = null;
       var box = el('lines');
-      var firstTop = null, firstH = 0;
-      if (ghost) {
-        try {
-          var gr = ghost.getBoundingClientRect();
-          firstTop = gr.top;
-          firstH = gr.height;
-        } catch (x) { firstTop = null; }
-        if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
-      }
-      ghost = null;
-      div.style.visibility = '';
-      /* Итоговое место — по пальцу, а не по центру призрака: у высокой
-       * (многострочной) задачи центр далеко от пальца, иначе она встаёт
-       * на пару строк выше/ниже того места, куда наводили. */
-      var cy = (lastY != null) ? lastY : ((firstTop != null) ? firstTop + firstH / 2 : 0);
+      var firstTop = null;
+      try { firstTop = div.getBoundingClientRect().top; } catch (x) { firstTop = null; }
+      /* Итоговое место — по верху тянущейся (совпадает с дырой-preview).
+       * Снэп недолётной анимации, дыру убираем, строку возвращаем в поток. */
+      var cy = (lastY != null) ? lastY : y0;
       var below = [];
+      var preTops = [];
       if (box && order) {
         for (var i = 0; i < order.length; i++) {
           var row = order[i];
           if (row === div || !row.parentNode || row.style.display === 'none') continue;
-          var r = row.getBoundingClientRect();
-          var rest = r.top - (shift[i] || 0);
-          if (rest + r.height / 2 < cy) below.push(row);
+          row.style.transition = 'none';
+          row.style.transform = '';
         }
+        for (var j = 0; j < order.length; j++) {
+          var row2 = order[j];
+          if (row2 === div || !row2.parentNode || row2.style.display === 'none') continue;
+          var r = row2.getBoundingClientRect();
+          preTops.push({ el: row2, top: r.top });
+          if (r.top + r.height / 2 < cy) below.push(row2);
+        }
+        if (ph && ph.parentNode === box) box.removeChild(ph);
+        ph = null;
         /* Родитель едет вместе с детьми: весь блок встаёт на итоговое место,
          * дети снова принимают прежний вид вложений. */
         var sibs0 = box.querySelectorAll ? box.querySelectorAll('.tline[data-id]') : [];
@@ -676,6 +703,13 @@
           box.insertBefore(kids[m], ref);
           ref = kids[m];
         }
+        /* Только теперь возвращаем строку в поток — место уже измерено. */
+        div.style.position = '';
+        div.style.top = '';
+        div.style.left = '';
+        div.style.width = '';
+        div.style.margin = '';
+        div.style.pointerEvents = '';
         /* Отступ по новому месту (только если блок реально переехал):
          * на уровне родителей — убираем, внутри чужого вложения —
          * берём отступ соседа сверху; весь блок сдвигается целиком. */
@@ -689,7 +723,7 @@
         }
       }
       div.classList.remove('dragging');
-      /* Мягкая посадка: все доезжают 200мс, затем сохраняем и рисуем. */
+      /* Мягкая посадка: строка и соседи доезжают 200мс, затем сохраняем. */
       if (box && order) {
         if (firstTop != null) {
           var newR = null;
@@ -705,18 +739,20 @@
             }
           }
         }
-        for (var j = 0; j < order.length; j++) {
-          var rw = order[j];
-          if (rw === div || !rw.parentNode) continue;
-          if (shift[j]) {
-            rw.style.transition = 'transform .2s ease';
-            rw.style.transform = '';
-          }
+        for (var q = 0; q < preTops.length; q++) {
+          var nt = preTops[q].el.getBoundingClientRect().top;
+          var ddy = preTops[q].top - nt;
+          if (!ddy) continue;
+          preTops[q].el.style.transition = 'none';
+          preTops[q].el.style.transform = 'translateY(' + ddy + 'px)';
+          void preTops[q].el.offsetHeight;
+          preTops[q].el.style.transition = 'transform .2s ease';
+          preTops[q].el.style.transform = '';
         }
         box.classList.remove('drag-active');
       }
       order = null;
-      shift = {};
+      ph = null;
       kids = [];
       setTimeout(function () {
         div.style.transition = '';

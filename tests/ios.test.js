@@ -134,18 +134,16 @@ describe('логика вызывается с state.tasks', () => {
   });
   it('групповой drag: дети прячутся под родителя и едут с ним', () => {
     assert.ok(appSrc.includes('kids'), 'дети не собираются при drag');
-    assert.ok(appSrc.includes('gInp.value'), 'призрак не копирует текст многострочного поля');
+    assert.ok(html.includes('phold'), 'нет стиля дыры в оболочке');
   });
-  it('перетаскивание: сосед едет под наездом сразу, без перескока', () => {
+  it('перетаскивание: дыра путешествует, исходное место не пустует', () => {
     assert.ok(appSrc.includes('pointerdown'), 'нет pointerdown на grip');
     assert.ok(appSrc.includes('pointermove'), 'нет pointermove для живого drag');
     assert.ok(appSrc.includes('pointerup'), 'нет pointerup для завершения drag');
     assert.ok(appSrc.includes('setPointerCapture'), 'нет захвата указателя');
-    assert.ok(appSrc.includes('gapOpen'), 'нет дыры высотой с призрак — высокий перекроет соседей');
+    assert.ok(appSrc.includes('phold'), 'нет путешествующего placeholder');
     assert.ok(appSrc.includes('lastY'), 'место drop не по пальцу — высокие встанут мимо');
-    assert.ok(!appSrc.includes('phold'), 'placeholder даёт скачок вместо плавного наезда');
-    assert.ok(appSrc.includes('cloneNode'), 'нет призрака: захват будет дёргать список');
-    assert.ok(appSrc.includes('visibility'), 'оригинал не держит место на захвате');
+    assert.ok(!appSrc.includes('cloneNode'), 'призрак оставляет пустое место исходника');
     assert.ok(appSrc.includes('drag-active'), 'нет drag-active состояния');
     assert.ok(appSrc.includes('persistLineOrder'), 'порядок не сохраняется');
     assert.ok(appSrc.includes('lostpointercapture'), 'нет страховки завершения drag');
