@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v20';
+  var APP_VERSION = 'v21';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var L = window.EBLogic;
@@ -521,6 +521,13 @@
       var box = el('lines');
       if (!box) return;
       mode = 'vertical';
+      /* Высота контейнера фиксируется: вынутая из потока строка ужмёт
+       * документ на кадр, браузер клампнет скролл вверх — и не вернёт.
+       * Меряем до любых изменений, снимаем на финише (там высоты те же). */
+      try {
+        var boxH = box.getBoundingClientRect().height;
+        if (boxH > 0) box.style.minHeight = boxH + 'px';
+      } catch (x) {}
       /* Снэп хвостов прошлой посадки: замер покоя обязан быть чистым. */
       var _all = rowsOf(box);
       for (var _si = 0; _si < _all.length; _si++) {
@@ -758,6 +765,7 @@
           preTops[q].el.style.transform = '';
         }
         box.classList.remove('drag-active');
+        box.style.minHeight = '';
       }
       order = null;
       kids = [];

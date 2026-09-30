@@ -139,6 +139,7 @@ describe('логика вызывается с state.tasks', () => {
   it('позиция страницы не прыгает, автопрокрутка не дёргает', () => {
     assert.ok(appSrc.includes('keepY'), 'скролл не сохраняется при перерисовке');
     assert.ok(appSrc.includes('scrollTo(0, keepY)'), 'скролл не возвращается');
+    assert.ok(appSrc.includes('minHeight'), 'высота списка не фиксируется на время drag');
     assert.ok(appSrc.includes('lastScrollTs'), 'автопрокрутка без троттлинга');
     assert.ok(appSrc.includes('dragDist'), 'автопрокрутка без порога движения');
   });
