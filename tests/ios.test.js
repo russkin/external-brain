@@ -134,21 +134,20 @@ describe('логика вызывается с state.tasks', () => {
   });
   it('групповой drag: дети прячутся под родителя и едут с ним', () => {
     assert.ok(appSrc.includes('kids'), 'дети не собираются при drag');
-    assert.ok(html.includes('phold'), 'нет стиля дыры в оболочке');
+    assert.ok(appSrc.includes('holeShift'), 'дыра не покрывает весь блок');
   });
-  it('перетаскивание: дыра путешествует, исходное место не пустует', () => {
+  it('перетаскивание: слепок на захвате, сдвиги соседей, посадка после', () => {
     assert.ok(appSrc.includes('pointerdown'), 'нет pointerdown на grip');
     assert.ok(appSrc.includes('pointermove'), 'нет pointermove для живого drag');
     assert.ok(appSrc.includes('pointerup'), 'нет pointerup для завершения drag');
     assert.ok(appSrc.includes('setPointerCapture'), 'нет захвата указателя');
-    assert.ok(appSrc.includes('phold'), 'нет путешествующего placeholder');
-    assert.ok(appSrc.includes('holeH + LINES_GAP'), 'границы не в покое — вниз будет недотяг');
-    assert.ok(appSrc.includes('glRem'), 'недолёт анимации болтает дыру — будет тряска');
-    assert.ok(appSrc.includes('.18s linear'), 'анимация не линейная — вычитание недолёта врёт');
+    assert.ok(!appSrc.includes('phold'), 'placeholder-раскладка вместо сдвигов');
+    assert.ok(!appSrc.includes('cloneNode'), 'призрак вместо самой строки');
+    assert.ok(appSrc.includes('holeShift'), 'нет высоты блока для дыры');
+    assert.ok(appSrc.includes('setHole'), 'дыра не открывается сдвигами');
     assert.ok(appSrc.includes('PEN'), 'нет порога въезда ведущим краем');
-    assert.ok(appSrc.includes('movePh'), 'дыра не едет за пальцем отдельно');
     assert.ok(appSrc.includes('divH'), 'нет высоты тянущейся для симметрии вверх/вниз');
-    assert.ok(!appSrc.includes('cloneNode'), 'призрак оставляет пустое место исходника');
+    assert.ok(appSrc.includes('.18s linear'), 'анимация не линейная');
     assert.ok(appSrc.includes('drag-active'), 'нет drag-active состояния');
     assert.ok(appSrc.includes('persistLineOrder'), 'порядок не сохраняется');
     assert.ok(appSrc.includes('lostpointercapture'), 'нет страховки завершения drag');
