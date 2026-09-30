@@ -453,6 +453,16 @@
       if (kt) L.setIndent(state.tasks, kidId, lineIndent(kt) + delta);
     }
   }
+  /* Остаток недолётной FLIP-анимации строки: решения принимаем по покою
+   * (замер минус остаток), поэтому соседи не болтают дыру туда-сюда. */
+  function glRem(row) {
+    var g = row._gl;
+    if (!g) return 0;
+    var k = (Date.now() - g.t0) / 180;
+    if (k >= 1) return 0;
+    return g.dy * (1 - k);
+  }
+
   /* Сдвинуть дыру на позицию np с плавным огибанием соседей (FLIP).
    * Возвращает true, если дыра реально переехала. */
   function movePh(box, ph, vis, np) {
@@ -468,6 +478,7 @@
       var nt = snaps[q].el.getBoundingClientRect().top;
       var ddy = snaps[q].top - nt;
       if (!ddy) continue;
+      snaps[q].el._gl = { dy: ddy, t0: Date.now() };
       snaps[q].el.style.transition = 'none';
       snaps[q].el.style.transform = 'translateY(' + ddy + 'px)';
       void snaps[q].el.offsetHeight;
@@ -523,6 +534,13 @@
       var box = el('lines');
       if (!box) return;
       mode = 'vertical';
+      /* Снэп хвостов прошлой посадки: замер покоя обязан быть чистым. */
+      var _all = rowsOf(box);
+      for (var _si = 0; _si < _all.length; _si++) {
+        _all[_si].style.transition = '';
+        _all[_si].style.transform = '';
+        delete _all[_si]._gl;
+      }
       var rect = null;
       try { rect = div.getBoundingClientRect(); } catch (x) { rect = null; }
       var h = rect ? rect.height : div.offsetHeight || 56;
@@ -631,9 +649,12 @@
         if (vrow === div || !vrow.classList || !vrow.classList.contains('tline')) continue;
         if (vrow.style.display === 'none') continue;
         var vr = vrow.getBoundingClientRect();
-        /* Ряды ниже дыры измеряем в покое (минус дыра): иначе вниз
-         * пришлось бы дотягиваться на высоту дыры дальше, чем вверх. */
-        vis.push({ row: vrow, top: vr.top - (afterPh ? holeH + LINES_GAP : 0), h: vr.height });
+        /* Покой = замер минус недолёт анимации минус сдвиг дырой. */
+        vis.push({
+          row: vrow,
+          top: vr.top - glRem(vrow) - (afterPh ? holeH + LINES_GAP : 0),
+          h: vr.height
+        });
       }
       var advanced = false;
       while (phi < vis.length) {
@@ -688,6 +709,7 @@
           if (row === div || !row.parentNode || row.style.display === 'none') continue;
           row.style.transition = 'none';
           row.style.transform = '';
+          delete row._gl;
         }
         for (var j = 0; j < order.length; j++) {
           var row2 = order[j];
