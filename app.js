@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v32';
+  var APP_VERSION = 'v33';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -177,20 +177,70 @@
     if (!state || !undoStack.length) return;
     redoStack.push(snapFull());
     if (redoStack.length > HISTORY_MAX) redoStack.shift();
-    applySnapshot(undoStack.pop());
+    var us = undoStack.pop();
+    applySnapshot(us);
+    focusAfterHistory(us, false);
   }
 
   function doRedo() {
     if (!state || !redoStack.length) return;
     undoStack.push(snapFull());
     if (undoStack.length > HISTORY_MAX) undoStack.shift();
-    applySnapshot(redoStack.pop());
+    var rs = redoStack.pop();
+    applySnapshot(rs);
+    focusAfterHistory(rs, true);
   }
 
   function updateHistoryButtons() {
     var u = el('undoBtn'), r = el('redoBtn');
     if (u) u.disabled = !undoStack.length;
     if (r) r.disabled = !redoStack.length;
+  }
+
+  /* Курсор в конец задачи по id (после отмены вызова поля). */
+  function focusTaskEnd(taskId) {
+    if (!taskId) return;
+    var box = el('lines');
+    if (!box || !box.querySelectorAll) return;
+    var rows = box.querySelectorAll('.tline[data-id]');
+    for (var i = 0; i < rows.length; i++) {
+      if (!rows[i].getAttribute || rows[i].getAttribute('data-id') !== taskId) continue;
+      var inp = rows[i].querySelector ? rows[i].querySelector('.tinput') : null;
+      if (inp && inp.focus) {
+        try {
+          inp.focus();
+          var v = inp.value || '';
+          if (inp.setSelectionRange) inp.setSelectionRange(v.length, v.length);
+        } catch (x) {}
+      }
+      return;
+    }
+  }
+
+  /* Жива ли цепочка из слепка: якорь TOP или живая задача. */
+  function snapChainLive(s) {
+    if (!s || !s.afterId) return false;
+    if (s.afterId === 'TOP') return true;
+    var a = state ? L.getTask(state.tasks, s.afterId) : null;
+    return !!(a && !a.deleted && a.status !== 'done');
+  }
+
+  /* После отмены/возврата курсор — в осмысленное поле. Отмена точки
+   * с фокусом убирает вызванное поле → курсор в конец той задачи,
+   * даже если концевое поле списка видно (оно тут ни при чём).
+   * Остальное: возврат — в видимое поле (или задачу из точки). */
+  function focusAfterHistory(s, isRedo) {
+    var box = el('lines');
+    var draft = (box && box.querySelector) ? box.querySelector('.tline[data-trailing] .tinput') : null;
+    if (!isRedo && s && s.focusId && !snapChainLive(s)) {
+      focusTaskEnd(s.focusId);
+      return;
+    }
+    if (draft && draft.focus) {
+      try { draft.focus(); } catch (x) {}
+      return;
+    }
+    if (s && s.focusId) focusTaskEnd(s.focusId);
   }
 
   /* --- single-flight синк: летит один, повтор ждёт очереди --- */
@@ -882,7 +932,8 @@
             tasks: snapTasks(),
             afterId: oldAnchor,
             text: '',
-            indent: oldIndent
+            indent: oldIndent,
+            focusId: created.id
           });
           if (undoStack.length > HISTORY_MAX) undoStack.shift();
           redoStack = [];
@@ -899,9 +950,23 @@
       }
       commitLine(taskId, inp.value, false);
       /* Пустое поле переезжает под эту строку — ввод продолжается вниз
-       * на том же уровне (следующая — сестра, а не с нулевым отступом). */
+       * на том же уровне (следующая — сестра, а не с нулевым отступом).
+       * Вызов поля — отдельная точка в истории, иначе ↩ откатит чужое
+       * давнее действие (вплоть до воскрешения удалённого в выполненных). */
       var moved = L.getTask(state.tasks, taskId);
       if (moved && moved.status !== 'done') {
+        if (trailingAfterId !== taskId || effTrailingIndent() !== lineIndent(moved)) {
+          undoStack.push({
+            tasks: snapTasks(),
+            afterId: trailingAfterId,
+            text: trailingText,
+            indent: trailingIndent,
+            focusId: taskId
+          });
+          if (undoStack.length > HISTORY_MAX) undoStack.shift();
+          redoStack = [];
+          updateHistoryButtons();
+        }
         trailingAfterId = taskId;
         trailingIndent = lineIndent(moved);
       }

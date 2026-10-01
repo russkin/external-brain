@@ -185,6 +185,13 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('afterId: oldAnchor'), 'появление поля не делится в истории');
     assert.ok(appSrc.includes('snapTasks() !== tasksJson'), 'возврат поля дёргает метки синка');
   });
+  it('отмена убирает вызванное поле и возвращает курсор', () => {
+    assert.ok(appSrc.includes('focusId: taskId'), 'Enter не пишет точку с фокусом');
+    assert.ok(appSrc.includes('focusTaskEnd'), 'курсор не возвращается в конец задачи');
+    assert.ok(appSrc.includes('setSelectionRange'), 'курсор не ставится в конец');
+    assert.ok(appSrc.includes('focusAfterHistory'), 'отмена не ведёт курсор');
+    assert.ok(appSrc.includes('snapChainLive'), 'курсор путает концевое поле с вызванным');
+  });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
   });
