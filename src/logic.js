@@ -173,6 +173,45 @@ function reopenTask(tasks, id, nowMs) {
   return task;
 }
 
+/* Вернуть ветку: задачу и всех вложенных ниже — зеркало completeBranch.
+ * Порядок структурный (createdAt, затем id): выполненные в секции done
+ * лежат по doneAt и для отступов не годятся, поэтому массив-аргумент
+ * не принимаем — работаем со всем списком по ссылкам (мутируем оригиналы).
+ * Живые (не done) пропускаем, но ветку не обрываем. Возвращает id
+ * возвращённых. Отступы не трогаем — это делает вызывающий UI. */
+function reopenBranch(tasks, id, nowMs) {
+  if (!Array.isArray(tasks)) return [];
+  var now = toInt(nowMs, Date.now());
+  var ordered = [];
+  for (var k = 0; k < tasks.length; k++) {
+    if (tasks[k] && tasks[k].id) ordered.push(tasks[k]);
+  }
+  ordered.sort(function (a, b) {
+    var ca = toInt(a.createdAt, 0), cb = toInt(b.createdAt, 0);
+    if (ca !== cb) return ca - cb;
+    return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
+  });
+  var idx = -1;
+  for (var i = 0; i < ordered.length; i++) {
+    if (ordered[i].id === id) { idx = i; break; }
+  }
+  if (idx === -1) return [];
+  var base = normIndent(ordered[idx].indent);
+  var back = [];
+  for (var j = idx; j < ordered.length; j++) {
+    var t = ordered[j];
+    if (!t || t.deleted) continue;
+    if (j > idx && normIndent(t.indent) <= base) break;
+    if (t.status !== 'done') continue;
+    t.status = 'next';
+    t.doneAt = 0;
+    t.updatedAt = now;
+    t.ts = now;
+    back.push(t.id);
+  }
+  return back;
+}
+
 /* Удаление — tombstone, чтобы LWW-синк не воскрешал задачу на других устройствах. */
 function removeTask(tasks, id, nowMs) {
   var task = getTask(tasks, id);
@@ -506,6 +545,7 @@ var api = {
   completeTask: completeTask,
   completeBranch: completeBranch,
   reopenTask: reopenTask,
+  reopenBranch: reopenBranch,
   removeTask: removeTask,
   setFrog: setFrog,
   setSlices: setSlices,

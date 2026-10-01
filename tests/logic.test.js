@@ -417,6 +417,41 @@ describe('отступ (группы)', () => {
     assert.equal(L.completeBranch(order, 'nope', 9000).length, 0);
     assert.deepEqual(L.completeBranch(null, 'p', 9000), []);
   });
+  it('reopenBranch возвращает ветку целиком: дети к родителю', () => {
+    const t = L.blankTasks();
+    mk(t, 'P', 1000, { id: 'p' });
+    mk(t, 'K1', 2000, { id: 'k1', indent: 1 });
+    mk(t, 'K2', 3000, { id: 'k2', indent: 2 });
+    mk(t, 'Q', 4000, { id: 'q' });
+    const order = [L.getTask(t, 'p'), L.getTask(t, 'k1'), L.getTask(t, 'k2'), L.getTask(t, 'q')];
+    L.completeBranch(order, 'p', 9000);
+    assert.deepEqual(L.reopenBranch(t, 'p', 9500), ['p', 'k1', 'k2']);
+    assert.equal(L.getTask(t, 'p').status, 'next');
+    assert.equal(L.getTask(t, 'k1').status, 'next');
+    assert.equal(L.getTask(t, 'k2').status, 'next');
+    assert.equal(L.getTask(t, 'q').status, 'inbox');
+    assert.equal(L.getTask(t, 'p').doneAt, 0);
+  });
+  it('reopenBranch останавливается на соседе, живых пропускает', () => {
+    const t = L.blankTasks();
+    mk(t, 'A', 1000, { id: 'a' });
+    mk(t, 'B', 2000, { id: 'b', indent: 1 });
+    mk(t, 'C', 3000, { id: 'c' });
+    L.getTask(t, 'a').status = 'done';
+    L.getTask(t, 'b').status = 'done';
+    L.getTask(t, 'c').status = 'done';
+    assert.deepEqual(L.reopenBranch(t, 'b', 9999), ['b']);
+    assert.equal(L.getTask(t, 'a').status, 'done');
+    assert.equal(L.getTask(t, 'c').status, 'done');
+    const u = L.blankTasks();
+    mk(u, 'P', 1000, { id: 'p' });
+    mk(u, 'K', 2000, { id: 'k', indent: 1 });
+    L.getTask(u, 'p').status = 'done';
+    assert.deepEqual(L.reopenBranch(u, 'p', 9999), ['p']);
+    assert.equal(L.getTask(u, 'k').status, 'inbox');
+    assert.deepEqual(L.reopenBranch(u, 'nope', 1), []);
+    assert.deepEqual(L.reopenBranch(null, 'p', 1), []);
+  });
   it('shareText показывает отступ пробелами', () => {
     const t = L.blankTasks();
     mk(t, 'Верх', 1000, { id: 'a' });

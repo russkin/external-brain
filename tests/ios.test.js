@@ -148,6 +148,8 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('Не выполнено'), 'нет флага возврата');
     assert.ok(appSrc.includes('L.reopenTask(state.tasks'), 'нет возврата задачи');
     assert.ok(appSrc.includes('completeBranch'), 'ветка не выполняется целиком');
+    assert.ok(appSrc.includes('reopenBranch'), 'ветка не возвращается целиком');
+    assert.ok(appSrc.includes('hasLiveParent'), 'нет проверки живого родителя при возврате ветки');
     assert.ok(appSrc.includes('setIndent(state.tasks, taskId, 0)'), 'отступ вернувшейся не сбрасывается');
     assert.ok(html.includes('id="undoBtn"'), 'нет стрелки назад');
     assert.ok(html.includes('id="redoBtn"'), 'нет стрелки вперёд');

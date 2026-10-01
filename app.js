@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v29';
+  var APP_VERSION = 'v30';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -613,15 +613,57 @@
     }, 260);
   }
 
+  /* Есть ли у задачи живой структурный родитель: идём вверх по порядку
+   * createdAt через всех предков с меньшим отступом (как isDoneShown) —
+   * все должны быть живыми (не done). Пустые/удалённые — не в счёт. */
+  function hasLiveParent(t) {
+    if (!t || !state) return false;
+    var base = lineIndent(t);
+    if (base === 0) return true;
+    var ord = state.tasks.slice().sort(function (a, b) {
+      var ca = (a && a.createdAt) || 0, cb = (b && b.createdAt) || 0;
+      if (ca !== cb) return ca - cb;
+      var ia = a && a.id, ib = b && b.id;
+      return ia < ib ? -1 : (ia > ib ? 1 : 0);
+    });
+    var idx = -1;
+    for (var i = 0; i < ord.length; i++) {
+      if (ord[i] && ord[i].id === t.id) { idx = i; break; }
+    }
+    if (idx === -1) return false;
+    var cur = base;
+    for (var j = idx - 1; j >= 0; j--) {
+      var u = ord[j];
+      if (!u || u.deleted || !String(u.title || '').trim()) continue;
+      if (lineIndent(u) < cur) {
+        if (u.status === 'done') return false;
+        cur = lineIndent(u);
+        if (cur === 0) return true;
+      }
+    }
+    return cur === 0;
+  }
+
   function toggleDoneNow(taskId, toDone) {
     if (toDone) {
       L.completeBranch(lineTasks(), taskId, Date.now());
       return L.getTask(state.tasks, taskId);
     }
-    var t = L.reopenTask(state.tasks, taskId);
-    /* Вернувшаяся задача без родителя: отступ в 0 — иначе висят чужой
+    /* Возврат — всей веткой: дети возвращаются к родителю в невыполненные. */
+    var ids = L.reopenBranch(state.tasks, taskId, Date.now());
+    var t = L.getTask(state.tasks, taskId);
+    /* Вернувшаяся ветка без живого родителя: уводим всю ветку в 0
+     * с сохранением относительных отступов — иначе висят чужой
      * отступ и чужое зачёркивание от done-группы. */
-    if (t && lineIndent(t) !== 0) L.setIndent(state.tasks, taskId, 0);
+    if (t && ids.length && lineIndent(t) !== 0 && !hasLiveParent(t)) {
+      var delta = lineIndent(t);
+      L.setIndent(state.tasks, taskId, 0);
+      for (var i = 0; i < ids.length; i++) {
+        if (ids[i] === taskId) continue;
+        var c = L.getTask(state.tasks, ids[i]);
+        if (c) L.setIndent(state.tasks, c.id, lineIndent(c) - delta);
+      }
+    }
     return t;
   }
 
