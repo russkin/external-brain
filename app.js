@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v28';
+  var APP_VERSION = 'v29';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -419,6 +419,9 @@
   var trailingAfterId = null;
   var trailingText = '';
   var trailingIndent = null;
+  /* Защита от двойного тапа по флагу черновика: pointerup+click приходят
+   * парой и без гарда создают две задачи вместо одной. */
+  var draftTapBusy = false;
 
   /* Отступ строки в пикселях. Задача с отступом входит в группу задачи сверху. */
   function lineIndent(t) {
@@ -486,12 +489,13 @@
       div.appendChild(flag);
       wireLineSwipe(div, taskId);
     } else {
-      /* Черновик умеет то же: свайп открывает флаг. Тап по флагу:
-       * есть текст — создать и сразу выполнить, пусто — убрать поле вниз. */
+      /* Черновик — та же кнопка, что у остальных строк: свайп открывает
+       * флаг «✓ Выполнено». Тап по флагу: есть текст — создать и сразу
+       * выполнить (поле очищается), пусто — убрать поле вниз. */
       var dflag = document.createElement('button');
       dflag.className = 'doneflag';
-      dflag.textContent = '✓';
-      dflag.setAttribute('aria-label', 'Готово');
+      dflag.textContent = '✓ Выполнено';
+      dflag.setAttribute('aria-label', 'Отметить выполненной');
       (function (fl) {
         var fDownX = 0, fDownY = 0, fDown = false;
         fl.addEventListener('pointerdown', function (ev) {
@@ -700,27 +704,29 @@
     return created;
   }
 
-  /* Эффективный отступ черновика: ручной сдвиг, иначе — от якоря/соседа. */
+  /* Эффективный отступ черновика: ручной сдвиг, иначе 0.
+   * Отступ строки сверху НЕ наследуем: новое поле всегда начинается
+   * без отступа, в группу входит только сдвигом за grip. */
   function effTrailingIndent() {
     if (trailingIndent != null) return lineIndent({ indent: trailingIndent });
-    if (trailingAfterId === 'TOP') return 0;
-    var a = trailingAnchorId();
-    if (a) {
-      var t = L.getTask(state.tasks, a);
-      if (t) return lineIndent(t);
-    }
-    var alive = lineTasks();
-    return alive.length ? lineIndent(alive[alive.length - 1]) : 0;
+    return 0;
   }
 
   /* Тап по флагу черновика: есть текст — создать и сразу выполнить,
-   * пусто — убрать поле вниз. Одна запись в истории. */
+   * пусто — убрать поле вниз. Одна запись в истории. Поле очищается
+   * ДО мутации, иначе render внутри mutate покажет старый текст рядом
+   * с улетевшей в выполненные копией (дубль при одной задаче). */
   function tapDraftFlag() {
+    if (draftTapBusy) return;
     var title = String(trailingText || '').trim();
     if (!title) { dismissDraft(); return; }
+    draftTapBusy = true;
     var atTop = trailingAfterId === 'TOP';
     var anchor = atTop ? null : trailingAnchorId();
     var ind = effTrailingIndent();
+    trailingAfterId = null;
+    trailingText = '';
+    trailingIndent = null;
     mutate(function () {
       var now = Date.now();
       var created = atTop ?
@@ -728,9 +734,9 @@
         insertTaskAfter(anchor, title, ind, now);
       if (created) L.completeTask(state.tasks, created.id, now);
     });
-    trailingAfterId = null;
-    trailingText = '';
-    trailingIndent = null;
+    render();
+    focusTrailing();
+    setTimeout(function () { draftTapBusy = false; }, 400);
   }
 
   function trailingAnchorId() {
@@ -754,7 +760,7 @@
     if (isTrailing || !taskId) {
       if (!title) return null;
       var created = null;
-      /* Новая строка наследует отступ строки сверху — так собираются группы. */
+      /* Отступ берём из поля черновика (по умолчанию 0, правит сдвиг). */
       mutate(function () { created = L.createTask(state.tasks, title, Date.now(), { indent: indent || 0 }); });
       return created;
     }
@@ -948,13 +954,15 @@
     var PEN = 14;
     /* Открыть дыру на позиции np: ряды ниже отходят на высоту блока,
      * ряды выше возвращаются. Трогаем только изменившиеся (иначе дёргание).
-     * Transition всё сглаживает сам — снапшоты не нужны. */
-    function setHole(np) {
+     * Transition сглаживает движение дыры, но ПЕРВАЯ дыра открывается
+     * мгновенно (instant): строка вынута из потока в том же кадре, и
+     * анимированное открытие видно как прыжок строк ниже вверх-вниз. */
+    function setHole(np, instant) {
       for (var i = 0; i < fr.length; i++) {
         var want = i >= np ? holeShift : 0;
         if (frSh[i] === want) continue;
         frSh[i] = want;
-        fr[i].row.style.transition = 'transform .18s linear';
+        fr[i].row.style.transition = instant ? 'none' : 'transform .18s linear';
         fr[i].row.style.transform = want ? 'translateY(' + want + 'px)' : '';
       }
     }
@@ -965,7 +973,9 @@
       var id = div.getAttribute ? div.getAttribute('data-id') : null;
       return id ? L.getTask(state.tasks, id) : null;
     }
-    /* Потолок отступа: первая строка — 0, иначе отступ соседа сверху +1. */
+    /* Потолок отступа: первая строка — 0, иначе отступ соседа сверху +1.
+     * Черновик — та же rule: свой текущий уровень и тот же потолок,
+     * иначе у нового поля отступ не меняется вообще. */
     function indentBounds() {
       var cur = 0, prev = 0, first = true;
       var box = el('lines');
@@ -980,10 +990,10 @@
         }
       }
       var mine = myTask();
-      if (!mine) return { cur: div._indent || 0, max: 8 };
-      cur = lineIndent(mine);
+      cur = mine ? lineIndent(mine) : (div._indent || 0);
       var max = first ? 0 : prev + 1;
       if (max > 8) max = 8;
+      if (max < 0) max = 0;
       return { cur: cur, max: max };
     }
     function startIndent() {
@@ -1065,8 +1075,10 @@
       div.classList.remove('swiped');
       div._swOpen = false;
       box.classList.add('drag-active');
-      /* Дыра сразу на месте строки: захват не схлопывает список. */
-      setHole(phi);
+      /* Дыра сразу на месте строки: захват не схлопывает список.
+       * Мгновенно, в том же кадре изъятия строки — иначе строки ниже
+       * прыгают вверх и возвращаются анимацией дыры. */
+      setHole(phi, true);
     }
     grip.addEventListener('pointerdown', function (e) {
       if (pid != null) return;
@@ -1093,7 +1105,12 @@
       var dy = e.clientY - y0;
       if (!mode) {
         if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 2) {
-          if (!myTask()) return;
+          /* Черновик сдвигается так же, как остальные строки; запрет —
+           * только для выполненных. Раньше черновик отфутболивался здесь
+           * и отступ у нового поля не менялся вообще. */
+          var _mt = myTask();
+          if (!_mt && !(div.getAttribute && div.getAttribute('data-trailing'))) return;
+          if (_mt && _mt.status === 'done') return;
           startIndent();
         } else if (Math.abs(dy) > 10) {
           startVertical(e);
@@ -1204,6 +1221,15 @@
         /* Посадка ровно в дыру: якорь — первый ряд под ней из слепка.
          * Пересчёт не нужен, промаха между preview и посадкой нет. */
         var anchor = phi < fr.length ? fr[phi].row : null;
+        /* Дыру снимаем мгновенно ДО перестановки: старая трансформа дыры,
+         * сложенная с новым потоком (строка+дети вернулись), даёт прыжок
+         * строк ниже вверх с возвратом. Замер preTops выше — со старой
+         * дырой, замер nt ниже — уже на чистом потоке, FLIP честный. */
+        for (var hc = 0; hc < fr.length; hc++) {
+          fr[hc].row.style.transition = 'none';
+          fr[hc].row.style.transform = '';
+        }
+        try { void box.offsetHeight; } catch (x) {}
         /* Родитель едет вместе с детьми: весь блок встаёт на итоговое место,
          * дети снова принимают прежний вид вложений. */
         var sibs0 = box.querySelectorAll ? box.querySelectorAll('.tline[data-id]') : [];
@@ -1306,7 +1332,8 @@
     var fullIdx = {};
     for (var fi = 0; fi < full.length; fi++) fullIdx[full[fi].id] = fi;
     /* Пустое поле живёт под строкой trailingAfterId (цепочка Enter вниз),
-     * иначе — в конце живых. Отступ наследует от строки сверху. */
+     * иначе — в конце живых. Отступ — свой ручной, по умолчанию 0.
+     * Все живые выполнены — остаётся одно пустое поле + секция выполненных. */
     var anchorIdx = -1;
     if (trailingAfterId) {
       for (var ai = 0; ai < tasks.length; ai++) {
