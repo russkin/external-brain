@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v33';
+  var APP_VERSION = 'v34';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1098,6 +1098,9 @@
     var mode = null, lastDx = 0, lastScrollTs = 0, phi = 0;
     var order = null, kids = [], fr = [], frSh = [];
     var indentCur = 0, indentMax = 0;
+    /* Поле и задачи на старте жеста: перестановка пишется в историю,
+     * отмена возвращает всё на места, а не трогает чужое. */
+    var dragUiBefore = null;
     var PEN = 14;
     /* Открыть дыру на позиции np: ряды ниже отходят на высоту блока,
      * ряды выше возвращаются. Трогаем только изменившиеся (иначе дёргание).
@@ -1243,6 +1246,7 @@
       lastScrollTs = 0;
       mode = null;
       kids = [];
+      dragUiBefore = snapFull();
       try { grip.setPointerCapture(pid); } catch (x) {}
       if (e.cancelable) e.preventDefault();
     });
@@ -1338,6 +1342,19 @@
         var task = myTask();
         if (!task) {
           if (div.getAttribute && div.getAttribute('data-trailing')) {
+            /* Сдвиг пустого поля — тоже перестановка: пишем в историю,
+             * иначе отмена после сдвига откатит чужое действие. */
+            if (effTrailingIndent() !== lvl) {
+              undoStack.push({
+                tasks: snapTasks(),
+                afterId: trailingAfterId,
+                text: trailingText,
+                indent: trailingIndent
+              });
+              if (undoStack.length > HISTORY_MAX) undoStack.shift();
+              redoStack = [];
+              updateHistoryButtons();
+            }
             trailingIndent = lvl;
             render();
           }
@@ -1392,7 +1409,9 @@
           ref = kids[m];
         }
         /* Черновик перетащили: запоминаем новое место (id соседа сверху
-         * или TOP), данные не трогаем — persist его игнорирует. */
+         * или TOP), данные не трогаем — persist его игнорирует.
+         * Перестановка поля пишется в историю: отмена вернёт поле
+         * на место, а не будет откатывать чужие задачи. */
         if (!myTask() && div.getAttribute && div.getAttribute('data-trailing')) {
           var prevRow = div.previousSibling;
           var prevId = null;
@@ -1403,7 +1422,20 @@
             }
             prevRow = prevRow.previousSibling;
           }
-          trailingAfterId = prevId || 'TOP';
+          var newAfter = prevId || 'TOP';
+          var oldAfter = dragUiBefore ? dragUiBefore.afterId : trailingAfterId;
+          if (newAfter !== oldAfter) {
+            undoStack.push({
+              tasks: snapTasks(),
+              afterId: oldAfter,
+              text: dragUiBefore ? String(dragUiBefore.text || '') : trailingText,
+              indent: dragUiBefore ? dragUiBefore.indent : trailingIndent
+            });
+            if (undoStack.length > HISTORY_MAX) undoStack.shift();
+            redoStack = [];
+            updateHistoryButtons();
+          }
+          trailingAfterId = newAfter;
         }
         /* Только теперь возвращаем строку в поток — место уже измерено. */
         div.style.position = '';

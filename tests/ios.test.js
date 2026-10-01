@@ -192,6 +192,10 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('focusAfterHistory'), 'отмена не ведёт курсор');
     assert.ok(appSrc.includes('snapChainLive'), 'курсор путает концевое поле с вызванным');
   });
+  it('перетаскивание пустого поля пишется в историю', () => {
+    assert.ok(appSrc.includes('dragUiBefore'), 'старт drag не запоминает поле');
+    assert.ok(appSrc.includes('dragUiBefore.afterId'), 'возврат поля не знает старое место');
+  });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
   });
