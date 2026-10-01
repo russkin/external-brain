@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v27';
+  var APP_VERSION = 'v28';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -418,6 +418,7 @@
    * где был нажат Enter (цепочка ввода вниз). Текст переживает перерисовки. */
   var trailingAfterId = null;
   var trailingText = '';
+  var trailingIndent = null;
 
   /* Отступ строки в пикселях. Задача с отступом входит в группу задачи сверху. */
   function lineIndent(t) {
@@ -435,6 +436,7 @@
     else div.setAttribute('data-trailing', '1');
     indent = lineIndent({ indent: indent });
     div.setAttribute('data-indent', String(indent));
+    div._indent = indent;
     if (indent) div.style.marginLeft = (indent * INDENT_STEP) + 'px';
     if (opts.hidden) div.classList.add('collapsed-kid');
     var body = document.createElement('div');
@@ -483,6 +485,32 @@
       })(taskId, flag);
       div.appendChild(flag);
       wireLineSwipe(div, taskId);
+    } else {
+      /* Черновик умеет то же: свайп открывает флаг. Тап по флагу:
+       * есть текст — создать и сразу выполнить, пусто — убрать поле вниз. */
+      var dflag = document.createElement('button');
+      dflag.className = 'doneflag';
+      dflag.textContent = '✓';
+      dflag.setAttribute('aria-label', 'Готово');
+      (function (fl) {
+        var fDownX = 0, fDownY = 0, fDown = false;
+        fl.addEventListener('pointerdown', function (ev) {
+          fDownX = ev.clientX;
+          fDownY = ev.clientY;
+          fDown = true;
+        });
+        function draftGo(ev) {
+          if (!fDown) return;
+          fDown = false;
+          if (ev && (Math.abs(ev.clientX - fDownX) > 12 || Math.abs(ev.clientY - fDownY) > 12)) return;
+          tapDraftFlag();
+        }
+        fl.addEventListener('pointerup', draftGo);
+        fl.addEventListener('pointercancel', function () { fDown = false; });
+        fl.addEventListener('click', function () { tapDraftFlag(); });
+      })(dflag);
+      div.appendChild(dflag);
+      wireLineSwipe(div, null);
     }
     wireLineInput(div, inp, taskId, isTrailing, indent);
     wireLineDrag(div, grip, inp);
@@ -586,50 +614,123 @@
       L.completeBranch(lineTasks(), taskId, Date.now());
       return L.getTask(state.tasks, taskId);
     }
-    return L.reopenTask(state.tasks, taskId);
+    var t = L.reopenTask(state.tasks, taskId);
+    /* Вернувшаяся задача без родителя: отступ в 0 — иначе висят чужой
+     * отступ и чужое зачёркивание от done-группы. */
+    if (t && lineIndent(t) !== 0) L.setIndent(state.tasks, taskId, 0);
+    return t;
   }
 
   /* Создать задачу сразу под prevId (той же цепочкой Enter вниз).
    * createdAt втискиваем между соседями целым числом; тесно — сдвигаем
    * всех выше на 1 (редко, ms-метки почти всегда с зазором). */
+  function insertTaskAfter(prevId, title, indent, now) {
+    var alive = lineTasks();
+    var idx = -1;
+    for (var i = 0; i < alive.length; i++) {
+      if (alive[i].id === prevId) { idx = i; break; }
+    }
+    if (idx === -1) return L.createTask(state.tasks, title, now, { indent: indent || 0 });
+    var prev = alive[idx];
+    var next = alive[idx + 1] || null;
+    var slot;
+    if (!next || next.createdAt - prev.createdAt > 1) {
+      slot = next ? prev.createdAt + Math.floor((next.createdAt - prev.createdAt) / 2) : now;
+    } else {
+      for (var j = 0; j < alive.length; j++) {
+        if (alive[j].createdAt > prev.createdAt) {
+          alive[j].createdAt += 1;
+          alive[j].ts = now;
+          alive[j].updatedAt = now;
+        }
+      }
+      slot = prev.createdAt + 1;
+    }
+    var created = L.createTask(state.tasks, title, now, { indent: indent || 0 });
+    if (created) {
+      created.createdAt = slot;
+      created.ts = now;
+      created.updatedAt = now;
+    }
+    return created;
+  }
+
+  function insertTaskTop(title, now) {
+    var alive = lineTasks();
+    var slot = now;
+    if (alive.length) {
+      slot = alive[0].createdAt;
+      for (var j = 0; j < alive.length; j++) {
+        if (alive[j].createdAt >= slot) {
+          alive[j].createdAt += 1;
+          alive[j].ts = now;
+          alive[j].updatedAt = now;
+        }
+      }
+    }
+    /* Первая строка всегда без отступа (правило потолка). */
+    var created = L.createTask(state.tasks, title, now, { indent: 0 });
+    if (created) {
+      created.createdAt = slot;
+      created.ts = now;
+      created.updatedAt = now;
+    }
+    return created;
+  }
+
   function placeTaskAfter(prevId, title, indent) {
     var title0 = String(title == null ? '' : title).trim();
     if (!title0) return null;
     var now = Date.now();
     var created = null;
     mutate(function () {
-      var alive = lineTasks();
-      var idx = -1;
-      for (var i = 0; i < alive.length; i++) {
-        if (alive[i].id === prevId) { idx = i; break; }
-      }
-      if (idx === -1) {
-        created = L.createTask(state.tasks, title0, now, { indent: indent || 0 });
-        return;
-      }
-      var prev = alive[idx];
-      var next = alive[idx + 1] || null;
-      var slot;
-      if (!next || next.createdAt - prev.createdAt > 1) {
-        slot = next ? prev.createdAt + Math.floor((next.createdAt - prev.createdAt) / 2) : now;
-      } else {
-        for (var j = 0; j < alive.length; j++) {
-          if (alive[j].createdAt > prev.createdAt) {
-            alive[j].createdAt += 1;
-            alive[j].ts = now;
-            alive[j].updatedAt = now;
-          }
-        }
-        slot = prev.createdAt + 1;
-      }
-      created = L.createTask(state.tasks, title0, now, { indent: indent || 0 });
-      if (created) {
-        created.createdAt = slot;
-        created.ts = now;
-        created.updatedAt = now;
-      }
+      created = insertTaskAfter(prevId, title0, indent, now);
     });
     return created;
+  }
+
+  function placeTaskTop(title) {
+    var title0 = String(title == null ? '' : title).trim();
+    if (!title0) return null;
+    var now = Date.now();
+    var created = null;
+    mutate(function () {
+      created = insertTaskTop(title0, now);
+    });
+    return created;
+  }
+
+  /* Эффективный отступ черновика: ручной сдвиг, иначе — от якоря/соседа. */
+  function effTrailingIndent() {
+    if (trailingIndent != null) return lineIndent({ indent: trailingIndent });
+    if (trailingAfterId === 'TOP') return 0;
+    var a = trailingAnchorId();
+    if (a) {
+      var t = L.getTask(state.tasks, a);
+      if (t) return lineIndent(t);
+    }
+    var alive = lineTasks();
+    return alive.length ? lineIndent(alive[alive.length - 1]) : 0;
+  }
+
+  /* Тап по флагу черновика: есть текст — создать и сразу выполнить,
+   * пусто — убрать поле вниз. Одна запись в истории. */
+  function tapDraftFlag() {
+    var title = String(trailingText || '').trim();
+    if (!title) { dismissDraft(); return; }
+    var atTop = trailingAfterId === 'TOP';
+    var anchor = atTop ? null : trailingAnchorId();
+    var ind = effTrailingIndent();
+    mutate(function () {
+      var now = Date.now();
+      var created = atTop ?
+        insertTaskTop(title, now) :
+        insertTaskAfter(anchor, title, ind, now);
+      if (created) L.completeTask(state.tasks, created.id, now);
+    });
+    trailingAfterId = null;
+    trailingText = '';
+    trailingIndent = null;
   }
 
   function trailingAnchorId() {
@@ -637,6 +738,15 @@
     var t = L.getTask(state.tasks, trailingAfterId);
     if (!t || t.deleted || t.status === 'done') return null;
     return trailingAfterId;
+  }
+
+  /* Убрать поле-черновик с текущего места: текст стёрт, поле — вниз. */
+  function dismissDraft() {
+    trailingAfterId = null;
+    trailingText = '';
+    trailingIndent = null;
+    render();
+    focusTrailing();
   }
 
   function commitLine(taskId, value, isTrailing, indent) {
@@ -683,12 +793,20 @@
       else renderStatus();
     });
     inp.addEventListener('keydown', function (e) {
+      if (e.key === 'Backspace' && isTrailing && !inp.value) {
+        dismissDraft();
+        e.preventDefault();
+        return;
+      }
       if (e.key !== 'Enter' || e.shiftKey) return;
       e.preventDefault();
       if (isTrailing) {
-        var created = placeTaskAfter(trailingAnchorId(), inp.value, indent);
+        var created = (trailingAfterId === 'TOP') ?
+          placeTaskTop(inp.value) :
+          placeTaskAfter(trailingAnchorId(), inp.value, indent);
         if (created) {
           trailingText = '';
+          trailingIndent = null;
           trailingAfterId = created.id;
           render();
           focusTrailing();
@@ -862,7 +980,8 @@
         }
       }
       var mine = myTask();
-      cur = mine ? lineIndent(mine) : 0;
+      if (!mine) return { cur: div._indent || 0, max: 8 };
+      cur = lineIndent(mine);
       var max = first ? 0 : prev + 1;
       if (max > 8) max = 8;
       return { cur: cur, max: max };
@@ -952,6 +1071,10 @@
     grip.addEventListener('pointerdown', function (e) {
       if (pid != null) return;
       if (e.button != null && e.button !== 0) return;
+      /* Выполненные не таскаем: ни в свой раздел, ни тем более в живые.
+       * Проверка до взятия pid, иначе мув стартует drag мимо гарда. */
+      var mt0 = myTask();
+      if (mt0 && mt0.status === 'done') return;
       var box = el('lines');
       if (!box) return;
       pid = e.pointerId;
@@ -1049,7 +1172,14 @@
         if (lvl < 0) lvl = 0;
         if (lvl > bou.max) lvl = bou.max;
         var task = myTask();
-        if (task && lvl !== bou.cur) {
+        if (!task) {
+          if (div.getAttribute && div.getAttribute('data-trailing')) {
+            trailingIndent = lvl;
+            render();
+          }
+          return;
+        }
+        if (lvl !== bou.cur) {
           (function (id, l) {
             mutate(function () { L.setIndent(state.tasks, id, l); });
           })(task.id, lvl);
@@ -1087,6 +1217,20 @@
           kids[m].style.display = '';
           box.insertBefore(kids[m], ref);
           ref = kids[m];
+        }
+        /* Черновик перетащили: запоминаем новое место (id соседа сверху
+         * или TOP), данные не трогаем — persist его игнорирует. */
+        if (!myTask() && div.getAttribute && div.getAttribute('data-trailing')) {
+          var prevRow = div.previousSibling;
+          var prevId = null;
+          while (prevRow) {
+            if (prevRow.getAttribute && prevRow.getAttribute('data-id')) {
+              prevId = prevRow.getAttribute('data-id');
+              break;
+            }
+            prevRow = prevRow.previousSibling;
+          }
+          trailingAfterId = prevId || 'TOP';
         }
         /* Только теперь возвращаем строку в поток — место уже измерено. */
         div.style.position = '';
@@ -1169,20 +1313,23 @@
         if (tasks[ai].id === trailingAfterId) { anchorIdx = ai; break; }
       }
     }
-    var anchorTask = anchorIdx !== -1 ? tasks[anchorIdx] : null;
-    var tailIndent = anchorTask ? lineIndent(anchorTask) :
-      (tasks.length ? lineIndent(tasks[tasks.length - 1]) : 0);
+    var tailIndent = effTrailingIndent();
     function taskRow(t, i) {
       return makeLine(t.id, t.title, false, lineIndent(t), {
         doneShown: L.isDoneShown(full, fullIdx[t.id]),
         hidden: L.isHiddenByCollapse(tasks, i, collapsed)
       });
     }
+    if (trailingAfterId === 'TOP') {
+      box.appendChild(makeLine(null, trailingText, true, 0));
+    }
     for (var i = 0; i < tasks.length; i++) {
       box.appendChild(taskRow(tasks[i], i));
       if (i === anchorIdx) box.appendChild(makeLine(null, trailingText, true, tailIndent));
     }
-    if (anchorIdx === -1) box.appendChild(makeLine(null, trailingText, true, tailIndent));
+    if (anchorIdx === -1 && trailingAfterId !== 'TOP') {
+      box.appendChild(makeLine(null, trailingText, true, tailIndent));
+    }
     /* Выполненные — под полем добавления, новые выше старых. */
     var done = L.doneList(state.tasks);
     if (done.length) {

@@ -148,12 +148,20 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('Не выполнено'), 'нет флага возврата');
     assert.ok(appSrc.includes('L.reopenTask(state.tasks'), 'нет возврата задачи');
     assert.ok(appSrc.includes('completeBranch'), 'ветка не выполняется целиком');
+    assert.ok(appSrc.includes('setIndent(state.tasks, taskId, 0)'), 'отступ вернувшейся не сбрасывается');
     assert.ok(html.includes('id="undoBtn"'), 'нет стрелки назад');
     assert.ok(html.includes('id="redoBtn"'), 'нет стрелки вперёд');
     assert.ok(appSrc.includes('doUndo'), 'нет undo');
     assert.ok(appSrc.includes('doRedo'), 'нет redo');
     assert.ok(appSrc.includes('HISTORY_MAX'), 'история без лимита');
     assert.ok(appSrc.includes('deleted = true'), 'отмена создания не переживёт синк');
+  });
+  it('черновик: удаление, сдвиг, перетаскивание; выполненные не таскаем', () => {
+    assert.ok(appSrc.includes('dismissDraft'), 'черновик нельзя убрать');
+    assert.ok(appSrc.includes('trailingIndent'), 'у черновика нет своего отступа');
+    assert.ok(appSrc.includes('Backspace'), 'нет сброса пустого поля');
+    assert.ok(appSrc.includes('placeTaskTop'), 'нет создания в начало');
+    assert.ok(appSrc.includes('не таскаем'), 'нет запрета drag выполненных');
   });
   it('Enter в строке даёт пустое поле ниже, а не фокус дальше', () => {
     assert.ok(appSrc.includes('trailingAfterId'), 'пустое поле не переезжает');
