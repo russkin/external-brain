@@ -203,6 +203,12 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes("closest('.grip') || lastPDTarget.closest('.doneflag')"),
       'жесты флага/грипа не защищены от blur-создания');
     assert.ok(appSrc.includes('document.contains(inp)'), 'создание не ждёт удалённое поле');
+    var blurBody = appSrc.slice(appSrc.indexOf('function createDraftOnBlur'),
+      appSrc.indexOf('function commitLine'));
+    assert.ok(blurBody.includes('trailingAfterId = null'),
+      'после blur-create поле-продолжение остаётся');
+    assert.ok(!blurBody.includes('undoStack.push'),
+      'лишняя точка истории в blur-create (должна быть одна — от mutate)');
   });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');

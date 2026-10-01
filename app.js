@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v35';
+  var APP_VERSION = 'v36';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -879,13 +879,14 @@
     focusTrailing();
   }
 
-  /* Потеря фокуса поля с текстом = Enter: задача создаётся и цепочка
-   * продолжается под ней, но фокус НЕ воруем (клавиатуру закрыли неслучайно).
-   * Тап по флагу/грипу своей же строки — их жест (создание+выполнение,
-   * drag) сам разберётся; тап по другой строке — задача создаётся и фокус
-   * возвращается в неё (render пересоздаёт строки, старый узел мёртв).
-   * Точка истории — та же, что у Enter: сначала уходит продолжение цепочки,
-   * потом задача (текст возвращается в поле). */
+  /* Потеря фокуса поля с текстом = создание задачи, но поле-продолжение
+   * НЕ оставляем: новое пустое поле вызывается Enter в любой строке
+   * (фокус не воруем — клавиатуру закрыли неслучайно). Тап по флагу/грипу
+   * своей строки — их жест (создание+выполнение, drag) сам разберётся;
+   * тап по другой строке — задача создаётся и фокус возвращается в неё
+   * (render пересоздаёт строки, старый узел мёртв). История — одна точка
+   * (само создание, её пишет mutate): отмена снимает задачу и возвращает
+   * текст в поле. */
   function createDraftOnBlur(inp, indent) {
     if (draftTapBusy) return;
     if (!inp || !document.contains(inp)) return;
@@ -909,26 +910,16 @@
         if (arow && arow.getAttribute('data-id')) focusId = arow.getAttribute('data-id');
       }
     }
-    var oldAnchor = trailingAfterId;
-    var oldIndent = trailingIndent;
     var created = (trailingAfterId === 'TOP') ?
       placeTaskTop(title) :
       placeTaskAfter(trailingAnchorId(), title, indent);
     if (!created) return;
-    undoStack.push({
-      tasks: snapTasks(),
-      afterId: oldAnchor,
-      text: '',
-      indent: oldIndent,
-      focusId: created.id
-    });
-    if (undoStack.length > HISTORY_MAX) undoStack.shift();
-    redoStack = [];
+    /* Поле гасим ДО следующего render (mutate уже отрендерил с текстом
+     * рядом с новой задачей — дубль живёт один кадр, как у Enter). */
     trailingText = '';
-    trailingIndent = lineIndent(created);
-    trailingAfterId = created.id;
+    trailingAfterId = null;
+    trailingIndent = null;
     render();
-    updateHistoryButtons();
     if (focusId) focusTaskEnd(focusId);
   }
 
