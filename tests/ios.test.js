@@ -196,6 +196,14 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('dragUiBefore'), 'старт drag не запоминает поле');
     assert.ok(appSrc.includes('dragUiBefore.afterId'), 'возврат поля не знает старое место');
   });
+  it('потеря фокуса поля создаёт задачу', () => {
+    assert.ok(appSrc.includes("addEventListener('blur'"), 'нет blur-обработчика поля');
+    assert.ok(appSrc.includes('createDraftOnBlur'), 'нет создания по потере фокуса');
+    assert.ok(appSrc.includes('draftBlurTimer'), 'blur не отложен до смены фокуса');
+    assert.ok(appSrc.includes("closest('.grip') || lastPDTarget.closest('.doneflag')"),
+      'жесты флага/грипа не защищены от blur-создания');
+    assert.ok(appSrc.includes('document.contains(inp)'), 'создание не ждёт удалённое поле');
+  });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
   });

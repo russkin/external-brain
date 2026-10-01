@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v34';
+  var APP_VERSION = 'v35';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -494,6 +494,17 @@
    * парой и без гарда создают две задачи вместо одной. */
   var draftTapBusy = false;
 
+  /* Последний pointerdown (захват — до смены фокуса): по нему blur черновика
+   * отличает «тап по флагу/грипу/строке» (у их жестов своя логика — не мешаем)
+   * от настоящей потери фокуса (задача создаётся). */
+  var lastPDTarget = null, lastPDts = 0;
+  document.addEventListener('pointerdown', function (e) {
+    lastPDTarget = e.target;
+    lastPDts = Date.now();
+  }, true);
+
+  var draftBlurTimer = null;
+
   /* Отступ строки в пикселях. Задача с отступом входит в группу задачи сверху. */
   function lineIndent(t) {
     var v = parseInt(t && t.indent, 10);
@@ -868,6 +879,59 @@
     focusTrailing();
   }
 
+  /* Потеря фокуса поля с текстом = Enter: задача создаётся и цепочка
+   * продолжается под ней, но фокус НЕ воруем (клавиатуру закрыли неслучайно).
+   * Тап по флагу/грипу своей же строки — их жест (создание+выполнение,
+   * drag) сам разберётся; тап по другой строке — задача создаётся и фокус
+   * возвращается в неё (render пересоздаёт строки, старый узел мёртв).
+   * Точка истории — та же, что у Enter: сначала уходит продолжение цепочки,
+   * потом задача (текст возвращается в поле). */
+  function createDraftOnBlur(inp, indent) {
+    if (draftTapBusy) return;
+    if (!inp || !document.contains(inp)) return;
+    var title = String(trailingText || '').trim();
+    if (!title) return;
+    var focusId = null;
+    var fresh = (Date.now() - lastPDts) < 700;
+    if (fresh && lastPDTarget && lastPDTarget.closest) {
+      if (lastPDTarget.closest('.grip') || lastPDTarget.closest('.doneflag')) return;
+      var row = lastPDTarget.closest('.tline');
+      if (row) {
+        if (row.getAttribute('data-trailing')) return;
+        if (!lastPDTarget.closest('.tinput')) return;
+        focusId = row.getAttribute('data-id');
+      }
+    } else {
+      var ae = document.activeElement;
+      if (ae && ae.classList && ae.classList.contains('tinput') && ae.closest) {
+        var arow = ae.closest('.tline');
+        if (arow && arow.getAttribute('data-trailing')) return;
+        if (arow && arow.getAttribute('data-id')) focusId = arow.getAttribute('data-id');
+      }
+    }
+    var oldAnchor = trailingAfterId;
+    var oldIndent = trailingIndent;
+    var created = (trailingAfterId === 'TOP') ?
+      placeTaskTop(title) :
+      placeTaskAfter(trailingAnchorId(), title, indent);
+    if (!created) return;
+    undoStack.push({
+      tasks: snapTasks(),
+      afterId: oldAnchor,
+      text: '',
+      indent: oldIndent,
+      focusId: created.id
+    });
+    if (undoStack.length > HISTORY_MAX) undoStack.shift();
+    redoStack = [];
+    trailingText = '';
+    trailingIndent = lineIndent(created);
+    trailingAfterId = created.id;
+    render();
+    updateHistoryButtons();
+    if (focusId) focusTaskEnd(focusId);
+  }
+
   function commitLine(taskId, value, isTrailing, indent) {
     var title = String(value == null ? '' : value).trim();
     if (isTrailing || !taskId) {
@@ -911,6 +975,17 @@
       if (r === 'removed') render();
       else renderStatus();
     });
+    if (isTrailing) {
+      /* Потеря фокуса с текстом = создание задачи. Отложенный запуск:
+       * focus нового элемента и lastPD должны успеть устаканиться. */
+      inp.addEventListener('blur', function () {
+        if (draftBlurTimer) clearTimeout(draftBlurTimer);
+        draftBlurTimer = setTimeout(function () {
+          draftBlurTimer = null;
+          createDraftOnBlur(inp, indent);
+        }, 0);
+      });
+    }
     inp.addEventListener('keydown', function (e) {
       if (e.key === 'Backspace' && isTrailing && !inp.value) {
         dismissDraft();
