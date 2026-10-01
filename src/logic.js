@@ -343,37 +343,36 @@ function stats(tasks) {
   };
 }
 
-var FROG = 'FROG';
-var INBOX_H = 'INBOX';
-var NEXT_H = 'NEXT';
-var WAIT_H = 'WAIT';
-var SOMEDAY_H = 'SOMEDAY';
+/* Текст для «Поделиться»: как на экране — живые по порядку с отступами,
+ * ниже выполненные (новые выше). */
+function shareItem(t) {
+  var pad = '';
+  for (var k = 0; k < normIndent(t.indent); k++) pad += '  ';
+  var s = pad + '- ' + (t.frog ? 'FROG ' : '') + t.title;
+  if (t.project) s += ' [' + t.project + ']';
+  if (t.slicesTotal > 0) s += ' (' + t.slicesDone + '/' + t.slicesTotal + ')';
+  return s;
+}
 
-/* Текст для «Поделиться»: фокус, затем группы. */
 function shareText(tasks) {
   var lines = [];
-  var f = focusTask(tasks);
-  if (f) lines.push(FROG + ' ' + f.title);
-  var groups = [
-    [INBOX_H, inboxList(tasks)],
-    [NEXT_H, nextList(tasks)],
-    [WAIT_H, waitingList(tasks)],
-    [SOMEDAY_H, somedayList(tasks)]
-  ];
-  groups.forEach(function (g) {
-    if (!g[1].length) return;
+  var all = normalizeTasks(tasks).filter(function (t) { return !t.deleted && t.title; });
+  var i, t;
+  for (i = 0; i < all.length; i++) {
+    t = all[i];
+    if (t.status === 'done') continue;
+    lines.push(shareItem(t));
+  }
+  var done = [];
+  for (i = 0; i < all.length; i++) {
+    if (all[i].status === 'done') done.push(all[i]);
+  }
+  done.sort(function (a, b) { return (b.doneAt || 0) - (a.doneAt || 0); });
+  if (done.length) {
     if (lines.length) lines.push('');
-    lines.push(g[0] + ':');
-    g[1].forEach(function (t) {
-      var pad = '';
-      for (var k = 0; k < normIndent(t.indent); k++) pad += '  ';
-      var s = pad + '- ' + t.title;
-      if (t.project) s += ' [' + t.project + ']';
-      if (t.frog) s += ' ' + FROG;
-      if (t.slicesTotal > 0) s += ' (' + t.slicesDone + '/' + t.slicesTotal + ')';
-      lines.push(s);
-    });
-  });
+    lines.push('Выполнено:');
+    for (i = 0; i < done.length; i++) lines.push(shareItem(done[i]));
+  }
   return lines.join('\n');
 }
 

@@ -264,6 +264,24 @@ describe('списки и фокус', () => {
     assert.ok(txt.includes('[Дом]'));
     assert.ok(txt.includes('(0/3)'));
   });
+  it('shareText: как на экране — порядок, отступы, выполненные ниже', () => {
+    const t = L.blankTasks();
+    mk(t, 'Верх', 1000, { id: 'a' });
+    mk(t, 'Внутрь', 2000, { id: 'b', indent: 1 });
+    mk(t, 'Старая', 3000, { id: 'old' });
+    mk(t, 'Новая', 4000, { id: 'new' });
+    L.completeTask(t, 'old', 5000);
+    L.completeTask(t, 'new', 9000);
+    const lines = L.shareText(t).split('\n');
+    assert.deepEqual(lines, [
+      '- Верх',
+      '  - Внутрь',
+      '',
+      'Выполнено:',
+      '- Новая',
+      '- Старая'
+    ]);
+  });
 });
 
 describe('нормализация', () => {
