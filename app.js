@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v31';
+  var APP_VERSION = 'v32';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -97,7 +97,10 @@
   /* --- История изменений (undo/redo стрелками в шапке, локально) ---
    * Слепок задач до каждой меняющей мутации; отмена применяется как новое
    * изменение со свежими метками (так честно и для синка): созданное после
-   * превращается в tombstone, удалённое воскресает, правки побеждают. */
+   * превращается в tombstone, удалённое воскресает, правки побеждают.
+   * В слепок входит и пустое поле (якорь/текст/сдвиг), чтобы Enter делился
+   * на два шага отмены: сначала уходит новое пустое поле (задача остаётся),
+   * затем — сама задача (текст возвращается в поле). */
   var undoStack = [];
   var redoStack = [];
   var HISTORY_MAX = 50;
@@ -106,11 +109,21 @@
     try { return JSON.stringify(state.tasks); } catch (x) { return '[]'; }
   }
 
+  /* Полный слепок для истории: задачи + положение/текст/сдвиг пустого поля. */
+  function snapFull() {
+    return {
+      tasks: snapTasks(),
+      afterId: trailingAfterId,
+      text: trailingText,
+      indent: trailingIndent
+    };
+  }
+
   function mutateWithHistory(fn) {
     if (!state) return null;
-    var before = snapTasks();
+    var before = snapFull();
     var r = fn();
-    if (snapTasks() !== before) {
+    if (snapTasks() !== before.tasks) {
       undoStack.push(before);
       if (undoStack.length > HISTORY_MAX) undoStack.shift();
       redoStack = [];
@@ -121,47 +134,55 @@
     return r;
   }
 
-  function applySnapshot(json) {
+  function applySnapshot(s) {
+    var tasksJson = (s && typeof s === 'object') ? s.tasks : s;
     var now = Date.now(), snap = [];
-    try { snap = JSON.parse(json); } catch (x) { snap = []; }
+    try { snap = JSON.parse(tasksJson); } catch (x) { snap = []; }
     if (!Array.isArray(snap)) snap = [];
-    var keep = {}, out = [], i, t, c;
-    for (i = 0; i < snap.length; i++) {
-      t = snap[i];
-      if (!t || !t.id) continue;
-      keep[t.id] = true;
-      c = L.normalizeTask(t);
-      if (!c) continue;
-      c.ts = now;
-      c.updatedAt = now;
-      out.push(c);
+    if (snapTasks() !== tasksJson) {
+      var keep = {}, out = [], i, t, c;
+      for (i = 0; i < snap.length; i++) {
+        t = snap[i];
+        if (!t || !t.id) continue;
+        keep[t.id] = true;
+        c = L.normalizeTask(t);
+        if (!c) continue;
+        c.ts = now;
+        c.updatedAt = now;
+        out.push(c);
+      }
+      for (i = 0; i < state.tasks.length; i++) {
+        t = state.tasks[i];
+        if (!t || !t.id || keep[t.id] || t.deleted) continue;
+        c = L.normalizeTask(t);
+        if (!c) continue;
+        c.deleted = true;
+        c.ts = now;
+        c.updatedAt = now;
+        out.push(c);
+      }
+      state.tasks = out;
+      save();
     }
-    for (i = 0; i < state.tasks.length; i++) {
-      t = state.tasks[i];
-      if (!t || !t.id || keep[t.id] || t.deleted) continue;
-      c = L.normalizeTask(t);
-      if (!c) continue;
-      c.deleted = true;
-      c.ts = now;
-      c.updatedAt = now;
-      out.push(c);
+    if (s && typeof s === 'object') {
+      trailingAfterId = s.afterId || null;
+      trailingText = String(s.text || '');
+      trailingIndent = (s.indent == null) ? null : s.indent;
     }
-    state.tasks = out;
-    save();
     render();
     updateHistoryButtons();
   }
 
   function doUndo() {
     if (!state || !undoStack.length) return;
-    redoStack.push(snapTasks());
+    redoStack.push(snapFull());
     if (redoStack.length > HISTORY_MAX) redoStack.shift();
     applySnapshot(undoStack.pop());
   }
 
   function doRedo() {
     if (!state || !redoStack.length) return;
-    undoStack.push(snapTasks());
+    undoStack.push(snapFull());
     if (undoStack.length > HISTORY_MAX) undoStack.shift();
     applySnapshot(redoStack.pop());
   }
@@ -849,22 +870,41 @@
       if (e.key !== 'Enter' || e.shiftKey) return;
       e.preventDefault();
       if (isTrailing) {
+        var oldAnchor = trailingAfterId;
+        var oldIndent = trailingIndent;
         var created = (trailingAfterId === 'TOP') ?
           placeTaskTop(inp.value) :
           placeTaskAfter(trailingAnchorId(), inp.value, indent);
         if (created) {
+          /* Вторая точка в истории: появление нового пустого поля —
+           * отменяется отдельно (задача с текстом остаётся). */
+          undoStack.push({
+            tasks: snapTasks(),
+            afterId: oldAnchor,
+            text: '',
+            indent: oldIndent
+          });
+          if (undoStack.length > HISTORY_MAX) undoStack.shift();
+          redoStack = [];
           trailingText = '';
-          trailingIndent = null;
+          /* Продолжаем на том же уровне: следующее поле — с отступом
+           * только что созданной (дети набираются подряд). */
+          trailingIndent = lineIndent(created);
           trailingAfterId = created.id;
           render();
+          updateHistoryButtons();
           focusTrailing();
         }
         return;
       }
       commitLine(taskId, inp.value, false);
-      /* Пустое поле переезжает под эту строку — ввод продолжается вниз. */
+      /* Пустое поле переезжает под эту строку — ввод продолжается вниз
+       * на том же уровне (следующая — сестра, а не с нулевым отступом). */
       var moved = L.getTask(state.tasks, taskId);
-      if (moved && moved.status !== 'done') trailingAfterId = taskId;
+      if (moved && moved.status !== 'done') {
+        trailingAfterId = taskId;
+        trailingIndent = lineIndent(moved);
+      }
       render();
       focusTrailing();
     });
@@ -900,7 +940,7 @@
       if (domAlive[d] !== cur[d]) { if (bs === -1) bs = d; be = d; }
     }
     if (bs === -1) return;
-    var before = snapTasks();
+    var before = snapFull();
     var now = Date.now();
     function at(idx) {
       var tt = L.getTask(state.tasks, domAlive[idx]);

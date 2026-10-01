@@ -176,6 +176,15 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('tasks.length <= 1'), 'поле не ограничено коротким списком');
     assert.ok(appSrc.includes('hasDraftText'), 'набранный текст поля может потеряться');
   });
+  it('Enter продолжает уровень: дочерняя за дочерней', () => {
+    assert.ok(appSrc.includes('trailingIndent = lineIndent(created)'), 'цепочка не держит отступ');
+    assert.ok(appSrc.includes('trailingIndent = lineIndent(moved)'), 'Enter в строке не даёт сестру');
+  });
+  it('отмена Enter: сначала поле, потом задача', () => {
+    assert.ok(appSrc.includes('function snapFull'), 'нет полного слепка с полем');
+    assert.ok(appSrc.includes('afterId: oldAnchor'), 'появление поля не делится в истории');
+    assert.ok(appSrc.includes('snapTasks() !== tasksJson'), 'возврат поля дёргает метки синка');
+  });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
   });
