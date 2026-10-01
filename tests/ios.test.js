@@ -171,6 +171,11 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(!appSrc.includes('focusLineAfter'), 'старый фокус дальше остался');
     assert.ok(appSrc.includes('trailingText'), 'текст поля теряется при перерисовке');
   });
+  it('пустое поле не висит при длинном списке', () => {
+    assert.ok(appSrc.includes('showDraft'), 'нет гейта пустого поля');
+    assert.ok(appSrc.includes('tasks.length <= 1'), 'поле не ограничено коротким списком');
+    assert.ok(appSrc.includes('hasDraftText'), 'набранный текст поля может потеряться');
+  });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
   });

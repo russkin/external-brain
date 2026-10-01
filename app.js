@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v30';
+  var APP_VERSION = 'v31';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1375,7 +1375,12 @@
     for (var fi = 0; fi < full.length; fi++) fullIdx[full[fi].id] = fi;
     /* Пустое поле живёт под строкой trailingAfterId (цепочка Enter вниз),
      * иначе — в конце живых. Отступ — свой ручной, по умолчанию 0.
-     * Все живые выполнены — остаётся одно пустое поле + секция выполненных. */
+     * Лишнее поле не показываем: при более чем одной живой задаче
+     * (без цепочки и без набранного текста) его нет — новое поле
+     * вызывается через Enter в строке. При пустом/единичном списке
+     * поле всегда под рукой; набранный текст показываем всегда,
+     * иначе ввод потеряется. Все живые выполнены — остаётся одно
+     * пустое поле + секция выполненных. */
     var anchorIdx = -1;
     if (trailingAfterId) {
       for (var ai = 0; ai < tasks.length; ai++) {
@@ -1383,20 +1388,29 @@
       }
     }
     var tailIndent = effTrailingIndent();
+    var hasDraftText = String(trailingText || '').trim() !== '';
+    var showDraft = (trailingAfterId === 'TOP') || (anchorIdx !== -1) ||
+      (tasks.length <= 1) || hasDraftText;
+    if (!showDraft) {
+      /* Поля нет на экране — сбрасываем протухший якорь/сдвиг,
+       * чтобы пустое поле не воскресало в случайном месте. */
+      trailingAfterId = null;
+      trailingIndent = null;
+    }
     function taskRow(t, i) {
       return makeLine(t.id, t.title, false, lineIndent(t), {
         doneShown: L.isDoneShown(full, fullIdx[t.id]),
         hidden: L.isHiddenByCollapse(tasks, i, collapsed)
       });
     }
-    if (trailingAfterId === 'TOP') {
+    if (showDraft && trailingAfterId === 'TOP') {
       box.appendChild(makeLine(null, trailingText, true, 0));
     }
     for (var i = 0; i < tasks.length; i++) {
       box.appendChild(taskRow(tasks[i], i));
-      if (i === anchorIdx) box.appendChild(makeLine(null, trailingText, true, tailIndent));
+      if (showDraft && i === anchorIdx) box.appendChild(makeLine(null, trailingText, true, tailIndent));
     }
-    if (anchorIdx === -1 && trailingAfterId !== 'TOP') {
+    if (showDraft && anchorIdx === -1 && trailingAfterId !== 'TOP') {
       box.appendChild(makeLine(null, trailingText, true, tailIndent));
     }
     /* Выполненные — под полем добавления, новые выше старых. */
