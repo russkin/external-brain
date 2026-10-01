@@ -147,12 +147,19 @@ describe('логика вызывается с state.tasks', () => {
   it('возврат из выполненных и история undo/redo', () => {
     assert.ok(appSrc.includes('Не выполнено'), 'нет флага возврата');
     assert.ok(appSrc.includes('L.reopenTask(state.tasks'), 'нет возврата задачи');
+    assert.ok(appSrc.includes('completeBranch'), 'ветка не выполняется целиком');
     assert.ok(html.includes('id="undoBtn"'), 'нет стрелки назад');
     assert.ok(html.includes('id="redoBtn"'), 'нет стрелки вперёд');
     assert.ok(appSrc.includes('doUndo'), 'нет undo');
     assert.ok(appSrc.includes('doRedo'), 'нет redo');
     assert.ok(appSrc.includes('HISTORY_MAX'), 'история без лимита');
-    assert.ok(appSrc.includes('tombstone') || appSrc.includes('deleted = true'), 'отмена создания не переживёт синк');
+    assert.ok(appSrc.includes('deleted = true'), 'отмена создания не переживёт синк');
+  });
+  it('Enter в строке даёт пустое поле ниже, а не фокус дальше', () => {
+    assert.ok(appSrc.includes('trailingAfterId'), 'пустое поле не переезжает');
+    assert.ok(appSrc.includes('placeTaskAfter'), 'нет вставки по месту');
+    assert.ok(!appSrc.includes('focusLineAfter'), 'старый фокус дальше остался');
+    assert.ok(appSrc.includes('trailingText'), 'текст поля теряется при перерисовке');
   });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');

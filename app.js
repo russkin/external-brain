@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v25';
+  var APP_VERSION = 'v26';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -414,6 +414,11 @@
     render();
   }
 
+  /* Пустое поле ввода: одно на весь список, но живёт под той строкой,
+   * где был нажат Enter (цепочка ввода вниз). Текст переживает перерисовки. */
+  var trailingAfterId = null;
+  var trailingText = '';
+
   /* Отступ строки в пикселях. Задача с отступом входит в группу задачи сверху. */
   function lineIndent(t) {
     var v = parseInt(t && t.indent, 10);
@@ -577,8 +582,61 @@
   }
 
   function toggleDoneNow(taskId, toDone) {
-    if (toDone) return L.completeTask(state.tasks, taskId);
+    if (toDone) {
+      L.completeBranch(lineTasks(), taskId, Date.now());
+      return L.getTask(state.tasks, taskId);
+    }
     return L.reopenTask(state.tasks, taskId);
+  }
+
+  /* Создать задачу сразу под prevId (той же цепочкой Enter вниз).
+   * createdAt втискиваем между соседями целым числом; тесно — сдвигаем
+   * всех выше на 1 (редко, ms-метки почти всегда с зазором). */
+  function placeTaskAfter(prevId, title, indent) {
+    var title0 = String(title == null ? '' : title).trim();
+    if (!title0) return null;
+    var now = Date.now();
+    var created = null;
+    mutate(function () {
+      var alive = lineTasks();
+      var idx = -1;
+      for (var i = 0; i < alive.length; i++) {
+        if (alive[i].id === prevId) { idx = i; break; }
+      }
+      if (idx === -1) {
+        created = L.createTask(state.tasks, title0, now, { indent: indent || 0 });
+        return;
+      }
+      var prev = alive[idx];
+      var next = alive[idx + 1] || null;
+      var slot;
+      if (!next || next.createdAt - prev.createdAt > 1) {
+        slot = next ? prev.createdAt + Math.floor((next.createdAt - prev.createdAt) / 2) : now;
+      } else {
+        for (var j = 0; j < alive.length; j++) {
+          if (alive[j].createdAt > prev.createdAt) {
+            alive[j].createdAt += 1;
+            alive[j].ts = now;
+            alive[j].updatedAt = now;
+          }
+        }
+        slot = prev.createdAt + 1;
+      }
+      created = L.createTask(state.tasks, title0, now, { indent: indent || 0 });
+      if (created) {
+        created.createdAt = slot;
+        created.ts = now;
+        created.updatedAt = now;
+      }
+    });
+    return created;
+  }
+
+  function trailingAnchorId() {
+    if (!trailingAfterId) return null;
+    var t = L.getTask(state.tasks, trailingAfterId);
+    if (!t || t.deleted || t.status === 'done') return null;
+    return trailingAfterId;
   }
 
   function commitLine(taskId, value, isTrailing, indent) {
@@ -606,7 +664,8 @@
     var saveTimer = null;
     inp.addEventListener('input', function () {
       autosize(inp);
-      if (isTrailing || !taskId) return;
+      if (isTrailing) { trailingText = inp.value; return; }
+      if (!taskId) return;
       if (saveTimer) clearTimeout(saveTimer);
       saveTimer = setTimeout(function () {
         var title = inp.value.trim();
@@ -627,16 +686,21 @@
       if (e.key !== 'Enter' || e.shiftKey) return;
       e.preventDefault();
       if (isTrailing) {
-        var created = commitLine(null, inp.value, true, indent);
+        var created = placeTaskAfter(trailingAnchorId(), inp.value, indent);
         if (created) {
+          trailingText = '';
+          trailingAfterId = created.id;
           render();
           focusTrailing();
         }
         return;
       }
       commitLine(taskId, inp.value, false);
+      /* Пустое поле переезжает под эту строку — ввод продолжается вниз. */
+      var moved = L.getTask(state.tasks, taskId);
+      if (moved && moved.status !== 'done') trailingAfterId = taskId;
       render();
-      focusLineAfter(taskId);
+      focusTrailing();
     });
   }
 
@@ -1097,16 +1161,28 @@
     var full = L.normalizeTasks(state.tasks).filter(function (t) { return !t.deleted && t.title; });
     var fullIdx = {};
     for (var fi = 0; fi < full.length; fi++) fullIdx[full[fi].id] = fi;
-    for (var i = 0; i < tasks.length; i++) {
-      var t = tasks[i];
-      box.appendChild(makeLine(t.id, t.title, false, lineIndent(t), {
+    /* Пустое поле живёт под строкой trailingAfterId (цепочка Enter вниз),
+     * иначе — в конце живых. Отступ наследует от строки сверху. */
+    var anchorIdx = -1;
+    if (trailingAfterId) {
+      for (var ai = 0; ai < tasks.length; ai++) {
+        if (tasks[ai].id === trailingAfterId) { anchorIdx = ai; break; }
+      }
+    }
+    var anchorTask = anchorIdx !== -1 ? tasks[anchorIdx] : null;
+    var tailIndent = anchorTask ? lineIndent(anchorTask) :
+      (tasks.length ? lineIndent(tasks[tasks.length - 1]) : 0);
+    function taskRow(t, i) {
+      return makeLine(t.id, t.title, false, lineIndent(t), {
         doneShown: L.isDoneShown(full, fullIdx[t.id]),
         hidden: L.isHiddenByCollapse(tasks, i, collapsed)
-      }));
+      });
     }
-    /* Хвостовая пустая строка наследует отступ последней — группы растут сами. */
-    var tail = tasks.length ? lineIndent(tasks[tasks.length - 1]) : 0;
-    box.appendChild(makeLine(null, '', true, tail));
+    for (var i = 0; i < tasks.length; i++) {
+      box.appendChild(taskRow(tasks[i], i));
+      if (i === anchorIdx) box.appendChild(makeLine(null, trailingText, true, tailIndent));
+    }
+    if (anchorIdx === -1) box.appendChild(makeLine(null, trailingText, true, tailIndent));
     /* Выполненные — под полем добавления, новые выше старых. */
     var done = L.doneList(state.tasks);
     if (done.length) {
@@ -1130,21 +1206,6 @@
     if (inp && inp.focus) {
       try { inp.focus(); } catch (x) {}
     }
-  }
-
-  function focusLineAfter(taskId) {
-    var box = el('lines');
-    if (!box || !box.querySelectorAll) { focusTrailing(); return; }
-    var rows = box.querySelectorAll('.tline');
-    for (var i = 0; i < rows.length; i++) {
-      if (rows[i].getAttribute && rows[i].getAttribute('data-id') === taskId) {
-        var next = rows[i + 1];
-        var inp = next ? next.querySelector('.tinput') : null;
-        if (inp && inp.focus) { try { inp.focus(); return; } catch (x) {} }
-        break;
-      }
-    }
-    focusTrailing();
   }
 
   function renderStatus() {

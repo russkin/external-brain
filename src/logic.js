@@ -134,6 +134,33 @@ function completeTask(tasks, id, nowMs) {
   return task;
 }
 
+/* Выполнить ветку: задачу и всех вложенных ниже (по порядку массива —
+ * передавать lineTasks()). doneAt убывает: родитель выше детей в секции
+ * выполненных. Возвращает id выполненных. */
+function completeBranch(arr, id, nowMs) {
+  if (!Array.isArray(arr)) return [];
+  var idx = -1;
+  for (var i = 0; i < arr.length; i++) {
+    if (arr[i] && arr[i].id === id) { idx = i; break; }
+  }
+  if (idx === -1) return [];
+  var now = toInt(nowMs, Date.now());
+  var base = normIndent(arr[idx].indent);
+  var done = [];
+  for (var j = idx; j < arr.length; j++) {
+    var t = arr[j];
+    if (!t || t.deleted) continue;
+    if (j > idx && normIndent(t.indent) <= base) break;
+    if (t.status === 'done') continue;
+    t.status = 'done';
+    t.doneAt = now - done.length;
+    t.updatedAt = now;
+    t.ts = now;
+    done.push(t.id);
+  }
+  return done;
+}
+
 function reopenTask(tasks, id, nowMs) {
   var task = getTask(tasks, id);
   if (!task || task.deleted) return null;
@@ -478,6 +505,7 @@ var api = {
   createTask: createTask,
   clarifyTask: clarifyTask,
   completeTask: completeTask,
+  completeBranch: completeBranch,
   reopenTask: reopenTask,
   removeTask: removeTask,
   setFrog: setFrog,

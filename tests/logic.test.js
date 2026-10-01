@@ -385,6 +385,20 @@ describe('отступ (группы)', () => {
       [{ id: 'a', title: 'A', ts: 1, createdAt: 1, updatedAt: 1, indent: 1 }]
     ), false);
   });
+  it('completeBranch выполняет ветку целиком, doneAt убывает', () => {
+    const t = L.blankTasks();
+    mk(t, 'P', 1000, { id: 'p' });
+    mk(t, 'K1', 2000, { id: 'k1', indent: 1 });
+    mk(t, 'K2', 3000, { id: 'k2', indent: 1 });
+    mk(t, 'Q', 4000, { id: 'q' });
+    const order = [L.getTask(t, 'p'), L.getTask(t, 'k1'), L.getTask(t, 'k2'), L.getTask(t, 'q')];
+    assert.deepEqual(L.completeBranch(order, 'p', 9000), ['p', 'k1', 'k2']);
+    assert.equal(L.getTask(t, 'q').status, 'inbox');
+    assert.ok(L.getTask(t, 'p').doneAt > L.getTask(t, 'k1').doneAt);
+    assert.ok(L.getTask(t, 'k1').doneAt > L.getTask(t, 'k2').doneAt);
+    assert.equal(L.completeBranch(order, 'nope', 9000).length, 0);
+    assert.deepEqual(L.completeBranch(null, 'p', 9000), []);
+  });
   it('shareText показывает отступ пробелами', () => {
     const t = L.blankTasks();
     mk(t, 'Верх', 1000, { id: 'a' });
