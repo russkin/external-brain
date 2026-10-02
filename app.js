@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v48';
+  var APP_VERSION = 'v49';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -454,6 +454,23 @@
     return out;
   }
 
+  /* Полный порядок (включая выполненных) — как в renderLines. */
+  function fullList() {
+    return L.normalizeTasks(state.tasks).filter(function (t) { return !t.deleted && t.title; });
+  }
+
+  /* Есть ли вложенные у id в ПОЛНОМ порядке: тап по точкам и «свернуть
+   * все» должны работать, даже если дети уже выполнены — они живут в
+   * отдельной секции и должны прятаться вместе с группой. */
+  function hasKidsFull(id) {
+    if (!id) return false;
+    var full = fullList();
+    for (var i = 0; i < full.length; i++) {
+      if (full[i].id === id) return L.hasKids(full, i);
+    }
+    return false;
+  }
+
   function makeGrip() {
     var g = document.createElement('span');
     g.className = 'grip';
@@ -500,7 +517,7 @@
     if (all && state) {
       var tasks = lineTasks();
       for (var i = 0; i < tasks.length; i++) {
-        if (L.hasKids(tasks, i)) collapsed[tasks[i].id] = true;
+        if (hasKidsFull(tasks[i].id)) collapsed[tasks[i].id] = true;
       }
     }
     saveCollapsed();
@@ -1665,11 +1682,9 @@
       /* Тап по многоточию родителя (без движения): свернуть/развернуть детей. */
       if (mode === null && e && e.type === 'pointerup') {
         var tapped = myTask();
-        if (tapped) {
-          var lt = lineTasks();
-          for (var ti = 0; ti < lt.length; ti++) {
-            if (lt[ti].id === tapped.id && L.hasKids(lt, ti)) { toggleCollapse(tapped.id); return; }
-          }
+        if (tapped && hasKidsFull(tapped.id)) {
+          toggleCollapse(tapped.id);
+          return;
         }
       }
       if (mode === 'indent') {
@@ -1865,7 +1880,7 @@
     var tasks = lineTasks();
     /* Полный порядок (включая выполненных) — для наследования зачёркивания:
      * done-родитель ушёл в секцию ниже, но детей зачёркивает. */
-    var full = L.normalizeTasks(state.tasks).filter(function (t) { return !t.deleted && t.title; });
+    var full = fullList();
     var fullIdx = {};
     for (var fi = 0; fi < full.length; fi++) fullIdx[full[fi].id] = fi;
     /* Пустое поле живёт под строкой trailingAfterId (цепочка Enter вниз),
@@ -1908,16 +1923,25 @@
     if (showDraft && anchorIdx === -1 && trailingAfterId !== 'TOP') {
       box.appendChild(makeLine(null, trailingText, true, tailIndent));
     }
-    /* Выполненные — под полем добавления, новые выше старых. */
+    /* Выполненные — под полем добавления, новые выше старых. Строка под
+     * свёрнутым родителем прячется вместе с живыми детьми (иначе
+     * последняя дочерняя висит под свёрнутой группой). Сепаратор — если
+     * после скрытия хоть что-то видно. */
     var done = L.doneList(state.tasks);
-    if (done.length) {
+    var doneVis = [];
+    for (var d = 0; d < done.length; d++) {
+      var di = fullIdx[done[d].id];
+      var dHide = (di != null) ? L.isHiddenByCollapse(full, di, collapsed) : false;
+      if (!dHide) doneVis.push(done[d]);
+    }
+    if (doneVis.length) {
       var sep = document.createElement('div');
       sep.className = 'done-sep';
-      sep.textContent = 'Выполнено · ' + done.length;
+      sep.textContent = 'Выполнено · ' + doneVis.length;
       box.appendChild(sep);
     }
-    for (var d = 0; d < done.length; d++) {
-      box.appendChild(makeLine(done[d].id, done[d].title, false, lineIndent(done[d]), { doneShown: true }));
+    for (var dv = 0; dv < doneVis.length; dv++) {
+      box.appendChild(makeLine(doneVis[dv].id, doneVis[dv].title, false, lineIndent(doneVis[dv]), { doneShown: true }));
     }
     /* Раскрыть многострочные по содержимому (в потоке, после вставки). */
     var areas = box.querySelectorAll ? box.querySelectorAll('.tinput') : [];

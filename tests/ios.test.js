@@ -204,6 +204,24 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(emptyBranch.includes('L.removeTask(state.tasks, cur.id)'),
       'пустая строка не удаляется');
   });
+  it('Сворачивание: выполненные дети прячутся, точки и 📁 смотрят в полном порядке', () => {
+    assert.ok(appSrc.includes('function hasKidsFull'), 'нет проверки детей в полном порядке');
+    assert.ok(appSrc.includes('function fullList'), 'нет полного списка задач');
+    var iF = appSrc.indexOf('function finish(e)');
+    var fBody = appSrc.slice(iF, iF + 1500);
+    assert.ok(fBody.includes('hasKidsFull(tapped.id)'),
+      'тап по точкам смотрит только на живых детей');
+    var iS = appSrc.indexOf('function setAllCollapsed');
+    var sBody = appSrc.slice(iS, iS + 450);
+    assert.ok(sBody.includes('hasKidsFull(tasks[i].id)'),
+      'свернуть все смотрит только на живых детей');
+    var iD = appSrc.indexOf('Выполненные — под полем добавления');
+    var dBody = appSrc.slice(iD, appSrc.indexOf('function focusTrailing'));
+    assert.ok(dBody.includes('isHiddenByCollapse(full, di, collapsed)'),
+      'выполненные дети не прячутся под свёрнутым родителем');
+    assert.ok(dBody.includes('if (!dHide) doneVis.push(done[d])'),
+      'счётчик выполненных не считает скрытые');
+  });
   it('Enter в середине: хвост уходит в задачу ниже, курсор в её начало', () => {
     assert.ok(appSrc.includes('splitPos > 0 && splitPos < splitVal.length'),
       'нет сплита строки по позиции каретки');
