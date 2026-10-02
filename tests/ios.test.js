@@ -215,6 +215,17 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(!blurBody.includes('undoStack.push'),
       'лишняя точка истории в blur-create (должна быть одна — от mutate)');
   });
+  it('Enter в строке доводит висячий черновик до конца', () => {
+    var idxL = appSrc.indexOf('var lingering');
+    assert.ok(idxL !== -1, 'нет доводки набранного черновика');
+    var idxP = appSrc.indexOf('placeTaskAfter', idxL);
+    var idxC = appSrc.indexOf('commitLine(taskId', idxL);
+    assert.ok(idxP > idxL && idxC > idxP, 'черновик создаётся не на своём месте до commitLine');
+    var block = appSrc.slice(idxL, idxC);
+    assert.ok(block.includes('trailingAfterId = null'), 'после создания черновик не очищен');
+    assert.ok(block.includes('effTrailingIndent()'), 'отступ висячего черновика не из состояния');
+    assert.ok(block.includes('trailingText = \'\''), 'текст висячего черновика не стёрт');
+  });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
   });

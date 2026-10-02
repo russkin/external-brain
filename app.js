@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v37';
+  var APP_VERSION = 'v38';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1013,6 +1013,19 @@
           focusTrailing();
         }
         return;
+      }
+      /* Набранный, но не созданный черновик висит где-то с текстом (фокус
+       * уже ушёл — blur-создание на grip/флажке не сработало): Enter в
+       * строке сначала ДОВОДИТ его до конца — задача встаёт на своём
+       * месте, — иначе поле просто переезжает сюда и старая «седьмая»
+       * улетает вниз. Потом под строкой вызывается свежее пустое поле. */
+      var lingering = String(trailingText || '').trim();
+      if (lingering) {
+        if (trailingAfterId === 'TOP') placeTaskTop(lingering);
+        else placeTaskAfter(trailingAnchorId(), lingering, effTrailingIndent());
+        trailingText = '';
+        trailingAfterId = null;
+        trailingIndent = null;
       }
       commitLine(taskId, inp.value, false);
       /* Пустое поле переезжает под эту строку — ввод продолжается вниз
