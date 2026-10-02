@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v50';
+  var APP_VERSION = 'v51';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -543,14 +543,48 @@
   }, true);
 
   var draftBlurTimer = null;
-  /* Жест перетаскивания: фокус с любой строки/поля сбрасывается на захвате
-   * grip (иначе на старых устройствах открытая клавиатура живёт весь свайп,
-   * а клик не успевает отстрелиться и blur не приходит). Пока флаг поднят,
-   * render в mutate/commit не выполняется — узлы жеста не пересоздаются. */
+  /* Жест перетаскивания: пока флаг поднят, render в mutate/commit не
+   * выполняется — узлы жеста не пересоздаются. Фокус при захвате НЕ
+   * снимается: blur закрыл бы клавиатуру посреди touch, вьюпорт прыгнул,
+   * содержимое уехало из-под пальца и жест глох (v51). Клавиатура
+   * закрывается в finish — после pointerup. */
   var dragActive = false;
   /* Курсор стоял в поле-черновике — после ЖЕСТА ПО САМОМУ ПОЛЮ возвращаем
-   * его (клавиатуру закрыли для чистого свайпа, набирать-то надо). */
+   * его (поле на месте — набирать-то надо). */
   var refocusDraft = false;
+
+  /* Пин прокрутки: пока жест жив, страница не уезжает — автоскролы
+   * (фокус, закрытие клавиатуры) держатся на месте, содержимое не
+   * уходит из-под пальца. Свой автоскрол руками двигает pinY. */
+  var pinY = null, pinTimer = null, pinOn = false;
+  function onPinScroll() {
+    if (pinY == null) return;
+    if (window.pageYOffset !== pinY) {
+      try { window.scrollTo(0, pinY); } catch (x) {}
+    }
+  }
+  function pinScroll() {
+    if (pinTimer) { clearTimeout(pinTimer); pinTimer = null; }
+    pinY = window.pageYOffset;
+    if (!pinOn) {
+      pinOn = true;
+      window.addEventListener('scroll', onPinScroll);
+      window.addEventListener('resize', onPinScroll);
+    }
+  }
+  function unpinScroll(delay) {
+    if (pinTimer) { clearTimeout(pinTimer); pinTimer = null; }
+    if (delay) {
+      pinTimer = setTimeout(function () { pinTimer = null; unpinScroll(); }, delay);
+      return;
+    }
+    pinY = null;
+    if (pinOn) {
+      pinOn = false;
+      window.removeEventListener('scroll', onPinScroll);
+      window.removeEventListener('resize', onPinScroll);
+    }
+  }
 
   /* Отступ строки в пикселях. Задача с отступом входит в группу задачи сверху. */
   function lineIndent(t) {
@@ -1575,12 +1609,16 @@
       kids = [];
       dragUiBefore = snapFull();
       try { grip.setPointerCapture(pid); } catch (x) {}
-      /* Взялись за grip — фокус с любой строки/поля сбрасываем сразу:
-       * старый Chrome держит его весь свайп (mousedown под preventDefault
-       * не уходит, blur сам не приходит) — открытая клавиатура ломает
-       * замеры и посадку. Коммит текста при этом не рендерит (dragActive);
-       * blur-создание чужого черновика видит grip в lastPD и пропускает,
-       * а черновик СВОЕЙ строки с текстом создаётся задачей ниже. */
+      pinScroll();
+      document.addEventListener('pointerup', finish);
+      document.addEventListener('pointercancel', finish);
+      /* Взялись за grip — фокус НЕ трогаем: blur на захвате закрывал
+       * клавиатуру посреди touch — вьюпорт прыгал, содержимое уезжало
+       * из-под пальца и жест глох («сдвиг влево ничего не делает»).
+       * Клавиатура закрывается в finish. Коммит текста не рендерит
+       * (dragActive); blur-создание чужого черновика видит grip в lastPD
+       * и пропускает, а черновик СВОЕЙ строки с текстом создаётся задачей
+       * ниже. */
       dragActive = true;
       /* Черновик с текстом: захват точек сразу делает из него задачу —
        * поле теряет фокус насовсем (курсор сюда не возвращается), а сам
@@ -1610,15 +1648,12 @@
         }
       }
       var aeNow = document.activeElement;
-      /* Возврат курсора — только когда тащат САМО поле: при жесте на
+      /* Возврат курсор — только когда тащат САМО поле: при жесте на
        * чужой строке (свайп родителя) фокус с набранного снимается
-       * насовсем, иначе клавиатура тут же возвращается. */
+       * насовсем (в finish), иначе клавиатура тут же возвращается. */
       var focusInDraft = !!(aeNow && aeNow.closest && aeNow.closest('.tline[data-trailing]'));
       var dragIsDraft = !!(div.getAttribute && div.getAttribute('data-trailing'));
       refocusDraft = focusInDraft && dragIsDraft;
-      if (aeNow && aeNow.blur && (aeNow.tagName === 'TEXTAREA' || aeNow.tagName === 'INPUT')) {
-        try { aeNow.blur(); } catch (x) {}
-      }
       if (e.cancelable) e.preventDefault();
     });
     grip.addEventListener('pointermove', function (e) {
@@ -1634,7 +1669,7 @@
           if (!_mt && !(div.getAttribute && div.getAttribute('data-trailing'))) return;
           if (_mt && _mt.status === 'done') return;
           startIndent();
-        } else if (Math.abs(dy) > 10) {
+        } else if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx) * 2) {
           startVertical(e);
           if (mode !== 'vertical') return;
         } else return;
@@ -1682,8 +1717,15 @@
       var nowMs = Date.now();
       if (dragDist > 40 && nowMs - lastScrollTs > 90) {
         try {
-          if (e.clientY < 70) { window.scrollBy(0, -12); lastScrollTs = nowMs; }
-          else if (e.clientY > (window.innerHeight || 800) - 70) { window.scrollBy(0, 12); lastScrollTs = nowMs; }
+          if (e.clientY < 70) {
+            window.scrollBy(0, -12);
+            if (pinY != null) pinY -= 12;
+            lastScrollTs = nowMs;
+          } else if (e.clientY > (window.innerHeight || 800) - 70) {
+            window.scrollBy(0, 12);
+            if (pinY != null) pinY += 12;
+            lastScrollTs = nowMs;
+          }
         } catch (x) {}
       }
       if (e.cancelable) e.preventDefault();
@@ -1693,6 +1735,27 @@
       if (e && e.pointerId != null && e.pointerId !== pid) return;
       pid = null;
       dragActive = false;
+      document.removeEventListener('pointerup', finish);
+      document.removeEventListener('pointercancel', finish);
+      /* Фокус и клавиатура — только на финише: blur на захвате закрывал
+       * клавиатуру посреди touch — вьюпорт прыгал, содержимое уезжало
+       * из-под пальца и жест глох (v51). lastPD перед blur оживляем:
+       * долгий жест (>700мс) иначе уводит blur-создание чужого черновика
+       * мимо гарда grip и набранный текст превращается в задачу. */
+      if (!refocusDraft) {
+        lastPDts = Date.now();
+        lastPDTarget = grip;
+        var aeEnd = document.activeElement;
+        var didBlur = false;
+        if (aeEnd && aeEnd.blur && (aeEnd.tagName === 'TEXTAREA' || aeEnd.tagName === 'INPUT')) {
+          try { aeEnd.blur(); didBlur = true; } catch (x) {}
+        }
+        /* Закрытие клавиатуры двигает страницу уже ПОСЛЕ жеста:
+         * держим пин ещё полсекунды, чтобы итог не дёргался. */
+        if (didBlur) unpinScroll(500); else unpinScroll();
+      } else {
+        unpinScroll();
+      }
       /* Курсор был в поле-черновике: возвращаем его после финального
        * render (220мс), когда поле уже пересоздано на новом месте. */
       if (refocusDraft) {
@@ -1897,7 +1960,12 @@
     }
     grip.addEventListener('pointerup', finish);
     grip.addEventListener('pointercancel', finish);
-    grip.addEventListener('lostpointercapture', finish);
+    grip.addEventListener('lostpointercapture', function (e) {
+      if (pid == null) return;
+      /* Захват упал сам — жест жив, берём снова; не вышло (указателя
+       * больше нет) — штатный финиш, слушатели снимаются в нём. */
+      try { grip.setPointerCapture(e.pointerId); } catch (x) { finish(e); }
+    });
   }
 
   function renderLines() {

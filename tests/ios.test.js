@@ -208,7 +208,7 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('function hasKidsFull'), 'нет проверки детей в полном порядке');
     assert.ok(appSrc.includes('function fullList'), 'нет полного списка задач');
     var iF = appSrc.indexOf('function finish(e)');
-    var fBody = appSrc.slice(iF, iF + 1500);
+    var fBody = appSrc.slice(iF, iF + 2600);
     assert.ok(fBody.includes('hasKidsFull(tapped.id)'),
       'тап по точкам смотрит только на живых детей');
     var iS = appSrc.indexOf('function setAllCollapsed');
@@ -343,22 +343,45 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(iTop !== -1 && appSrc.slice(iTop, iTop + 220).includes('tailIndent'),
       'поле сверху игнорирует отступ из состояния');
   });
-  it('захват grip сбрасывает фокус, коммит не рендерит во время жеста', () => {
+  it('захват grip не гасит клавиатуру, pin держит страницу, коммит не рендерит', () => {
     assert.ok(appSrc.includes('var dragActive = false'), 'нет флага жеста');
     assert.ok(appSrc.includes('if (!dragActive) render()'), 'mutate рендерит во время жеста');
     var iP = appSrc.indexOf("grip.addEventListener('pointerdown'");
     assert.ok(iP !== -1, 'нет обработчика захвата grip');
     var block = appSrc.slice(iP, iP + 3400);
     assert.ok(block.includes('dragActive = true'), 'флаг не поднимается на захвате');
-    assert.ok(block.includes('.blur()'), 'фокус не сбрасывается при захвате grip');
+    assert.ok(!block.includes('.blur()'),
+      'клавиатуру гасят на захвате — прыжок вьюпорта посреди touch роняет жест');
+    assert.ok(block.includes('pinScroll()'), 'прокрутка не заперта на время жеста');
+    assert.ok(block.includes("document.addEventListener('pointerup', finish)"),
+      'нет document-страховки от зависшего pid (жест умирает без pointerup на grip)');
     assert.ok(block.includes('refocusDraft'), 'черновик не запоминается для возврата курсора');
     assert.ok(block.includes("div.getAttribute('data-trailing')"),
       'возврат курсора не привязан к переносу самого поля (чужой жест возвращает фокус)');
     var iF = appSrc.indexOf('function finish(e)');
     assert.ok(iF !== -1 && appSrc.slice(iF, iF + 700).includes('dragActive = false'),
       'флаг не снимается на финише жеста');
-    assert.ok(appSrc.slice(iF, iF + 700).includes('focusTrailing()'),
-      'поле не возвращает курсор после переноса');
+    var fin = appSrc.slice(iF, iF + 2200);
+    assert.ok(fin.includes('.blur()'), 'фокус не снимается на финише жеста');
+    assert.ok(fin.includes('lastPDts = Date.now()'),
+      'гард blur-создания чужого черновика не оживлён перед отложенным blur');
+    assert.ok(fin.includes('focusTrailing()'), 'поле не возвращает курсор после переноса');
+  });
+  it('жест держит прокрутку, порог вертикали симметричен, захват перехватывается', () => {
+    assert.ok(appSrc.includes('function pinScroll'), 'нет pinScroll');
+    assert.ok(appSrc.includes("window.addEventListener('scroll', onPinScroll)"),
+      'скролл не слушается на время пина');
+    assert.ok(appSrc.includes('window.scrollTo(0, pinY)'), 'пин не возвращает страницу на место');
+    assert.ok(appSrc.includes('unpinScroll(500)'),
+      'закрытие клавиатуры после жеста не подстраховано пином');
+    assert.ok(appSrc.includes('Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx) * 2'),
+      'порог вертикали не симметричен горизонтали — дрожь пальца лочит не тот режим');
+    var iA = appSrc.indexOf('lastScrollTs > 90');
+    assert.ok(iA !== -1 && appSrc.slice(iA, iA + 320).includes('pinY'),
+      'автопрокрутка не двигает пин — страница дёрнется обратно');
+    var iL = appSrc.indexOf("grip.addEventListener('lostpointercapture'");
+    assert.ok(iL !== -1 && appSrc.slice(iL, iL + 400).includes('setPointerCapture'),
+      'упавший захват не перехватывается заново');
   });
   it('свайп и отметка выполненной снимают фокус, поле уходит с веткой', () => {
     var iS = appSrc.indexOf('function wireLineSwipe');

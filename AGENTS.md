@@ -4,7 +4,7 @@
 следующие/ожидание/когда-нибудь, лягушка дня, слоны-бифштексы.
 Репозиторий: `git@github.com:russkin/external-brain.git`, ветка `main`.
 Прод: https://russkin.github.io/external-brain/ (GitHub Pages, source = GitHub Actions).
-Текущая версия: v50 (сентябрь 2026). Тестов: 129 (`logic` + `ios` + `sync` + `sync-devices`).
+Текущая версия: v51 (октябрь 2026). Тестов: 130 (`logic` + `ios` + `sync` + `sync-devices`).
 
 ## Регламент публикации (обязательный после КАЖДОГО коммита)
 
@@ -107,3 +107,8 @@ Docs-only правки версию НЕ bump'ят. Есть регресс-те
    списком файлов внутри `alex/external-brain`.
 7. Каталог `alex/external-brain` пересоздан под пользователя opencode (исходный был
    root-owned); бэкап — `alex/external-brain-rootbak` (только `.env`, удалить после проверки).
+8. Blur на захвате grip закрывал клавиатуру ПОСРЕДИ touch: вьюпорт прыгал, страница
+   уезжала из-под пальца, жест глох («сдвиг влево ничего не делает»). Фокус снимается
+   только в `finish` (после pointerup) + пин прокрутки (`pinScroll`) на время жеста;
+   упавший `lostpointercapture` перехватывается повторным `setPointerCapture`,
+   document-listener страховает от зависшего `pid`.
