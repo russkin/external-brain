@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v46';
+  var APP_VERSION = 'v47';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -197,8 +197,9 @@
     if (r) r.disabled = !redoStack.length;
   }
 
-  /* Курсор в конец задачи по id (после отмены вызова поля). */
-  function focusTaskEnd(taskId) {
+  /* Курсор в задачу по id: по умолчанию в конец (после отмены вызова
+   * поля), с pos — на точную позицию (сцепка: стык верхней и хвоста). */
+  function focusTaskEnd(taskId, pos) {
     if (!taskId) return;
     var box = el('lines');
     if (!box || !box.querySelectorAll) return;
@@ -210,7 +211,8 @@
         try {
           inp.focus();
           var v = inp.value || '';
-          if (inp.setSelectionRange) inp.setSelectionRange(v.length, v.length);
+          var p = (pos == null || pos > v.length) ? v.length : pos;
+          if (inp.setSelectionRange) inp.setSelectionRange(p, p);
         } catch (x) {}
       }
       return;
@@ -1060,13 +1062,16 @@
      * no-op. */
     var curText = String(liveVal == null ? '' : liveVal).trim();
     if (!curText) curText = String(cur.title || '');
+    var prevLen = String(prev.title || '').length;
     var joined = (String(prev.title || '') + ' ' + curText).trim();
     mutate(function () {
       L.clarifyTask(state.tasks, prev.id, { title: joined });
       L.removeTask(state.tasks, cur.id);
       if (trailingAfterId === cur.id) trailingAfterId = prev.id;
     });
-    focusTaskEnd(prev.id);
+    /* Курсор — на стык: конец текста верхней, пробел, дальше перенесённый.
+     * Длину верхней запоминаем ДО mutate (после — там уже склейка). */
+    focusTaskEnd(prev.id, prevLen + 1);
   }
 
   function commitLine(taskId, value, isTrailing, indent) {

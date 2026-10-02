@@ -174,8 +174,11 @@ describe('логика вызывается с state.tasks', () => {
     var mBody = appSrc.slice(iM, iM + 1300);
     assert.ok(mBody.includes('L.removeTask(state.tasks, cur.id)'), 'текущая строка не удаляется');
     assert.ok(mBody.includes('trailingAfterId === cur.id'), 'поле под строкой остаётся на мёртвом якоре');
-    assert.ok(mBody.includes('focusTaskEnd(prev.id)'), 'курсор не переезжает в сцепленную');
+    assert.ok(mBody.includes('focusTaskEnd(prev.id, prevLen + 1)'),
+      'курсор не встаёт на стык верхней и перенесённого');
     assert.ok(mBody.includes('liveVal'), 'сцепка идёт не по живому значению строки');
+    assert.ok(mBody.indexOf('var prevLen = String(prev.title') < mBody.indexOf('mutate(function'),
+      'длина верхней не запомнена до склейки');
     var iB = appSrc.indexOf('function backspaceCreateDraft');
     var bBody = appSrc.slice(iB, iB + 700);
     assert.ok(bBody.includes('focusTaskEnd(anchor || created.id)'), 'курсор не уезжает в задачу сверху');
