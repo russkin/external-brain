@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v44';
+  var APP_VERSION = 'v45';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -211,6 +211,26 @@
           inp.focus();
           var v = inp.value || '';
           if (inp.setSelectionRange) inp.setSelectionRange(v.length, v.length);
+        } catch (x) {}
+      }
+      return;
+    }
+  }
+
+  /* Курсор в НАЧАЛО задачи по id (после сплита Enter в середине:
+   * набор продолжается перед хвостом, как в редакторе). */
+  function focusLineStart(taskId) {
+    if (!taskId) return;
+    var box = el('lines');
+    if (!box || !box.querySelectorAll) return;
+    var rows = box.querySelectorAll('.tline[data-id]');
+    for (var i = 0; i < rows.length; i++) {
+      if (!rows[i].getAttribute || rows[i].getAttribute('data-id') !== taskId) continue;
+      var inp = rows[i].querySelector ? rows[i].querySelector('.tinput') : null;
+      if (inp && inp.focus) {
+        try {
+          inp.focus();
+          if (inp.setSelectionRange) inp.setSelectionRange(0, 0);
         } catch (x) {}
       }
       return;
@@ -1034,7 +1054,7 @@
     if (idx <= 0) return;
     var prev = lt[idx - 1];
     var cur = lt[idx];
-    var joined = String(prev.title || '') + String(cur.title || '');
+    var joined = (String(prev.title || '') + ' ' + String(cur.title || '')).trim();
     mutate(function () {
       L.clarifyTask(state.tasks, prev.id, { title: joined });
       L.removeTask(state.tasks, cur.id);
@@ -1165,6 +1185,38 @@
         trailingText = '';
         trailingAfterId = null;
         trailingIndent = null;
+      }
+      /* Enter в середине текста: левая часть остаётся задачей, хвост
+       * (от каретки до конца) уходит в новую задачу ниже — как в
+       * редакторе. Отступ — по правилу поля под строкой: у родителя
+       * хвост встаёт на уровень первой дочерней, чтобы не сорвать
+       * вложенность. Одна точка истории, курсор — в начало хвоста
+       * (набор продолжается перед ним). Поле-продолжение, стоявшее
+       * под строкой, переякоривается на хвост. */
+      var splitPos = inp.selectionStart;
+      var splitVal = String(inp.value == null ? '' : inp.value);
+      var splitCur = L.getTask(state.tasks, taskId);
+      if (splitPos > 0 && splitPos < splitVal.length &&
+          splitVal.slice(0, splitPos).trim() && splitVal.slice(splitPos).trim() &&
+          splitCur && splitCur.status !== 'done') {
+        var splitLeft = splitVal.slice(0, splitPos).trim();
+        var splitTail = splitVal.slice(splitPos).trim();
+        var spIndent = lineIndent(splitCur);
+        var ltSp = lineTasks();
+        for (var si = 0; si < ltSp.length; si++) {
+          if (!ltSp[si] || ltSp[si].id !== taskId) continue;
+          var nxSp = ltSp[si + 1];
+          if (nxSp && lineIndent(nxSp) > spIndent) spIndent = lineIndent(nxSp);
+          break;
+        }
+        var madeSplit = null;
+        mutate(function () {
+          L.clarifyTask(state.tasks, taskId, { title: splitLeft });
+          madeSplit = insertTaskAfter(taskId, splitTail, spIndent, Date.now());
+          if (madeSplit && trailingAfterId === taskId) trailingAfterId = madeSplit.id;
+        });
+        if (madeSplit) focusLineStart(madeSplit.id);
+        return;
       }
       commitLine(taskId, inp.value, false);
       /* Позиция поля: каретка в начале текста — НАД текущей строкой на

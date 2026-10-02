@@ -168,8 +168,8 @@ describe('логика вызывается с state.tasks', () => {
   it('Backspace: сцепка с предыдущей, черновик создаётся и курсор уезжает вверх', () => {
     assert.ok(appSrc.includes('function mergeTaskIntoPrev'), 'нет сцепки строк по Backspace');
     assert.ok(appSrc.includes('function backspaceCreateDraft'), 'нет создания черновика по Backspace');
-    assert.ok(appSrc.includes('String(prev.title || \'\') + String(cur.title || \'\')'),
-      'тексты не соединяются в одну строку');
+    assert.ok(appSrc.includes('String(prev.title || \'\') + \' \' + String(cur.title || \'\')'),
+      'между наименованиями нет пробела');
     var iM = appSrc.indexOf('function mergeTaskIntoPrev');
     var mBody = appSrc.slice(iM, iM + 900);
     assert.ok(mBody.includes('L.removeTask(state.tasks, cur.id)'), 'текущая строка не удаляется');
@@ -184,6 +184,21 @@ describe('логика вызывается с state.tasks', () => {
       'Backspace не обрабатывается в keydown');
     assert.ok(kBody.includes('inp.selectionStart === 0 && inp.selectionEnd === 0'),
       'нет каретки в начале строки');
+  });
+  it('Enter в середине: хвост уходит в задачу ниже, курсор в её начало', () => {
+    assert.ok(appSrc.includes('splitPos > 0 && splitPos < splitVal.length'),
+      'нет сплита строки по позиции каретки');
+    assert.ok(appSrc.includes('splitVal.slice(0, splitPos).trim()'),
+      'левая часть не отделяется и не проверяется');
+    assert.ok(appSrc.includes('splitVal.slice(splitPos).trim()'),
+      'хвост не отделяется от каретки');
+    assert.ok(appSrc.includes('insertTaskAfter(taskId, splitTail, spIndent'),
+      'хвост не создаётся задачей ниже');
+    assert.ok(appSrc.includes('focusLineStart(madeSplit.id)'),
+      'курсор не встаёт в начало хвоста');
+    assert.ok(appSrc.includes('trailingAfterId === taskId'),
+      'поле-продолжение не переякоривается на хвост');
+    assert.ok(appSrc.includes('function focusLineStart'), 'нет фокуса в начало строки');
   });
   it('Enter в строке даёт пустое поле ниже, а не фокус дальше', () => {
     assert.ok(appSrc.includes('trailingAfterId'), 'пустое поле не переезжает');
