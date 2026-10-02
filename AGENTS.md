@@ -4,7 +4,7 @@
 следующие/ожидание/когда-нибудь, лягушка дня, слоны-бифштексы.
 Репозиторий: `git@github.com:russkin/external-brain.git`, ветка `main`.
 Прод: https://russkin.github.io/external-brain/ (GitHub Pages, source = GitHub Actions).
-Текущая версия: v52 (октябрь 2026). Тестов: 131 (`logic` + `ios` + `sync` + `sync-devices`).
+Текущая версия: v53 (октябрь 2026). Тестов: 132 (`logic` + `ios` + `sync` + `sync-devices`).
 Тестовая платформа: смартфон Android 16 (планшет в этом проекте НЕ используется —
 все замечания и проверки идут на телефоне).
 
@@ -114,3 +114,8 @@ Docs-only правки версию НЕ bump'ят. Есть регресс-те
    только в `finish` (после pointerup) + пин прокрутки (`pinScroll`) на время жеста;
    упавший `lostpointercapture` перехватывается повторным `setPointerCapture`,
    document-listener страховает от зависшего `pid`.
+9. Enter-сплит / Backspace-склейка сносят текущий input при `render()`; если строку
+   успели править (dirty-флаг), Chrome шлёт с него поздний `change` со старым
+   значением — `commitLine` возвращал в предка склеенный текст («сплит не обрезает
+   левую часть»). Лечится флагом `inputClosed` в `wireLineInput` (глушит `change`/
+   `input` уже закрытой строки); `saveTimer` гасится там же.

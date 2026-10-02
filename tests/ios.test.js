@@ -266,6 +266,27 @@ describe('логика вызывается с state.tasks', () => {
       'отложенное сохранение ввода вернёт перенесённый хвост обратно');
     assert.ok(spBody.includes('splitVal.slice(0, splitPos).trim()'),
       'в левой части остаётся лишний пробел');
+    assert.ok(spBody.includes('inputClosed = true'),
+      'сплит не закрывает input от позднего change');
+  });
+  it('Поздний change со старого input не склеивает сплит/сцепку обратно', () => {
+    var iW = appSrc.indexOf('function wireLineInput');
+    assert.ok(iW !== -1, 'нет wireLineInput');
+    var wBody = appSrc.slice(iW, iW + 700);
+    assert.ok(wBody.includes('var inputClosed = false'), 'нет флага закрытого input');
+    var iCh = appSrc.indexOf("inp.addEventListener('change'");
+    assert.ok(iCh !== -1, 'нет обработчика change');
+    var chBody = appSrc.slice(iCh, iCh + 220);
+    assert.ok(chBody.includes('if (inputClosed) return;'),
+      'change с заменённого input коммитит старое значение обратно');
+    var iInp = appSrc.indexOf("inp.addEventListener('input'");
+    var inBody = appSrc.slice(iInp, iInp + 220);
+    assert.ok(inBody.includes('if (inputClosed) return;'),
+      'поздний input взводит saveTimer после сплита');
+    var iMg = appSrc.indexOf('mergeTaskIntoPrev(taskId, inp.value)');
+    var mgBody = appSrc.slice(Math.max(0, iMg - 260), iMg);
+    assert.ok(mgBody.includes('inputClosed = true'),
+      'сцепка не закрывает input от позднего change');
   });
   it('Enter в строке даёт пустое поле ниже, а не фокус дальше', () => {
     assert.ok(appSrc.includes('trailingAfterId'), 'пустое поле не переезжает');

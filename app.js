@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v52';
+  var APP_VERSION = 'v53';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1157,7 +1157,13 @@
 
   function wireLineInput(div, inp, taskId, isTrailing, indent) {
     var saveTimer = null;
+    /* Строка расщеплена (Enter-сплит) или склеена/удалена (Backspace-merge):
+     * render() сносит этот input, а Chrome шлёт с него поздний change со
+     * СТАРЫМ значением — commitLine вернул бы в задачу уже перенесённый
+     * хвост (правка пробела выставляет dirty-флаг, без правки change нет). */
+    var inputClosed = false;
     inp.addEventListener('input', function () {
+      if (inputClosed) return;
       autosize(inp);
       if (isTrailing) { trailingText = inp.value; return; }
       if (!taskId) return;
@@ -1171,6 +1177,7 @@
       }, 800);
     });
     inp.addEventListener('change', function () {
+      if (inputClosed) return;
       if (isTrailing || !taskId) return;
       if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
       var r = commitLine(taskId, inp.value, false);
@@ -1210,6 +1217,7 @@
         /* Курсор в начале строки: backspace сцепляет её с предыдущей
          * живой — текст приклеивается вверх, текущая строка удаляется. */
         e.preventDefault();
+        inputClosed = true;
         mergeTaskIntoPrev(taskId, inp.value);
         return;
       }
@@ -1271,9 +1279,11 @@
           splitVal.slice(0, splitPos).trim() && splitVal.slice(splitPos).trim() &&
           splitCur && splitCur.status !== 'done') {
         /* Отложенное сохранение последнего ввода (saveTimer, 800 мс)
-         * позже вернуло бы в задачу уже перенесённый хвост — гасим;
+         * позже вернуло бы в задачу уже перенесённый хвост — гасим,
+         * как и поздний change с этого же input (см. inputClosed);
          * обе части сплита берутся из inp.value, терять нечего. */
         if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+        inputClosed = true;
         var splitLeft = splitVal.slice(0, splitPos).trim();
         var splitTail = splitVal.slice(splitPos).trim();
         var spIndent = lineIndent(splitCur);
