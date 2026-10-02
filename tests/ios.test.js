@@ -178,7 +178,7 @@ describe('логика вызывается с state.tasks', () => {
   });
   it('Enter продолжает уровень: дочерняя за дочерней', () => {
     assert.ok(appSrc.includes('trailingIndent = lineIndent(created)'), 'цепочка не держит отступ');
-    assert.ok(appSrc.includes('trailingIndent = lineIndent(moved)'), 'Enter в строке не даёт сестру');
+    assert.ok(appSrc.includes('var newIndent = lineIndent(moved)'), 'Enter в строке не даёт сестру');
   });
   it('отмена Enter: сначала поле, потом задача', () => {
     assert.ok(appSrc.includes('function snapFull'), 'нет полного слепка с полем');
@@ -225,6 +225,18 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(block.includes('trailingAfterId = null'), 'после создания черновик не очищен');
     assert.ok(block.includes('effTrailingIndent()'), 'отступ висячего черновика не из состояния');
     assert.ok(block.includes('trailingText = \'\''), 'текст висячего черновика не стёрт');
+  });
+  it('Enter в родителе: поле на уровне первой дочерней', () => {
+    var iN = appSrc.indexOf('var newIndent');
+    assert.ok(iN !== -1, 'нет расчёта отступа поля под строкой');
+    var iA = appSrc.indexOf('trailingIndent = newIndent', iN);
+    assert.ok(iA > iN, 'отступ не считается до присваивания');
+    var block = appSrc.slice(iN, iA);
+    assert.ok(block.includes('lineIndent(nx) > newIndent'),
+      'первая дочерняя не подхватывается (поле уходит на уровень родителя)');
+    assert.ok(block.includes('lineTasks()'), 'следующая строка не из живого списка');
+    assert.ok(block.includes('effTrailingIndent() !== newIndent'),
+      'повторный вызов поля пишет лишнюю точку истории');
   });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');

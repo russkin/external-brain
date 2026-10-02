@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v38';
+  var APP_VERSION = 'v39';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1028,13 +1028,24 @@
         trailingIndent = null;
       }
       commitLine(taskId, inp.value, false);
-      /* Пустое поле переезжает под эту строку — ввод продолжается вниз
-       * на том же уровне (следующая — сестра, а не с нулевым отступом).
-       * Вызов поля — отдельная точка в истории, иначе ↩ откатит чужое
-       * давнее действие (вплоть до воскрешения удалённого в выполненных). */
+      /* Пустое поле переезжает под эту строку — ввод продолжается вниз.
+       * У родителя (за ним первая дочерняя) поле встаёт сразу на её
+       * отступе — новая задача становится дочерней, у листа — свой
+       * уровень. Вызов поля — отдельная точка в истории, иначе ↩
+       * откатит чужое давнее действие (вплоть до воскрешения удалённого
+       * в выполненных). */
       var moved = L.getTask(state.tasks, taskId);
       if (moved && moved.status !== 'done') {
-        if (trailingAfterId !== taskId || effTrailingIndent() !== lineIndent(moved)) {
+        var newIndent = lineIndent(moved);
+        var lt = lineTasks();
+        for (var li = 0; li < lt.length; li++) {
+          if (lt[li].id === taskId) {
+            var nx = lt[li + 1];
+            if (nx && lineIndent(nx) > newIndent) newIndent = lineIndent(nx);
+            break;
+          }
+        }
+        if (trailingAfterId !== taskId || effTrailingIndent() !== newIndent) {
           undoStack.push({
             tasks: snapTasks(),
             afterId: trailingAfterId,
@@ -1047,7 +1058,7 @@
           updateHistoryButtons();
         }
         trailingAfterId = taskId;
-        trailingIndent = lineIndent(moved);
+        trailingIndent = newIndent;
       }
       render();
       focusTrailing();
