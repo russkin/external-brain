@@ -168,19 +168,20 @@ describe('логика вызывается с state.tasks', () => {
   it('Backspace: сцепка с предыдущей, черновик создаётся и курсор уезжает вверх', () => {
     assert.ok(appSrc.includes('function mergeTaskIntoPrev'), 'нет сцепки строк по Backspace');
     assert.ok(appSrc.includes('function backspaceCreateDraft'), 'нет создания черновика по Backspace');
-    assert.ok(appSrc.includes('String(prev.title || \'\') + \' \' + String(cur.title || \'\')'),
+    assert.ok(appSrc.includes('String(prev.title || \'\') + \' \' + curText'),
       'между наименованиями нет пробела');
     var iM = appSrc.indexOf('function mergeTaskIntoPrev');
-    var mBody = appSrc.slice(iM, iM + 900);
+    var mBody = appSrc.slice(iM, iM + 1300);
     assert.ok(mBody.includes('L.removeTask(state.tasks, cur.id)'), 'текущая строка не удаляется');
     assert.ok(mBody.includes('trailingAfterId === cur.id'), 'поле под строкой остаётся на мёртвом якоре');
     assert.ok(mBody.includes('focusTaskEnd(prev.id)'), 'курсор не переезжает в сцепленную');
+    assert.ok(mBody.includes('liveVal'), 'сцепка идёт не по живому значению строки');
     var iB = appSrc.indexOf('function backspaceCreateDraft');
     var bBody = appSrc.slice(iB, iB + 700);
     assert.ok(bBody.includes('focusTaskEnd(anchor || created.id)'), 'курсор не уезжает в задачу сверху');
     var iK = appSrc.indexOf("inp.addEventListener('keydown'");
     var kBody = appSrc.slice(iK, iK + 1400);
-    assert.ok(kBody.includes('backspaceCreateDraft()') && kBody.includes('mergeTaskIntoPrev(taskId)'),
+    assert.ok(kBody.includes('backspaceCreateDraft()') && kBody.includes('mergeTaskIntoPrev(taskId, inp.value)'),
       'Backspace не обрабатывается в keydown');
     assert.ok(kBody.includes('inp.selectionStart === 0 && inp.selectionEnd === 0'),
       'нет каретки в начале строки');
@@ -199,6 +200,12 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('trailingAfterId === taskId'),
       'поле-продолжение не переякоривается на хвост');
     assert.ok(appSrc.includes('function focusLineStart'), 'нет фокуса в начало строки');
+    var iSp = appSrc.indexOf('var splitPos = inp.selectionStart');
+    var spBody = appSrc.slice(iSp, appSrc.indexOf('commitLine(taskId, inp.value', iSp));
+    assert.ok(spBody.includes('clearTimeout(saveTimer)'),
+      'отложенное сохранение ввода вернёт перенесённый хвост обратно');
+    assert.ok(spBody.includes('splitVal.slice(0, splitPos).trim()'),
+      'в левой части остаётся лишний пробел');
   });
   it('Enter в строке даёт пустое поле ниже, а не фокус дальше', () => {
     assert.ok(appSrc.includes('trailingAfterId'), 'пустое поле не переезжает');

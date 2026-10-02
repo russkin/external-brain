@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v45';
+  var APP_VERSION = 'v46';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1045,7 +1045,7 @@
    * Одна точка истории: отмена возвращает и разъединение, и строку.
    * Поле-черновик, стоявшее под удаляемой строкой, якорится на
    * сцепленную — висеть на мёртвом якоре не должно. */
-  function mergeTaskIntoPrev(taskId) {
+  function mergeTaskIntoPrev(taskId, liveVal) {
     var lt = lineTasks();
     var idx = -1;
     for (var i = 0; i < lt.length; i++) {
@@ -1054,7 +1054,13 @@
     if (idx <= 0) return;
     var prev = lt[idx - 1];
     var cur = lt[idx];
-    var joined = (String(prev.title || '') + ' ' + String(cur.title || '')).trim();
+    /* Живое значение строки: нажатие могло прийти раньше, чем
+     * отложенное сохранение последнего ввода (800 мс). Отложенное
+     * сохранение удаляемой строки сойдёт на нет: clarify мёртвого —
+     * no-op. */
+    var curText = String(liveVal == null ? '' : liveVal).trim();
+    if (!curText) curText = String(cur.title || '');
+    var joined = (String(prev.title || '') + ' ' + curText).trim();
     mutate(function () {
       L.clarifyTask(state.tasks, prev.id, { title: joined });
       L.removeTask(state.tasks, cur.id);
@@ -1139,7 +1145,7 @@
         /* Курсор в начале строки: backspace сцепляет её с предыдущей
          * живой — текст приклеивается вверх, текущая строка удаляется. */
         e.preventDefault();
-        mergeTaskIntoPrev(taskId);
+        mergeTaskIntoPrev(taskId, inp.value);
         return;
       }
       if (e.key !== 'Enter' || e.shiftKey) return;
@@ -1199,6 +1205,10 @@
       if (splitPos > 0 && splitPos < splitVal.length &&
           splitVal.slice(0, splitPos).trim() && splitVal.slice(splitPos).trim() &&
           splitCur && splitCur.status !== 'done') {
+        /* Отложенное сохранение последнего ввода (saveTimer, 800 мс)
+         * позже вернуло бы в задачу уже перенесённый хвост — гасим;
+         * обе части сплита берутся из inp.value, терять нечего. */
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
         var splitLeft = splitVal.slice(0, splitPos).trim();
         var splitTail = splitVal.slice(splitPos).trim();
         var spIndent = lineIndent(splitCur);
