@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v43';
+  var APP_VERSION = 'v44';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -998,6 +998,51 @@
     if (focusId) focusTaskEnd(focusId);
   }
 
+  /* Backspace в начале набранного черновика: как потеря фокуса — задача
+   * создаётся (текст не теряется), потом курсор уезжает в конец задачи
+   * сверху. Если поле стоит под TOP — сверху некуда, фокус остаётся на
+   * только что созданной (она и есть верхняя). Одна точка истории. */
+  function backspaceCreateDraft() {
+    var title = String(trailingText || '').trim();
+    if (!title) { dismissDraft(); return; }
+    var atTop = trailingAfterId === 'TOP';
+    var anchor = atTop ? null : trailingAnchorId();
+    var created = atTop ?
+      placeTaskTop(title) :
+      placeTaskAfter(anchor, title, effTrailingIndent());
+    if (!created) return;
+    /* Поле гасим ДО следующего render (дубль — один кадр, как у blur). */
+    trailingText = '';
+    trailingAfterId = null;
+    trailingIndent = null;
+    render();
+    focusTaskEnd(anchor || created.id);
+  }
+
+  /* Backspace в начале строки задачи: сцепка с предыдущей живой — её
+   * текст пополняется текущим, текущая удаляется (дети остаются на
+   * месте: отступ не трогаем, вложением их держит сцепленная строка).
+   * Одна точка истории: отмена возвращает и разъединение, и строку.
+   * Поле-черновик, стоявшее под удаляемой строкой, якорится на
+   * сцепленную — висеть на мёртвом якоре не должно. */
+  function mergeTaskIntoPrev(taskId) {
+    var lt = lineTasks();
+    var idx = -1;
+    for (var i = 0; i < lt.length; i++) {
+      if (lt[i] && lt[i].id === taskId) { idx = i; break; }
+    }
+    if (idx <= 0) return;
+    var prev = lt[idx - 1];
+    var cur = lt[idx];
+    var joined = String(prev.title || '') + String(cur.title || '');
+    mutate(function () {
+      L.clarifyTask(state.tasks, prev.id, { title: joined });
+      L.removeTask(state.tasks, cur.id);
+      if (trailingAfterId === cur.id) trailingAfterId = prev.id;
+    });
+    focusTaskEnd(prev.id);
+  }
+
   function commitLine(taskId, value, isTrailing, indent) {
     var title = String(value == null ? '' : value).trim();
     if (isTrailing || !taskId) {
@@ -1053,9 +1098,28 @@
       });
     }
     inp.addEventListener('keydown', function (e) {
-      if (e.key === 'Backspace' && isTrailing && !inp.value) {
-        dismissDraft();
+      if (e.key === 'Backspace' && isTrailing) {
+        if (!inp.value) {
+          dismissDraft();
+          e.preventDefault();
+          return;
+        }
+        /* Курсор в начале набранного: backspace работает как потеря
+         * фокуса — задача создаётся (текст не теряется), а курсор
+         * переезжает в конец задачи сверху. Середка текста — обычная
+         * правка, браузер удаляет символ сам. */
+        if (inp.selectionStart === 0 && inp.selectionEnd === 0) {
+          e.preventDefault();
+          backspaceCreateDraft();
+        }
+        return;
+      }
+      if (e.key === 'Backspace' && !isTrailing && taskId &&
+          inp.selectionStart === 0 && inp.selectionEnd === 0) {
+        /* Курсор в начале строки: backspace сцепляет её с предыдущей
+         * живой — текст приклеивается вверх, текущая строка удаляется. */
         e.preventDefault();
+        mergeTaskIntoPrev(taskId);
         return;
       }
       if (e.key !== 'Enter' || e.shiftKey) return;
