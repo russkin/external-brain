@@ -196,6 +196,11 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('dragUiBefore'), 'старт drag не запоминает поле');
     assert.ok(appSrc.includes('dragUiBefore.afterId'), 'возврат поля не знает старое место');
   });
+  it('перенос черновика берёт отступ соседа сверху', () => {
+    assert.ok(appSrc.includes('var wantInd'), 'нет расчёта отступа при посадке поля');
+    assert.ok(appSrc.includes('trailingIndent = wantInd'), 'перенос поля не ставит отступ по месту');
+    assert.ok(appSrc.includes('wantInd !== oldInd'), 'смена только отступа не пишется в историю');
+  });
   it('потеря фокуса поля создаёт задачу', () => {
     assert.ok(appSrc.includes("addEventListener('blur'"), 'нет blur-обработчика поля');
     assert.ok(appSrc.includes('createDraftOnBlur'), 'нет создания по потере фокуса');

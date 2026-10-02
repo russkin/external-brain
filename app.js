@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v36';
+  var APP_VERSION = 'v37';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1475,9 +1475,10 @@
           ref = kids[m];
         }
         /* Черновик перетащили: запоминаем новое место (id соседа сверху
-         * или TOP), данные не трогаем — persist его игнорирует.
-         * Перестановка поля пишется в историю: отмена вернёт поле
-         * на место, а не будет откатывать чужие задачи. */
+         * или TOP) и берём отступ по новому месту — тот же закон, что
+         * у настоящих задач (applyDropIndent строку без data-id не видит,
+         * поэтому поле после переноса держало старый отступ: между
+         * дочерними оставалось на 0). Данные задач не трогаем. */
         if (!myTask() && div.getAttribute && div.getAttribute('data-trailing')) {
           var prevRow = div.previousSibling;
           var prevId = null;
@@ -1488,9 +1489,24 @@
             }
             prevRow = prevRow.previousSibling;
           }
+          var nextRow2 = div.nextSibling;
+          var nextId = null;
+          while (nextRow2) {
+            if (nextRow2.getAttribute && nextRow2.getAttribute('data-id')) {
+              nextId = nextRow2.getAttribute('data-id');
+              break;
+            }
+            nextRow2 = nextRow2.nextSibling;
+          }
           var newAfter = prevId || 'TOP';
+          var pT = prevId ? L.getTask(state.tasks, prevId) : null;
+          var nT = nextId ? L.getTask(state.tasks, nextId) : null;
+          var pInd = pT ? lineIndent(pT) : 0;
+          var nInd = nT ? lineIndent(nT) : -1;
+          var wantInd = !pT ? 0 : (nInd === pInd + 1 ? nInd : pInd);
           var oldAfter = dragUiBefore ? dragUiBefore.afterId : trailingAfterId;
-          if (newAfter !== oldAfter) {
+          var oldInd = effTrailingIndent();
+          if (newAfter !== oldAfter || wantInd !== oldInd) {
             undoStack.push({
               tasks: snapTasks(),
               afterId: oldAfter,
@@ -1502,6 +1518,7 @@
             updateHistoryButtons();
           }
           trailingAfterId = newAfter;
+          trailingIndent = wantInd;
         }
         /* Только теперь возвращаем строку в поток — место уже измерено. */
         div.style.position = '';
