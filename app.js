@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v42';
+  var APP_VERSION = 'v43';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -642,6 +642,23 @@
       if (!div._swOpen && dx < -48 && Math.abs(dx) > Math.abs(dy) * 2) {
         div.classList.add('swiped');
         div._swOpen = true;
+        /* Свайп — чужое действие: фокус снимаем сразу (на старых
+         * устройствах blur сам не приходит — с клавиатурой уезжают
+         * в свайп). Пока жест идёт, render подавлен (dragActive) —
+         * узлы строки не пересоздаются. Тап по строке при этом не
+         * должен сработать как blur-создание черновика (draftTapBusy,
+         * как у флага): текст поля остаётся на месте. */
+        dragActive = true;
+        draftTapBusy = true;
+        setTimeout(function () { draftTapBusy = false; }, 400);
+        /* Захват указателя: pointerup доедет до строки даже при
+         * отпускании мимо — иначе dragActive залипнет и render
+         * подавится навсегда. */
+        try { div.setPointerCapture(e.pointerId); } catch (x) {}
+        var aeS = document.activeElement;
+        if (aeS && aeS.blur && (aeS.tagName === 'TEXTAREA' || aeS.tagName === 'INPUT')) {
+          try { aeS.blur(); } catch (x) {}
+        }
       } else if (div._swOpen && dx > -16) {
         div.classList.remove('swiped');
         div._swOpen = false;
@@ -650,6 +667,7 @@
     function swEnd(e) {
       if (e && e.pointerId != null && e.pointerId !== swPid) return;
       swPid = null;
+      dragActive = false;
     }
     div.addEventListener('pointerup', swEnd);
     div.addEventListener('pointercancel', swEnd);
@@ -663,6 +681,41 @@
     });
   }
 
+  /* Поле-черновик с текстом, чей якорь — внутри завершаемой ветки:
+   * до-создаём задачу на её месте, иначе набранное не улетает
+   * в выполненные вместе с веткой, а поле свисает внизу живого списка.
+   * Отступ — свой; если вдруг не глубже родителя ветки, принудительно
+   * делаем дочерним — иначе completeBranch оборвётся на такой строке
+   * и ветка не завершится целиком. */
+  function commitTrailingIntoBranch(rootId) {
+    var text = String(trailingText || '').trim();
+    if (!text) return;
+    var anchor = trailingAnchorId();
+    var lt = lineTasks();
+    var rootIdx = -1;
+    for (var i = 0; i < lt.length; i++) {
+      if (lt[i] && lt[i].id === rootId) { rootIdx = i; break; }
+    }
+    if (rootIdx === -1) return;
+    var base = lineIndent(lt[rootIdx]);
+    var inside = false;
+    if (anchor && anchor === rootId) inside = true;
+    else if (anchor) {
+      for (var j = rootIdx + 1; j < lt.length; j++) {
+        if (lineIndent(lt[j]) <= base) break;
+        if (lt[j].id === anchor) { inside = true; break; }
+      }
+    }
+    if (!inside) return;
+    var fi = effTrailingIndent();
+    if (fi <= base) fi = base >= 8 ? 8 : base + 1;
+    var created = placeTaskAfter(anchor, text, fi);
+    if (!created) return;
+    trailingText = '';
+    trailingAfterId = null;
+    trailingIndent = null;
+  }
+
   /* Выполнить с анимацией: строка возвращается на место уже зачёркнутой,
    * затем спускается в секцию выполненных под полем ввода. */
   /* Выполнить/вернуть с анимацией: строка возвращается на место уже
@@ -672,7 +725,17 @@
   function toggleDoneSlide(taskId) {
     var task = L.getTask(state.tasks, taskId);
     if (!task || task.deleted) return;
+    /* Фокус с любой строки/поля снимаем сразу (свайп уже снял — тут
+     * no-op): отметка выполненной — чужое действие, клавиатура не должна
+     * пережить её ни в задаче, ни в поле-черновике. */
+    var aeF = document.activeElement;
+    if (aeF && aeF.blur && (aeF.tagName === 'TEXTAREA' || aeF.tagName === 'INPUT')) {
+      try { aeF.blur(); } catch (x) {}
+    }
     var toDone = task.status !== 'done';
+    /* Набранное в поле внутри ветки: создаём задачу ДО completeBranch —
+     * иначе поле не улетает в выполненные вместе с родителем. */
+    if (toDone) commitTrailingIntoBranch(taskId);
     var box = el('lines');
     var row = null;
     if (box && box.querySelectorAll) {
@@ -682,7 +745,10 @@
       }
     }
     if (!row || (row.classList && row.classList.contains('sliding-done'))) {
-      if (!row) mutate(function () { toggleDoneNow(taskId, toDone); });
+      if (!row) {
+        dragActive = false;
+        mutate(function () { toggleDoneNow(taskId, toDone); });
+      }
       return;
     }
     row.classList.add('sliding-done');
@@ -694,6 +760,7 @@
     row.classList.remove('swiped');
     row._swOpen = false;
     setTimeout(function () {
+      dragActive = false;
       mutate(function () { toggleDoneNow(taskId, toDone); });
       /* Курсор не должен остаться в поле: фокус могла увести кнопка. */
       try {

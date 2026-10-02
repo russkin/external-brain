@@ -267,6 +267,21 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.slice(iF, iF + 700).includes('focusTrailing()'),
       'поле не возвращает курсор после переноса');
   });
+  it('свайп и отметка выполненной снимают фокус, поле уходит с веткой', () => {
+    var iS = appSrc.indexOf('function wireLineSwipe');
+    var swBlock = appSrc.slice(iS, appSrc.indexOf('function commitTrailingIntoBranch'));
+    assert.ok(swBlock.includes('draftTapBusy = true'), 'свайп не гасит blur-создание черновика');
+    assert.ok(swBlock.includes('.blur()'), 'свайп не снимает фокус с полей');
+    assert.ok(swBlock.includes('dragActive = true'), 'render во время свайпа не подавлен');
+    assert.ok(swBlock.includes('dragActive = false'), 'подавление render не снимается на конце свайпа');
+    assert.ok(swBlock.includes('setPointerCapture'), 'отпускание мимо строки оставляет флаг жеста');
+    assert.ok(appSrc.includes('function commitTrailingIntoBranch'), 'нет доводки поля при завершении ветки');
+    assert.ok(appSrc.includes('fi <= base'), 'отступ поля не углубляется под родителем ветки');
+    var iT = appSrc.indexOf('function toggleDoneSlide');
+    var tBlock = appSrc.slice(iT, appSrc.indexOf('function hasLiveParent'));
+    assert.ok(tBlock.includes('commitTrailingIntoBranch(taskId)'), 'поле не до-создаётся при отметке');
+    assert.ok(tBlock.includes("tagName === 'TEXTAREA'"), 'отметка не снимает фокус с полей');
+  });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
   });
