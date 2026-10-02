@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v51';
+  var APP_VERSION = 'v52';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -2081,6 +2081,9 @@
 
   /* Удалить выполненные — с подтверждением (кнопка в шапке и в ⚙). */
   function askClearDone() {
+    /* Выполненных нет — и корзина, и пункт меню ничего не удаляют:
+     * пустое окно подтверждения только мешает (тап по 🗑 в шапке). */
+    if (!L.doneList(state.tasks).length) return;
     askConfirm('Удалить все выполненные задачи?').then(function (ok) {
       if (!ok) return;
       mutate(function () {

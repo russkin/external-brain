@@ -132,6 +132,15 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('askClearDone'), 'нет удаления выполненных с подтверждением');
     assert.ok(appSrc.includes('collapsed-kid'), 'нет скрытия вложенных');
   });
+  it('Корзина без выполненных не спрашивает подтверждение', () => {
+    var iC = appSrc.indexOf('function askClearDone()');
+    assert.ok(iC !== -1, 'нет askClearDone');
+    var cBody = appSrc.slice(iC, appSrc.indexOf('function wire()', iC));
+    assert.ok(cBody.includes('if (!L.doneList(state.tasks).length) return;'),
+      'нет раннего выхода при пустой секции выполненных');
+    assert.ok(cBody.indexOf('doneList(state.tasks).length') < cBody.indexOf('askConfirm'),
+      'пустая корзина показывает окно подтверждения');
+  });
   it('свайп-выполнено и секция под полем ввода', () => {
     assert.ok(html.includes('doneflag') || appSrc.includes('doneflag'), 'нет флага выполнено');
     assert.ok(appSrc.includes('swiped'), 'нет раскрытия свайпом');

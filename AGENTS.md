@@ -4,7 +4,7 @@
 следующие/ожидание/когда-нибудь, лягушка дня, слоны-бифштексы.
 Репозиторий: `git@github.com:russkin/external-brain.git`, ветка `main`.
 Прод: https://russkin.github.io/external-brain/ (GitHub Pages, source = GitHub Actions).
-Текущая версия: v51 (октябрь 2026). Тестов: 130 (`logic` + `ios` + `sync` + `sync-devices`).
+Текущая версия: v52 (октябрь 2026). Тестов: 131 (`logic` + `ios` + `sync` + `sync-devices`).
 Тестовая платформа: смартфон Android 16 (планшет в этом проекте НЕ используется —
 все замечания и проверки идут на телефоне).
 
