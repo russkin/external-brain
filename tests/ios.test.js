@@ -238,6 +238,18 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(block.includes('effTrailingIndent() !== newIndent'),
       'повторный вызов поля пишет лишнюю точку истории');
   });
+  it('Enter с кареткой в начале: поле над текущей строкой', () => {
+    assert.ok(appSrc.includes('inp.selectionStart === 0 && inp.selectionEnd === 0'),
+      'нет распознавания каретки в начале текста');
+    assert.ok(appSrc.includes("newAnchor = li > 0 ? lt[li - 1].id : 'TOP'"),
+      'нет якоря перед текущей строкой (или TOP для первой)');
+    assert.ok(appSrc.includes('trailingAfterId = newAnchor'), 'поле не ставится по новому якорю');
+    assert.ok(appSrc.includes('trailingIndent = newIndent'),
+      'поле над строкой не берёт её отступ');
+    var iTop = appSrc.indexOf("showDraft && trailingAfterId === 'TOP'");
+    assert.ok(iTop !== -1 && appSrc.slice(iTop, iTop + 220).includes('tailIndent'),
+      'поле сверху игнорирует отступ из состояния');
+  });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
   });

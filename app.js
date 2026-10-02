@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v39';
+  var APP_VERSION = 'v40';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1028,24 +1028,29 @@
         trailingIndent = null;
       }
       commitLine(taskId, inp.value, false);
-      /* Пустое поле переезжает под эту строку — ввод продолжается вниз.
-       * У родителя (за ним первая дочерняя) поле встаёт сразу на её
-       * отступе — новая задача становится дочерней, у листа — свой
-       * уровень. Вызов поля — отдельная точка в истории, иначе ↩
-       * откатит чужое давнее действие (вплоть до воскрешения удалённого
-       * в выполненных). */
+      /* Позиция поля: каретка в начале текста — НАД текущей строкой на
+       * её же отступе (вставка сверху, якорь — строка перед ней или
+       * TOP); иначе — под строкой: у родителя (за ним первая дочерняя)
+       * сразу на её отступе, у листа — свой уровень. Вызов поля —
+       * отдельная точка в истории, иначе ↩ откатит чужое давнее
+       * действие (вплоть до воскрешения удалённого в выполненных). */
       var moved = L.getTask(state.tasks, taskId);
       if (moved && moved.status !== 'done') {
+        var atStart = inp.selectionStart === 0 && inp.selectionEnd === 0;
         var newIndent = lineIndent(moved);
+        var newAnchor = taskId;
         var lt = lineTasks();
         for (var li = 0; li < lt.length; li++) {
-          if (lt[li].id === taskId) {
+          if (lt[li].id !== taskId) continue;
+          if (atStart) {
+            newAnchor = li > 0 ? lt[li - 1].id : 'TOP';
+          } else {
             var nx = lt[li + 1];
             if (nx && lineIndent(nx) > newIndent) newIndent = lineIndent(nx);
-            break;
           }
+          break;
         }
-        if (trailingAfterId !== taskId || effTrailingIndent() !== newIndent) {
+        if (trailingAfterId !== newAnchor || effTrailingIndent() !== newIndent) {
           undoStack.push({
             tasks: snapTasks(),
             afterId: trailingAfterId,
@@ -1057,7 +1062,7 @@
           redoStack = [];
           updateHistoryButtons();
         }
-        trailingAfterId = taskId;
+        trailingAfterId = newAnchor;
         trailingIndent = newIndent;
       }
       render();
@@ -1648,7 +1653,7 @@
       });
     }
     if (showDraft && trailingAfterId === 'TOP') {
-      box.appendChild(makeLine(null, trailingText, true, 0));
+      box.appendChild(makeLine(null, trailingText, true, tailIndent));
     }
     for (var i = 0; i < tasks.length; i++) {
       box.appendChild(taskRow(tasks[i], i));
