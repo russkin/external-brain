@@ -222,6 +222,21 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(dBody.includes('if (!dHide) doneVis.push(done[d])'),
       'счётчик выполненных не считает скрытые');
   });
+  it('Захват точек у черновика: задача создаётся, фокус уходит, жест идёт по строке', () => {
+    var iG = appSrc.indexOf('var draftRowG');
+    assert.ok(iG !== -1, 'нет коммита черновика при захвате grip');
+    var gBody = appSrc.slice(iG, appSrc.indexOf('var aeNow = document.activeElement', iG));
+    assert.ok(gBody.includes('insertTaskAfter(anchorG, commitTxt, indG'),
+      'черновик не создаётся задачей на своём месте');
+    assert.ok(gBody.includes('div.setAttribute(\'data-id\', madeG.id)'),
+      'узел жеста не становится задачей');
+    assert.ok(gBody.includes('div.removeAttribute(\'data-trailing\')'),
+      'узел жеста остаётся черновиком');
+    assert.ok(gBody.includes('trailingText = \'\''), 'текст черновика не очищен');
+    assert.ok(gBody.includes('effTrailingIndent()'), 'отступ черновика не взят');
+    assert.ok(appSrc.indexOf('var draftRowG') < appSrc.indexOf('var focusInDraft'),
+      'коммит черновика идёт после вычисления возврата курсора');
+  });
   it('Enter в середине: хвост уходит в задачу ниже, курсор в её начало', () => {
     assert.ok(appSrc.includes('splitPos > 0 && splitPos < splitVal.length'),
       'нет сплита строки по позиции каретки');
@@ -333,7 +348,7 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('if (!dragActive) render()'), 'mutate рендерит во время жеста');
     var iP = appSrc.indexOf("grip.addEventListener('pointerdown'");
     assert.ok(iP !== -1, 'нет обработчика захвата grip');
-    var block = appSrc.slice(iP, iP + 2400);
+    var block = appSrc.slice(iP, iP + 3400);
     assert.ok(block.includes('dragActive = true'), 'флаг не поднимается на захвате');
     assert.ok(block.includes('.blur()'), 'фокус не сбрасывается при захвате grip');
     assert.ok(block.includes('refocusDraft'), 'черновик не запоминается для возврата курсора');

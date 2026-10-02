@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v49';
+  var APP_VERSION = 'v50';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1578,10 +1578,37 @@
       /* Взялись за grip — фокус с любой строки/поля сбрасываем сразу:
        * старый Chrome держит его весь свайп (mousedown под preventDefault
        * не уходит, blur сам не приходит) — открытая клавиатура ломает
-       * замеры и посадку. Коммит текста при этом не рендерит (dragActive),
-       * текст черновика не теряется: его blur-создание видит grip в lastPD
-       * и пропускает. */
+       * замеры и посадку. Коммит текста при этом не рендерит (dragActive);
+       * blur-создание чужого черновика видит grip в lastPD и пропускает,
+       * а черновик СВОЕЙ строки с текстом создаётся задачей ниже. */
       dragActive = true;
+      /* Черновик с текстом: захват точек сразу делает из него задачу —
+       * поле теряет фокус насовсем (курсор сюда не возвращается), а сам
+       * жест идёт уже по настоящей строке: отступ применяется setIndent
+       * к задаче, а не уходит в черновик (trailingIndent), который при
+       * следующем рендере/blur ведёт себя иначе. Рендер поднят
+       * (dragActive) — узлы не пересоздаются, узел жеста помечается
+       * data-id, поэтому myTask() и indentBounds() работают сразу. */
+      var draftRowG = !!(div.getAttribute && div.getAttribute('data-trailing'));
+      var commitTxt = draftRowG ? String(trailingText || '').trim() : '';
+      if (commitTxt) {
+        var atTopG = trailingAfterId === 'TOP';
+        var anchorG = atTopG ? null : trailingAnchorId();
+        var indG = effTrailingIndent();
+        var madeG = null;
+        mutate(function () {
+          madeG = atTopG ?
+            insertTaskTop(commitTxt, Date.now()) :
+            insertTaskAfter(anchorG, commitTxt, indG, Date.now());
+        });
+        if (madeG) {
+          trailingText = '';
+          trailingAfterId = null;
+          trailingIndent = null;
+          div.setAttribute('data-id', madeG.id);
+          div.removeAttribute('data-trailing');
+        }
+      }
       var aeNow = document.activeElement;
       /* Возврат курсора — только когда тащат САМО поле: при жесте на
        * чужой строке (свайп родителя) фокус с набранного снимается
