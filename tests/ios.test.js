@@ -255,10 +255,12 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('if (!dragActive) render()'), 'mutate рендерит во время жеста');
     var iP = appSrc.indexOf("grip.addEventListener('pointerdown'");
     assert.ok(iP !== -1, 'нет обработчика захвата grip');
-    var block = appSrc.slice(iP, iP + 1400);
+    var block = appSrc.slice(iP, iP + 2400);
     assert.ok(block.includes('dragActive = true'), 'флаг не поднимается на захвате');
     assert.ok(block.includes('.blur()'), 'фокус не сбрасывается при захвате grip');
     assert.ok(block.includes('refocusDraft'), 'черновик не запоминается для возврата курсора');
+    assert.ok(block.includes("div.getAttribute('data-trailing')"),
+      'возврат курсора не привязан к переносу самого поля (чужой жест возвращает фокус)');
     var iF = appSrc.indexOf('function finish(e)');
     assert.ok(iF !== -1 && appSrc.slice(iF, iF + 700).includes('dragActive = false'),
       'флаг не снимается на финише жеста');

@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v41';
+  var APP_VERSION = 'v42';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1359,7 +1359,12 @@
        * и пропускает. */
       dragActive = true;
       var aeNow = document.activeElement;
-      refocusDraft = !!(aeNow && aeNow.closest && aeNow.closest('.tline[data-trailing]'));
+      /* Возврат курсора — только когда тащат САМО поле: при жесте на
+       * чужой строке (свайп родителя) фокус с набранного снимается
+       * насовсем, иначе клавиатура тут же возвращается. */
+      var focusInDraft = !!(aeNow && aeNow.closest && aeNow.closest('.tline[data-trailing]'));
+      var dragIsDraft = !!(div.getAttribute && div.getAttribute('data-trailing'));
+      refocusDraft = focusInDraft && dragIsDraft;
       if (aeNow && aeNow.blur && (aeNow.tagName === 'TEXTAREA' || aeNow.tagName === 'INPUT')) {
         try { aeNow.blur(); } catch (x) {}
       }
