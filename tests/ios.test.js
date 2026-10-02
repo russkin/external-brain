@@ -171,13 +171,13 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('String(prev.title || \'\') + \' \' + curText'),
       'между наименованиями нет пробела');
     var iM = appSrc.indexOf('function mergeTaskIntoPrev');
-    var mBody = appSrc.slice(iM, iM + 1300);
+    var mBody = appSrc.slice(iM, appSrc.indexOf('function commitLine'));
     assert.ok(mBody.includes('L.removeTask(state.tasks, cur.id)'), 'текущая строка не удаляется');
     assert.ok(mBody.includes('trailingAfterId === cur.id'), 'поле под строкой остаётся на мёртвом якоре');
     assert.ok(mBody.includes('focusTaskEnd(prev.id, prevLen + 1)'),
       'курсор не встаёт на стык верхней и перенесённого');
     assert.ok(mBody.includes('liveVal'), 'сцепка идёт не по живому значению строки');
-    assert.ok(mBody.indexOf('var prevLen = String(prev.title') < mBody.indexOf('mutate(function'),
+    assert.ok(mBody.indexOf('var prevLen = String(prev.title') < mBody.lastIndexOf('mutate(function'),
       'длина верхней не запомнена до склейки');
     var iB = appSrc.indexOf('function backspaceCreateDraft');
     var bBody = appSrc.slice(iB, iB + 700);
@@ -188,6 +188,21 @@ describe('логика вызывается с state.tasks', () => {
       'Backspace не обрабатывается в keydown');
     assert.ok(kBody.includes('inp.selectionStart === 0 && inp.selectionEnd === 0'),
       'нет каретки в начале строки');
+  });
+  it('Backspace на полностью удалённой строке: удалить её, ничего не копировать', () => {
+    var iM = appSrc.indexOf('function mergeTaskIntoPrev');
+    var mBody = appSrc.slice(iM, appSrc.indexOf('function commitLine'));
+    assert.ok(mBody.includes('if (!live.trim())'), 'нет ветки пустой строки');
+    assert.ok(mBody.includes('focusTaskEnd(prev.id);'),
+      'курсор не в конец предыдущей при пустой строке');
+    assert.ok(!mBody.includes('curText = String(cur.title'),
+      'пустая строка тащит старый заголовок из state в склейку');
+    var emptyBranch = mBody.slice(mBody.indexOf('if (!live.trim())'),
+      mBody.indexOf('var curText = live.trim()'));
+    assert.ok(!emptyBranch.includes('clarifyTask'),
+      'в пустой ветке что-то пишет в предыдущую строку');
+    assert.ok(emptyBranch.includes('L.removeTask(state.tasks, cur.id)'),
+      'пустая строка не удаляется');
   });
   it('Enter в середине: хвост уходит в задачу ниже, курсор в её начало', () => {
     assert.ok(appSrc.includes('splitPos > 0 && splitPos < splitVal.length'),

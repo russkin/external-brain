@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v47';
+  var APP_VERSION = 'v48';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1056,12 +1056,21 @@
     if (idx <= 0) return;
     var prev = lt[idx - 1];
     var cur = lt[idx];
-    /* Живое значение строки: нажатие могло прийти раньше, чем
-     * отложенное сохранение последнего ввода (800 мс). Отложенное
-     * сохранение удаляемой строки сойдёт на нет: clarify мёртвого —
-     * no-op. */
-    var curText = String(liveVal == null ? '' : liveVal).trim();
-    if (!curText) curText = String(cur.title || '');
+    /* Живое значение строки (null → из state): нажатие могло прийти
+     * раньше, чем отложенное сохранение последнего ввода (800 мс). */
+    var live = liveVal == null ? String(cur.title || '') : String(liveVal);
+    if (!live.trim()) {
+      /* Текст строки удалён полностью: в склейку старый заголовок из
+       * state НЕ тащим — строку просто удаляем, курсор — в конец
+       * предыдущей. Отложенное сохранение удаляемой — no-op. */
+      mutate(function () {
+        L.removeTask(state.tasks, cur.id);
+        if (trailingAfterId === cur.id) trailingAfterId = prev.id;
+      });
+      focusTaskEnd(prev.id);
+      return;
+    }
+    var curText = live.trim();
     var prevLen = String(prev.title || '').length;
     var joined = (String(prev.title || '') + ' ' + curText).trim();
     mutate(function () {
