@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v40';
+  var APP_VERSION = 'v41';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -128,7 +128,7 @@
       if (undoStack.length > HISTORY_MAX) undoStack.shift();
       redoStack = [];
     }
-    render();
+    if (!dragActive) render();
     save();
     updateHistoryButtons();
     return r;
@@ -504,6 +504,14 @@
   }, true);
 
   var draftBlurTimer = null;
+  /* Жест перетаскивания: фокус с любой строки/поля сбрасывается на захвате
+   * grip (иначе на старых устройствах открытая клавиатура живёт весь свайп,
+   * а клик не успевает отстрелиться и blur не приходит). Пока флаг поднят,
+   * render в mutate/commit не выполняется — узлы жеста не пересоздаются. */
+  var dragActive = false;
+  /* Курсор стоял в поле-черновике — после ЖЕСТА ПО САМОМУ ПОЛЮ возвращаем
+   * его (клавиатуру закрыли для чистого свайпа, набирать-то надо). */
+  var refocusDraft = false;
 
   /* Отступ строки в пикселях. Задача с отступом входит в группу задачи сверху. */
   function lineIndent(t) {
@@ -963,7 +971,7 @@
       if (isTrailing || !taskId) return;
       if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
       var r = commitLine(taskId, inp.value, false);
-      if (r === 'removed') render();
+      if (r === 'removed') { if (!dragActive) render(); }
       else renderStatus();
     });
     if (isTrailing) {
@@ -1343,6 +1351,18 @@
       kids = [];
       dragUiBefore = snapFull();
       try { grip.setPointerCapture(pid); } catch (x) {}
+      /* Взялись за grip — фокус с любой строки/поля сбрасываем сразу:
+       * старый Chrome держит его весь свайп (mousedown под preventDefault
+       * не уходит, blur сам не приходит) — открытая клавиатура ломает
+       * замеры и посадку. Коммит текста при этом не рендерит (dragActive),
+       * текст черновика не теряется: его blur-создание видит grip в lastPD
+       * и пропускает. */
+      dragActive = true;
+      var aeNow = document.activeElement;
+      refocusDraft = !!(aeNow && aeNow.closest && aeNow.closest('.tline[data-trailing]'));
+      if (aeNow && aeNow.blur && (aeNow.tagName === 'TEXTAREA' || aeNow.tagName === 'INPUT')) {
+        try { aeNow.blur(); } catch (x) {}
+      }
       if (e.cancelable) e.preventDefault();
     });
     grip.addEventListener('pointermove', function (e) {
@@ -1416,6 +1436,20 @@
       if (pid == null) return;
       if (e && e.pointerId != null && e.pointerId !== pid) return;
       pid = null;
+      dragActive = false;
+      /* Курсор был в поле-черновике: возвращаем его после финального
+       * render (220мс), когда поле уже пересоздано на новом месте. */
+      if (refocusDraft) {
+        refocusDraft = false;
+        setTimeout(function () {
+          focusTrailing();
+          var bx = el('lines');
+          var ix = bx && bx.querySelector ? bx.querySelector('.tline[data-trailing] .tinput') : null;
+          if (ix && ix.setSelectionRange) {
+            try { var vv = ix.value; ix.setSelectionRange(vv.length, vv.length); } catch (x) {}
+          }
+        }, 240);
+      }
       /* Тап по многоточию родителя (без движения): свернуть/развернуть детей. */
       if (mode === null && e && e.type === 'pointerup') {
         var tapped = myTask();

@@ -250,6 +250,21 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(iTop !== -1 && appSrc.slice(iTop, iTop + 220).includes('tailIndent'),
       'поле сверху игнорирует отступ из состояния');
   });
+  it('захват grip сбрасывает фокус, коммит не рендерит во время жеста', () => {
+    assert.ok(appSrc.includes('var dragActive = false'), 'нет флага жеста');
+    assert.ok(appSrc.includes('if (!dragActive) render()'), 'mutate рендерит во время жеста');
+    var iP = appSrc.indexOf("grip.addEventListener('pointerdown'");
+    assert.ok(iP !== -1, 'нет обработчика захвата grip');
+    var block = appSrc.slice(iP, iP + 1400);
+    assert.ok(block.includes('dragActive = true'), 'флаг не поднимается на захвате');
+    assert.ok(block.includes('.blur()'), 'фокус не сбрасывается при захвате grip');
+    assert.ok(block.includes('refocusDraft'), 'черновик не запоминается для возврата курсора');
+    var iF = appSrc.indexOf('function finish(e)');
+    assert.ok(iF !== -1 && appSrc.slice(iF, iF + 700).includes('dragActive = false'),
+      'флаг не снимается на финише жеста');
+    assert.ok(appSrc.slice(iF, iF + 700).includes('focusTrailing()'),
+      'поле не возвращает курсор после переноса');
+  });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
   });
