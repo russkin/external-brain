@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v55';
+  var APP_VERSION = 'v56';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -762,11 +762,15 @@
   }
 
   /* Свайп строки справа налево: открыть флаг «Выполнено»; слева направо
-   * (вправо): модалка времени задачи. Тап по открытой строке (без сдвига)
-   * — закрыть флаг обратно. */
+   * (вправо): модалка времени задачи — НО не если в этом жесте задет
+   * раскрытый флаг (тогда возврат вправо только закрывает флаг, swHadFlag).
+   * Тап по открытой строке (без сдвига) — закрыть флаг обратно. */
   function wireLineSwipe(div, taskId) {
     var swPid = null, swX0 = 0, swY0 = 0;
     var tapX0 = 0, tapY0 = 0;
+    /* Флаг «✓» был открыт на старте жеста или раскрыт этим же жестом:
+     * возврат пальца вправо — закрытие флага, не открытие времени. */
+    var swHadFlag = false;
     /* Состояние — на элементе, а не в closure: свайп делят обработчики
      * строки и старта drag'а, рассинхрон даёт залипший флаг. */
     div._swOpen = false;
@@ -779,6 +783,7 @@
       swPid = e.pointerId;
       swX0 = e.clientX;
       swY0 = e.clientY;
+      swHadFlag = div._swOpen;
     });
     div.addEventListener('pointermove', function (e) {
       if (e.pointerId !== swPid) return;
@@ -787,6 +792,7 @@
       if (!div._swOpen && !div._swRArm && dx < -48 && Math.abs(dx) > Math.abs(dy) * 2) {
         div.classList.add('swiped');
         div._swOpen = true;
+        swHadFlag = true;
         /* Свайп — чужое действие: фокус снимаем сразу (на старых
          * устройствах blur сам не приходит — с клавиатурой уезжают
          * в свайп). Пока жест идёт, render подавлен (dragActive) —
@@ -807,11 +813,13 @@
       } else if (div._swOpen && dx > -16) {
         div.classList.remove('swiped');
         div._swOpen = false;
-      } else if (!div._swOpen && !div._swRArm && dx > 48 &&
+      } else if (!div._swOpen && !div._swRArm && !swHadFlag && dx > 48 &&
                  Math.abs(dx) > Math.abs(dy) * 2 && taskId) {
         /* Свайп вправо: флагирует открытие модалки времени на pointerup
-         * (модалка посреди жеста мешала бы пальцу). Те же подстраховки,
-         * что у левого свайпа: blur, render подавлен, захват указателя. */
+         * (модалка посреди жеста мешала бы пальцу). swHadFlag — если флаг
+         * открыт/раскрыт в этом жесте, возврат вправо его только закрывает.
+         * Те же подстраховки, что у левого свайпа: blur, render подавлен,
+         * захват указателя. */
         div._swRArm = true;
         dragActive = true;
         try { div.setPointerCapture(e.pointerId); } catch (x) {}

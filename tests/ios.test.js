@@ -448,6 +448,8 @@ describe('логика вызывается с state.tasks', () => {
     var swBlock = appSrc.slice(iW, appSrc.indexOf('function commitTrailingIntoBranch'));
     assert.ok(swBlock.includes('dx > 48'), 'нет порога свайпа вправо');
     assert.ok(swBlock.includes('openDuration(taskId)'), 'свайп вправо не открывает время');
+    assert.ok(swBlock.includes('swHadFlag = true') && swBlock.includes('!swHadFlag'),
+      'возврат из-под раскрытого флага не глушит открытие времени');
     assert.ok(swBlock.includes('_swBlockUntil'), 'клик после свайпа не заглушен (двойная модалка/фокус)');
     assert.ok(swBlock.includes('div._swRArm = false'), 'отменённый свайп не оставляет флаг');
     assert.ok(appSrc.includes('function askDuration'), 'нет модалки времени');
