@@ -79,6 +79,7 @@ function createTask(tasks, title, nowMs, opts) {
     frog: !!opts.frog,
     slicesTotal: toInt(opts.slicesTotal, 0),
     slicesDone: 0,
+    estMin: normEst(opts.estMin),
     indent: normIndent(opts.indent),
     createdAt: now,
     updatedAt: now,
@@ -92,7 +93,8 @@ function createTask(tasks, title, nowMs, opts) {
 }
 
 /* Прояснение: разложить задачу из инбокса (или любую) по полям.
- * patch: { status, project, frog, slicesTotal, title, indent }. Невалидный status игнорируется. */
+ * patch: { status, project, frog, slicesTotal, title, indent, estMin }.
+ * Невалидный status игнорируется. */
 function clarifyTask(tasks, id, patch, nowMs) {
   var task = getTask(tasks, id);
   if (!task || task.deleted) return null;
@@ -118,6 +120,7 @@ function clarifyTask(tasks, id, patch, nowMs) {
     if (nt) task.title = nt;
   }
   if (patch.indent != null) task.indent = normIndent(patch.indent);
+  if (patch.estMin != null) task.estMin = normEst(patch.estMin);
   task.updatedAt = now;
   task.ts = now;
   return task;
@@ -417,6 +420,24 @@ function shareText(tasks) {
 
 /* --- Нормализация (защита от битых данных старых версий/синка) --- */
 
+/* Оценка времени в минутах: целое 0..59999 (99ч 59м — потолок модалки). */
+function normEst(v) {
+  var n = toInt(v, 0);
+  if (n < 0) n = 0;
+  if (n > 59999) n = 59999;
+  return n;
+}
+
+/* Метка времени для строки: 0 → '', 30 → '30 м', 60 → '1ч', 90 → '1ч 30м'. */
+function fmtDur(mins) {
+  var m = toInt(mins, 0);
+  if (m <= 0) return '';
+  var h = Math.floor(m / 60), r = m % 60;
+  if (h && r) return h + 'ч ' + r + 'м';
+  if (h) return h + 'ч';
+  return r + ' м';
+}
+
 function normalizeTask(t) {
   if (!t || typeof t !== 'object') return null;
   var id = String(t.id || '');
@@ -439,6 +460,7 @@ function normalizeTask(t) {
     frog: !!t.frog,
     slicesTotal: slicesTotal,
     slicesDone: slicesDone,
+    estMin: normEst(t.estMin),
     indent: indent,
     createdAt: createdAt,
     updatedAt: updatedAt,
@@ -564,6 +586,7 @@ var api = {
   inboxCount: inboxCount,
   stats: stats,
   shareText: shareText,
+  fmtDur: fmtDur,
   normalizeTask: normalizeTask,
   normalizeTasks: normalizeTasks,
   mergeTask: mergeTask,

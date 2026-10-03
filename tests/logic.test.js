@@ -99,6 +99,18 @@ describe('прояснение (clarify)', () => {
     L.removeTask(t, 'a', 2000);
     assert.equal(L.clarifyTask(t, 'a', { status: 'next' }, 3000), null);
   });
+  it('estMin: ставится через patch, клампится 0..59999, метки обновляются', () => {
+    const t = L.blankTasks();
+    mk(t, 'Дело', 1000, { id: 'a' });
+    L.clarifyTask(t, 'a', { estMin: 90 }, 2000);
+    assert.equal(L.getTask(t, 'a').estMin, 90);
+    assert.equal(L.getTask(t, 'a').ts, 2000);
+    L.clarifyTask(t, 'a', { estMin: -5 }, 3000);
+    assert.equal(L.getTask(t, 'a').estMin, 0);
+    L.clarifyTask(t, 'a', { estMin: 999999 }, 4000);
+    assert.equal(L.getTask(t, 'a').estMin, 59999);
+    assert.equal(L.getTask(t, 'a').ts, 4000);
+  });
 });
 
 describe('готово / вернуть / удалить', () => {
@@ -297,6 +309,24 @@ describe('нормализация', () => {
     assert.equal(n.slicesTotal, 0);
     assert.equal(n.slicesDone, 0);
     assert.equal(n.frog, true);
+  });
+  it('estMin: мусор и потолки, новая задача без времени', () => {
+    assert.equal(L.normalizeTask({ id: 'a', title: 'x', estMin: '75' }).estMin, 75);
+    assert.equal(L.normalizeTask({ id: 'a', title: 'x' }).estMin, 0);
+    assert.equal(L.normalizeTask({ id: 'a', title: 'x', estMin: 'abc' }).estMin, 0);
+    assert.equal(L.normalizeTask({ id: 'a', title: 'x', estMin: -3 }).estMin, 0);
+    assert.equal(L.normalizeTask({ id: 'a', title: 'x', estMin: 70000 }).estMin, 59999);
+    assert.equal(mk([], 'Дело', 1000).estMin, 0);
+  });
+  it('fmtDur: метка в углу строки', () => {
+    assert.equal(L.fmtDur(0), '');
+    assert.equal(L.fmtDur(undefined), '');
+    assert.equal(L.fmtDur(-10), '');
+    assert.equal(L.fmtDur(30), '30 м');
+    assert.equal(L.fmtDur(60), '1ч');
+    assert.equal(L.fmtDur(90), '1ч 30м');
+    assert.equal(L.fmtDur(600), '10ч');
+    assert.equal(L.fmtDur(125), '2ч 5м');
   });
   it('done без doneAt берёт updatedAt, не-done обнуляет', () => {
     const d = L.normalizeTask({ id: 'a', title: 'T', status: 'done', updatedAt: 500 });

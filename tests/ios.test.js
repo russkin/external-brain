@@ -428,6 +428,31 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(tBlock.includes('commitTrailingIntoBranch(taskId)'), 'поле не до-создаётся при отметке');
     assert.ok(tBlock.includes("tagName === 'TEXTAREA'"), 'отметка не снимает фокус с полей');
   });
+  it('Время задачи: метка в углу, свайп вправо, модалка со стрелками', () => {
+    assert.ok(html.includes('id="durCtl"'), 'нет блока часов в модалке');
+    assert.ok(html.includes('id="durHp"') && html.includes('id="durMm"'),
+      'нет кнопок стрелок часов/минут');
+    assert.ok(html.includes('.durchip'), 'нет стиля метки времени');
+    var iMk = appSrc.indexOf('function makeLine');
+    var mkBlock = appSrc.slice(iMk, appSrc.indexOf('function autosize'));
+    assert.ok(mkBlock.includes('durchip'), 'строка не рисует метку времени');
+    assert.ok(mkBlock.includes('L.fmtDur(opts.estMin)'), 'метка без формата из логики');
+    assert.ok(mkBlock.includes('openDuration(id)'), 'тап по метке не открывает модалку');
+    var iW = appSrc.indexOf('function wireLineSwipe');
+    var swBlock = appSrc.slice(iW, appSrc.indexOf('function commitTrailingIntoBranch'));
+    assert.ok(swBlock.includes('dx > 48'), 'нет порога свайпа вправо');
+    assert.ok(swBlock.includes('openDuration(taskId)'), 'свайп вправо не открывает время');
+    assert.ok(swBlock.includes('_swBlockUntil'), 'клик после свайпа не заглушен (двойная модалка/фокус)');
+    assert.ok(swBlock.includes('div._swRArm = false'), 'отменённый свайп не оставляет флаг');
+    assert.ok(appSrc.includes('function askDuration'), 'нет модалки времени');
+    assert.ok(appSrc.includes('function openDuration'), 'нет точки входа модалки времени');
+    assert.ok(appSrc.includes("clearBtn.textContent = 'Убрать'"), 'нет кнопки снятия метки');
+    assert.ok(appSrc.includes('{ estMin: min }'), 'время не пишется в задачу');
+    assert.ok(appSrc.includes('estMin: t.estMin') && appSrc.includes('estMin: doneVis[dv].estMin'),
+      'редендер не отдаёт estMin в строку');
+    assert.ok(appSrc.includes("on('durHp'") && appSrc.includes("on('durMm'"),
+      'стрелки модалки подписаны не через on()');
+  });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
   });

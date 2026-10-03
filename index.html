@@ -72,6 +72,14 @@
       user-select: none; -webkit-user-select: none; touch-action: pan-y; }
     .tinput::placeholder { color: #aaa; }
     .tinput.is-done { text-decoration: line-through; color: #888; }
+    .durchip { flex: none; align-self: flex-end; margin: 0 0 6px; padding: 4px 9px;
+      font-size: 12px; line-height: 1.1; color: #2c6cb0; background: #fff;
+      border: 1px solid #4a90e2; border-radius: 999px; white-space: nowrap; }
+    #durCtl { display: none; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+    .durrow { display: flex; align-items: center; gap: 10px; }
+    .durrow span { flex: 1; font-size: 14px; color: #555; }
+    .durrow b { min-width: 64px; text-align: center; font-size: 22px; }
+    .durrow button { min-width: 54px; font-size: 22px; padding: 6px 0; }
     .group { margin-bottom: 14px; border: 1px solid #eee; border-radius: 8px; padding: 8px 10px; }
     .group-title { font-weight: bold; margin-bottom: 6px; }
     .row { display: flex; gap: 8px; align-items: center; padding: 8px 0;
@@ -149,6 +157,16 @@
     <div id="modalBox">
       <div id="modalText"></div>
       <input id="modalInput" autocomplete="off" />
+      <div id="durCtl">
+        <div class="durrow"><span>Часы</span>
+          <button id="durHm" aria-label="Меньше часов">−</button>
+          <b id="durHv">0</b>
+          <button id="durHp" aria-label="Больше часов">+</button></div>
+        <div class="durrow"><span>Минуты</span>
+          <button id="durMm" aria-label="Меньше минут">−</button>
+          <b id="durMv">0</b>
+          <button id="durMp" aria-label="Больше минут">+</button></div>
+      </div>
       <div class="row">
         <button id="modalOk">OK</button>
         <button id="modalClear" style="display:none">Очистить</button>

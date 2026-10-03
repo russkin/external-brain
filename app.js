@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v53';
+  var APP_VERSION = 'v54';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -79,6 +79,58 @@
       }
       ok.onclick = function () { done(true); };
       cancel.onclick = function () { done(false); };
+    });
+  }
+
+  /* --- Время задачи (estMin, минуты): свайп вправо / тап по метке --- */
+  var durTot = 0;
+  function durRender() {
+    var h = el('durHv'), m = el('durMv');
+    if (h) h.textContent = String(Math.floor(durTot / 60));
+    if (m) m.textContent = String(durTot % 60);
+  }
+
+  /* Модалка со стрелками: часы ±60, минуты ±5 (итог — общие минуты,
+   * перенос разряда автоматический). OK — минуты, «Убрать» — 0,
+   * Отмена — null. Статичные кнопки стрелок подписаны в wire() через on(). */
+  function askDuration(initialMin) {
+    return new Promise(function (resolve) {
+      var back = el('modalBack'), text = el('modalText'), input = el('modalInput');
+      var ok = el('modalOk'), cancel = el('modalCancel'), clearBtn = el('modalClear');
+      var ctl = el('durCtl');
+      if (!back || !ok || !cancel || !ctl) { resolve(null); return; }
+      text.textContent = 'Сколько времени займёт?';
+      if (input) input.style.display = 'none';
+      durTot = Math.max(0, Math.min(59999, parseInt(initialMin, 10) || 0));
+      durRender();
+      ctl.style.display = 'flex';
+      if (clearBtn) { clearBtn.textContent = 'Убрать'; clearBtn.style.display = ''; }
+      back.classList.add('open');
+      function done(v) {
+        back.classList.remove('open');
+        ok.onclick = null; cancel.onclick = null;
+        ctl.style.display = 'none';
+        if (clearBtn) {
+          clearBtn.onclick = null;
+          clearBtn.textContent = 'Очистить';
+          clearBtn.style.display = 'none';
+        }
+        resolve(v);
+      }
+      ok.onclick = function () { done(durTot); };
+      if (clearBtn) clearBtn.onclick = function () { done(0); };
+      cancel.onclick = function () { done(null); };
+    });
+  }
+
+  function openDuration(taskId) {
+    if (!taskId || !state) return;
+    var task = L.getTask(state.tasks, taskId);
+    if (!task || task.deleted) return;
+    var cur = task.estMin || 0;
+    askDuration(cur).then(function (min) {
+      if (min == null || min === cur) return;
+      mutate(function () { L.clarifyTask(state.tasks, taskId, { estMin: min }); });
     });
   }
 
@@ -679,6 +731,22 @@
       div.appendChild(dflag);
       wireLineSwipe(div, null);
     }
+    /* Метка времени в правом нижнем углу: тап — та же модалка, что
+     * свайп вправо. Пустое время (estMin=0) — метки нет, угол свободен. */
+    if (!isTrailing && taskId && opts.estMin > 0) {
+      var chip = document.createElement('button');
+      chip.className = 'durchip';
+      chip.type = 'button';
+      chip.textContent = L.fmtDur(opts.estMin);
+      chip.setAttribute('aria-label', 'Время задачи: ' + L.fmtDur(opts.estMin));
+      (function (id, c) {
+        c.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          openDuration(id);
+        });
+      })(taskId, chip);
+      body.appendChild(chip);
+    }
     wireLineInput(div, inp, taskId, isTrailing, indent);
     wireLineDrag(div, grip, inp);
     return div;
@@ -691,14 +759,16 @@
     try { ta.style.height = ta.scrollHeight + 'px'; } catch (x) {}
   }
 
-  /* Свайп строки справа налево: открыть флаг «Выполнено».
-   * Тап по открытой строке (без сдвига) — закрыть флаг обратно. */
+  /* Свайп строки справа налево: открыть флаг «Выполнено»; слева направо
+   * (вправо): модалка времени задачи. Тап по открытой строке (без сдвига)
+   * — закрыть флаг обратно. */
   function wireLineSwipe(div, taskId) {
     var swPid = null, swX0 = 0, swY0 = 0;
     var tapX0 = 0, tapY0 = 0;
     /* Состояние — на элементе, а не в closure: свайп делят обработчики
      * строки и старта drag'а, рассинхрон даёт залипший флаг. */
     div._swOpen = false;
+    div._swRArm = false;
     div.addEventListener('pointerdown', function (e) {
       tapX0 = e.clientX;
       tapY0 = e.clientY;
@@ -712,7 +782,7 @@
       if (e.pointerId !== swPid) return;
       var dx = e.clientX - swX0;
       var dy = e.clientY - swY0;
-      if (!div._swOpen && dx < -48 && Math.abs(dx) > Math.abs(dy) * 2) {
+      if (!div._swOpen && !div._swRArm && dx < -48 && Math.abs(dx) > Math.abs(dy) * 2) {
         div.classList.add('swiped');
         div._swOpen = true;
         /* Свайп — чужое действие: фокус снимаем сразу (на старых
@@ -735,16 +805,38 @@
       } else if (div._swOpen && dx > -16) {
         div.classList.remove('swiped');
         div._swOpen = false;
+      } else if (!div._swOpen && !div._swRArm && dx > 48 &&
+                 Math.abs(dx) > Math.abs(dy) * 2 && taskId) {
+        /* Свайп вправо: флагирует открытие модалки времени на pointerup
+         * (модалка посреди жеста мешала бы пальцу). Те же подстраховки,
+         * что у левого свайпа: blur, render подавлен, захват указателя. */
+        div._swRArm = true;
+        dragActive = true;
+        try { div.setPointerCapture(e.pointerId); } catch (x) {}
+        var aeR = document.activeElement;
+        if (aeR && aeR.blur && (aeR.tagName === 'TEXTAREA' || aeR.tagName === 'INPUT')) {
+          try { aeR.blur(); } catch (x) {}
+        }
+      } else if (div._swRArm && dx < 16) {
+        /* Палец вернулся к старту — жест отменён, модалка не откроется. */
+        div._swRArm = false;
       }
     });
-    function swEnd(e) {
-      if (e && e.pointerId != null && e.pointerId !== swPid) return;
-      swPid = null;
-      dragActive = false;
-    }
-    div.addEventListener('pointerup', swEnd);
-    div.addEventListener('pointercancel', swEnd);
     div.addEventListener('pointerup', function (e) {
+      var openR = false;
+      if (!(e && e.pointerId != null && e.pointerId !== swPid)) {
+        openR = div._swRArm;
+        swPid = null;
+        dragActive = false;
+      }
+      if (openR) {
+        div._swRArm = false;
+        /* Клик, который браузер дошлёт следом за жестом (в т.ч. по
+         * метке в углу — отпускание часто попадает именно в неё),
+         * не должен вернуть фокус в поле или открыть вторую модалку. */
+        div._swBlockUntil = Date.now() + 400;
+        openDuration(taskId);
+      }
       /* Тап по самому флагу сюда не входит: у него свой обработчик. */
       if (e.target && e.target.closest && e.target.closest('.doneflag')) return;
       if (div._swOpen && Math.abs(e.clientX - tapX0) < 12 && Math.abs(e.clientY - tapY0) < 12) {
@@ -752,6 +844,18 @@
         div._swOpen = false;
       }
     });
+    div.addEventListener('pointercancel', function (e) {
+      if (e && e.pointerId != null && e.pointerId !== swPid) return;
+      swPid = null;
+      dragActive = false;
+      div._swRArm = false;
+    });
+    div.addEventListener('click', function (e) {
+      if (div._swBlockUntil && Date.now() < div._swBlockUntil) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    }, true);
   }
 
   /* Поле-черновик с текстом, чей якорь — внутри завершаемой ветки:
@@ -2015,7 +2119,8 @@
     function taskRow(t, i) {
       return makeLine(t.id, t.title, false, lineIndent(t), {
         doneShown: L.isDoneShown(full, fullIdx[t.id]),
-        hidden: L.isHiddenByCollapse(tasks, i, collapsed)
+        hidden: L.isHiddenByCollapse(tasks, i, collapsed),
+        estMin: t.estMin
       });
     }
     if (showDraft && trailingAfterId === 'TOP') {
@@ -2045,9 +2150,9 @@
       sep.textContent = 'Выполнено · ' + doneVis.length;
       box.appendChild(sep);
     }
-    for (var dv = 0; dv < doneVis.length; dv++) {
-      box.appendChild(makeLine(doneVis[dv].id, doneVis[dv].title, false, lineIndent(doneVis[dv]), { doneShown: true }));
-    }
+      for (var dv = 0; dv < doneVis.length; dv++) {
+        box.appendChild(makeLine(doneVis[dv].id, doneVis[dv].title, false, lineIndent(doneVis[dv]), { doneShown: true, estMin: doneVis[dv].estMin }));
+      }
     /* Раскрыть многострочные по содержимому (в потоке, после вставки). */
     var areas = box.querySelectorAll ? box.querySelectorAll('.tinput') : [];
     for (var q = 0; q < areas.length; q++) autosize(areas[q]);
@@ -2132,6 +2237,11 @@
     on('expandAllBtn', 'click', function () { setAllCollapsed(false); });
     on('undoBtn', 'click', function () { doUndo(); });
     on('redoBtn', 'click', function () { doRedo(); });
+    /* Стрелки модалки времени (часы ±60, минуты ±5 от общего итога). */
+    on('durHp', 'click', function () { durTot = Math.min(durTot + 60, 59999); durRender(); });
+    on('durHm', 'click', function () { durTot = Math.max(durTot - 60, 0); durRender(); });
+    on('durMp', 'click', function () { durTot = Math.min(durTot + 5, 59999); durRender(); });
+    on('durMm', 'click', function () { durTot = Math.max(durTot - 5, 0); durRender(); });
     on('saveSettings', 'click', function () {
       var repo = el('repoInput');
       var tok = document.getElementById('tokenInput');
