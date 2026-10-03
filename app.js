@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v54';
+  var APP_VERSION = 'v55';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -731,8 +731,10 @@
       div.appendChild(dflag);
       wireLineSwipe(div, null);
     }
-    /* Метка времени в правом нижнем углу: тап — та же модалка, что
-     * свайп вправо. Пустое время (estMin=0) — метки нет, угол свободен. */
+    /* Метка времени — НАЛОЖЕНИЕ в правом нижнем углу поля задачи
+     * (position: absolute против .tline, прозрачный фон — CSS .durchip):
+     * тап — та же модалка, что свайп вправо. Пустое время (estMin=0)
+     * — метки нет, угол поля свободен. */
     if (!isTrailing && taskId && opts.estMin > 0) {
       var chip = document.createElement('button');
       chip.className = 'durchip';

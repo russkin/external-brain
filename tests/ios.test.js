@@ -432,7 +432,13 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(html.includes('id="durCtl"'), 'нет блока часов в модалке');
     assert.ok(html.includes('id="durHp"') && html.includes('id="durMm"'),
       'нет кнопок стрелок часов/минут');
-    assert.ok(html.includes('.durchip'), 'нет стиля метки времени');
+    var iCss = html.indexOf('.durchip');
+    assert.ok(iCss !== -1, 'нет стиля метки времени');
+    var cssD = iCss === -1 ? '' : html.slice(iCss, iCss + 320);
+    assert.ok(cssD.includes('position: absolute'), 'метка не наложением на поле задачи');
+    assert.ok(cssD.includes('background: transparent'), 'фон метки не прозрачный');
+    assert.ok(cssD.includes('right: 8px') && cssD.includes('bottom: 5px'),
+      'метка не в правом нижнем углу поля');
     var iMk = appSrc.indexOf('function makeLine');
     var mkBlock = appSrc.slice(iMk, appSrc.indexOf('function autosize'));
     assert.ok(mkBlock.includes('durchip'), 'строка не рисует метку времени');

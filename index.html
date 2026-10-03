@@ -44,7 +44,7 @@
     .doneflag { display: none; position: absolute; right: 6px; top: 50%;
       transform: translateY(-50%); background: #4caf50; color: #fff; border: none;
       border-radius: 8px; padding: 8px 4px; font-size: 12px; white-space: nowrap;
-      max-width: 102px; overflow: hidden; text-overflow: ellipsis; }
+      max-width: 102px; overflow: hidden; text-overflow: ellipsis; z-index: 2; }
     .tline.swiped .doneflag { display: block; }
     .tline.collapsed-kid { display: none; }
     .tline[data-indent="1"] .tinput { background: #f4f8ff; }
@@ -72,9 +72,12 @@
       user-select: none; -webkit-user-select: none; touch-action: pan-y; }
     .tinput::placeholder { color: #aaa; }
     .tinput.is-done { text-decoration: line-through; color: #888; }
-    .durchip { flex: none; align-self: flex-end; margin: 0 0 6px; padding: 4px 9px;
-      font-size: 12px; line-height: 1.1; color: #2c6cb0; background: #fff;
-      border: 1px solid #4a90e2; border-radius: 999px; white-space: nowrap; }
+    /* Метка времени — наложение в правом нижнем углу ПОЛЯ задачи,
+     * прозрачный фон (текст поля читается под ней). */
+    .durchip { position: absolute; right: 8px; bottom: 5px; z-index: 1;
+      padding: 4px 9px; font-size: 12px; line-height: 1.1; color: #2c6cb0;
+      background: transparent; border: 1px solid #4a90e2; border-radius: 999px;
+      white-space: nowrap; }
     #durCtl { display: none; flex-direction: column; gap: 10px; margin-bottom: 12px; }
     .durrow { display: flex; align-items: center; gap: 10px; }
     .durrow span { flex: 1; font-size: 14px; color: #555; }
