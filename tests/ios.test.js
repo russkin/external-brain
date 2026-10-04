@@ -454,13 +454,20 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(swBlock.includes('openDuration(taskId)'), 'свайп вправо не открывает время');
     assert.ok(swBlock.includes('swHadFlag = true') && swBlock.includes('!swHadFlag'),
       'возврат из-под раскрытого флага не глушит открытие времени');
+    assert.ok(appSrc.includes('if (hasKidsFull(taskId)) return;'),
+      'родителю не закрыта установка времени');
+    assert.ok(appSrc.includes('function lineEstMin') && appSrc.includes('estMin: lineEstMin(t)'),
+      'метка родителя не считается автоматически');
+    assert.ok(appSrc.includes('sum += lineEstMin(full[j])') && appSrc.includes('ij === pin + 1'),
+      'сумма идёт не по первому вложению');
     assert.ok(swBlock.includes('_swBlockUntil'), 'клик после свайпа не заглушен (двойная модалка/фокус)');
     assert.ok(swBlock.includes('div._swRArm = false'), 'отменённый свайп не оставляет флаг');
     assert.ok(appSrc.includes('function askDuration'), 'нет модалки времени');
     assert.ok(appSrc.includes('function openDuration'), 'нет точки входа модалки времени');
     assert.ok(appSrc.includes("clearBtn.textContent = 'Убрать'"), 'нет кнопки снятия метки');
     assert.ok(appSrc.includes('{ estMin: min }'), 'время не пишется в задачу');
-    assert.ok(appSrc.includes('estMin: t.estMin') && appSrc.includes('estMin: doneVis[dv].estMin'),
+    assert.ok(appSrc.includes('estMin: lineEstMin(t)') &&
+      appSrc.includes('estMin: lineEstMin(doneVis[dv])'),
       'редендер не отдаёт estMin в строку');
     assert.ok(appSrc.includes("on('durHp'") && appSrc.includes("on('durMm'"),
       'стрелки модалки подписаны не через on()');

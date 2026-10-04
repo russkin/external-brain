@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v60';
+  var APP_VERSION = 'v61';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -128,6 +128,9 @@
     if (!taskId || !state) return;
     var task = L.getTask(state.tasks, taskId);
     if (!task || task.deleted) return;
+    /* Родителю время ставить нельзя (свайп вправо и тап по метке ведут
+     * сюда): его метка — авто-сумма первого вложения, см. lineEstMin. */
+    if (hasKidsFull(taskId)) return;
     var cur = task.estMin || 0;
     askDuration(cur).then(function (min) {
       if (min == null || min === cur) return;
@@ -667,6 +670,32 @@
     if (!(v >= 0)) return 0;
     if (v > 8) return 8;
     return v;
+  }
+
+  /* Метка времени строки (opts.estMin в makeLine): у обычной задачи — своё
+   * estMin; у РОДИТЕЛЯ — авто-сумма первого вложения (дети уровня indent+1;
+   * у вложенных-родителей — их такая же сумма, т.е. итог по всем своим).
+   * Своё estMin родителя в вёрстку не идёт — ему время ставить нельзя
+   * (openDuration закрыт), данные не трогаем на случай расформировки группы:
+   * без детей задача снова показывает своё время. Появление метки у родителя
+   * — только если сумма > 0 (хотя бы у одной задачи первого вложения
+   * задано время). */
+  function lineEstMin(t) {
+    if (!t) return 0;
+    var full = fullList();
+    var pi = -1;
+    for (var i = 0; i < full.length; i++) {
+      if (full[i].id === t.id) { pi = i; break; }
+    }
+    if (pi === -1 || !L.hasKids(full, pi)) return t.estMin || 0;
+    var pin = lineIndent(full[pi]);
+    var sum = 0;
+    for (var j = pi + 1; j < full.length; j++) {
+      var ij = lineIndent(full[j]);
+      if (ij <= pin) break;
+      if (ij === pin + 1) sum += lineEstMin(full[j]);
+    }
+    return sum;
   }
 
   function makeLine(taskId, value, isTrailing, indent, opts) {
@@ -2251,7 +2280,7 @@
       return makeLine(t.id, t.title, false, lineIndent(t), {
         doneShown: L.isDoneShown(full, fullIdx[t.id]),
         hidden: L.isHiddenByCollapse(tasks, i, collapsed),
-        estMin: t.estMin
+        estMin: lineEstMin(t)
       });
     }
     if (showDraft && trailingAfterId === 'TOP') {
@@ -2287,7 +2316,7 @@
       box.appendChild(sep);
       if (!doneHidden) {
         for (var dv = 0; dv < doneVis.length; dv++) {
-          box.appendChild(makeLine(doneVis[dv].id, doneVis[dv].title, false, lineIndent(doneVis[dv]), { doneShown: true, estMin: doneVis[dv].estMin }));
+          box.appendChild(makeLine(doneVis[dv].id, doneVis[dv].title, false, lineIndent(doneVis[dv]), { doneShown: true, estMin: lineEstMin(doneVis[dv]) }));
         }
       }
     }
