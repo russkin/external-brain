@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v65';
+  var APP_VERSION = 'v66';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -161,6 +161,46 @@
   var redoStack = [];
   var HISTORY_MAX = 50;
 
+  /* История переживает перезагрузку и обновление приложения: обе стопки
+   * держим в localStorage (слепки — сырые JSON задач, до 50 шагов каждая).
+   * histLoad() чистит битые записи; pushUndo — ЕДИНСТВЕННАЯ точка записи
+   * нового шага (сбрасывает redo и сохраняет обе стопки). */
+  var UNDO_KEY = 'external-brain-undo-v1';
+  var REDO_KEY = 'external-brain-redo-v1';
+
+  function histSave() {
+    try {
+      localStorage.setItem(UNDO_KEY, JSON.stringify(undoStack));
+      localStorage.setItem(REDO_KEY, JSON.stringify(redoStack));
+    } catch (e) {}
+  }
+  function histClean(arr) {
+    var out = [];
+    if (!Array.isArray(arr)) return out;
+    for (var i = 0; i < arr.length; i++) {
+      var e = arr[i];
+      if (e && typeof e === 'object' && typeof e.tasks === 'string') out.push(e);
+    }
+    return out;
+  }
+  function histLoad() {
+    try {
+      var u = JSON.parse(localStorage.getItem(UNDO_KEY) || '[]');
+      var r = JSON.parse(localStorage.getItem(REDO_KEY) || '[]');
+      u = histClean(u).slice(-HISTORY_MAX);
+      r = histClean(r).slice(-HISTORY_MAX);
+      undoStack = u;
+      redoStack = r;
+    } catch (e) {}
+  }
+  function pushUndo(entry) {
+    undoStack.push(entry);
+    if (undoStack.length > HISTORY_MAX) undoStack.shift();
+    redoStack = [];
+    histSave();
+  }
+  histLoad();
+
   function snapTasks() {
     try { return JSON.stringify(state.tasks); } catch (x) { return '[]'; }
   }
@@ -179,11 +219,7 @@
     if (!state) return null;
     var before = snapFull();
     var r = fn();
-    if (snapTasks() !== before.tasks) {
-      undoStack.push(before);
-      if (undoStack.length > HISTORY_MAX) undoStack.shift();
-      redoStack = [];
-    }
+    if (snapTasks() !== before.tasks) pushUndo(before);
     if (!dragActive) render();
     save();
     updateHistoryButtons();
@@ -234,6 +270,7 @@
     redoStack.push(snapFull());
     if (redoStack.length > HISTORY_MAX) redoStack.shift();
     var us = undoStack.pop();
+    histSave();
     applySnapshot(us);
     focusAfterHistory(us, false);
   }
@@ -243,6 +280,7 @@
     undoStack.push(snapFull());
     if (undoStack.length > HISTORY_MAX) undoStack.shift();
     var rs = redoStack.pop();
+    histSave();
     applySnapshot(rs);
     focusAfterHistory(rs, true);
   }
@@ -1459,15 +1497,13 @@
         if (created) {
           /* Вторая точка в истории: появление нового пустого поля —
            * отменяется отдельно (задача с текстом остаётся). */
-          undoStack.push({
+          pushUndo({
             tasks: snapTasks(),
             afterId: oldAnchor,
             text: '',
             indent: oldIndent,
             focusId: created.id
           });
-          if (undoStack.length > HISTORY_MAX) undoStack.shift();
-          redoStack = [];
           trailingText = '';
           /* Продолжаем на том же уровне: следующее поле — с отступом
            * только что созданной (дети набираются подряд). */
@@ -1554,15 +1590,13 @@
           break;
         }
         if (trailingAfterId !== newAnchor || effTrailingIndent() !== newIndent) {
-          undoStack.push({
+          pushUndo({
             tasks: snapTasks(),
             afterId: trailingAfterId,
             text: trailingText,
             indent: trailingIndent,
             focusId: taskId
           });
-          if (undoStack.length > HISTORY_MAX) undoStack.shift();
-          redoStack = [];
           updateHistoryButtons();
         }
         trailingAfterId = newAnchor;
@@ -1643,9 +1677,7 @@
     domAlive.forEach(function (id) { if (byId[id]) { ordered.push(byId[id]); delete byId[id]; } });
     Object.keys(byId).forEach(function (id) { ordered.push(byId[id]); });
     state.tasks = ordered;
-    undoStack.push(before);
-    if (undoStack.length > HISTORY_MAX) undoStack.shift();
-    redoStack = [];
+    pushUndo(before);
     save();
     updateHistoryButtons();
   }
@@ -2062,14 +2094,12 @@
             /* Сдвиг пустого поля — тоже перестановка: пишем в историю,
              * иначе отмена после сдвига откатит чужое действие. */
             if (effTrailingIndent() !== lvl) {
-              undoStack.push({
+              pushUndo({
                 tasks: snapTasks(),
                 afterId: trailingAfterId,
                 text: trailingText,
                 indent: trailingIndent
               });
-              if (undoStack.length > HISTORY_MAX) undoStack.shift();
-              redoStack = [];
               updateHistoryButtons();
             }
             trailingIndent = lvl;
@@ -2158,14 +2188,12 @@
           var oldAfter = dragUiBefore ? dragUiBefore.afterId : trailingAfterId;
           var oldInd = effTrailingIndent();
           if (newAfter !== oldAfter || wantInd !== oldInd) {
-            undoStack.push({
+            pushUndo({
               tasks: snapTasks(),
               afterId: oldAfter,
               text: dragUiBefore ? String(dragUiBefore.text || '') : trailingText,
               indent: dragUiBefore ? dragUiBefore.indent : trailingIndent
             });
-            if (undoStack.length > HISTORY_MAX) undoStack.shift();
-            redoStack = [];
             updateHistoryButtons();
           }
           trailingAfterId = newAfter;

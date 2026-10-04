@@ -100,6 +100,13 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'нет кнопок постоянной копии');
     assert.ok(appSrc.includes('pinOnVersion(APP_VERSION)') && appSrc.includes('Постоянная копия: '),
       'нет авто-пина/диагностики постоянной копии');
+    /* v66: в пине только задачи (без настроек/токена) + история ↩ в localStorage. */
+    assert.ok(/function pinWrite[\s\S]{0,400}state: \{ tasks:/.test(storeSrc) &&
+      !/function pinWrite[\s\S]{0,400}settings/.test(storeSrc),
+      'в постоянной копии хранятся настройки/токен');
+    assert.ok(appSrc.includes('external-brain-undo-v1') && appSrc.includes('external-brain-redo-v1') &&
+      appSrc.includes('pushUndo') && appSrc.includes('histLoad') && appSrc.includes('histSave'),
+      'история отмены не переживает перезагрузку');
     assert.ok(html.includes('id="repoBtn"') && appSrc.includes('on(\'repoBtn\''),
       'нет пункта «Репозиторий и токен»');
     assert.ok(html.includes('#gearSettings { display: none;') && html.includes('id="gearSettings"'),

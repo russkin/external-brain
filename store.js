@@ -10,7 +10,8 @@
   /* Постоянная («вечная») копия: не двигается автоматически — создаётся
    * кнопкой «Сделать постоянную копию» или автоматически при смене версии
    * приложения (первый запуск новой версии, PINVER_KEY хранит увиденную
-   * версию). Авто-пин никогда не перетирает существующую копию. */
+   * версию). Авто-пин никогда не перетирает существующую копию.
+   * В копии — только задачи (без настроек и токена). */
   var PIN_KEY = 'external-brain-pin-v1';
   var PINVER_KEY = 'external-brain-pin-ver-v1';
   var DB_NAME = 'external-brain';
@@ -49,10 +50,12 @@
     } catch (e) { return null; }
   }
   function pinWrite(state, by, ver) {
+    /* В копию уходят ТОЛЬКО задачи: настройки и токен здесь не хранятся —
+     * восстановлению подлежат задачи, второй копии ключа быть не должно. */
     try {
       localStorage.setItem(PIN_KEY, JSON.stringify({
         savedAt: Date.now(), by: by || 'manual', version: ver || '',
-        state: snap(state)
+        state: { tasks: (state && Array.isArray(state.tasks)) ? state.tasks : [] }
       }));
       return true;
     } catch (e) { return false; }
