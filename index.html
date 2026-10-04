@@ -114,6 +114,8 @@
     #gearMenu button { display: block; width: 100%; text-align: left; background: none;
       border: none; border-bottom: 1px solid #f0f0f0; padding: 12px 14px; }
     #gearMenu button:last-child { border-bottom: none; }
+    #gearSettings { display: none; }
+    #gearSettings.open { display: block; }
     .gear-settings { padding: 8px 12px 12px; border-top: 1px solid #eee; }
     .gear-settings input { display: block; width: 100%; box-sizing: border-box;
       font-size: 14px; padding: 8px 10px; margin: 0 0 8px; }
@@ -145,7 +147,8 @@
     <button id="shareBtn">📤 Поделиться списком</button>
     <button id="clearDone">Удалить выполненные</button>
     <button id="restoreBtn">♻ Восстановить копию задач</button>
-    <div class="gear-settings">
+    <button id="repoBtn">🔑 Репозиторий и токен</button>
+    <div class="gear-settings" id="gearSettings">
       <input id="repoInput" placeholder="owner/repo" autocomplete="off" />
       <span id="tokenWrap"></span>
       <button id="saveSettings">Сохранить</button>

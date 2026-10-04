@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v62';
+  var APP_VERSION = 'v63';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -2387,10 +2387,23 @@
     var gear = el('gearMenu');
     on('gearBtn', 'click', function () {
       if (gear) gear.classList.toggle('open');
+      var gs = el('gearSettings');
+      if (gs && gear && !gear.classList.contains('open')) gs.classList.remove('open');
       ensureTokenInput();
     });
     on('diagBtn', 'click', function () {
       askText(diagText(), '', false).then(function () {});
+    });
+    /* Репозиторий и токен — только для администратора: сначала предупреждение,
+     * поля (и поле токена) скрыты, пока не подтверждено. */
+    on('repoBtn', 'click', function () {
+      askConfirm('Настройки репозитория и токена — только для администратора. ' +
+        'Неверные значения нарушат синхронизацию на этом устройстве. Открыть?').then(function (ok) {
+          if (!ok) return;
+          var gs = el('gearSettings');
+          if (gs) gs.classList.add('open');
+          ensureTokenInput();
+        });
     });
     on('syncNowBtn', 'click', function () { doSync(true); });
     on('installBtn', 'click', function () {
@@ -2447,6 +2460,8 @@
       });
       var tw = el('tokenWrap');
       if (tw) tw.innerHTML = '';
+      var gs = el('gearSettings');
+      if (gs) gs.classList.remove('open');
       if (gear) gear.classList.remove('open');
       doSync(true);
     });

@@ -90,6 +90,11 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'нет кнопки восстановления копии');
     assert.ok(appSrc.includes('Локальная копия: ') && appSrc.includes('backupInfo'),
       'копия не видна в диагностике');
+    assert.ok(html.includes('id="repoBtn"') && appSrc.includes('on(\'repoBtn\''),
+      'нет пункта «Репозиторий и токен»');
+    assert.ok(html.includes('#gearSettings { display: none;') && html.includes('id="gearSettings"'),
+      'поля repo/токен не скрыты до предупреждения');
+    assert.ok(appSrc.includes('только для администратора'), 'нет предупреждения для администратора');
   });
 });
 
