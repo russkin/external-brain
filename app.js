@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v64';
+  var APP_VERSION = 'v65';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -2350,10 +2350,19 @@
   }
 
   /* Дата локальной копии (store.js) для диагностики. */
+  function fmtWhen(ms) {
+    try { return new Date(ms).toLocaleString('ru-RU'); } catch (x) { return 'есть'; }
+  }
   function backupLabel() {
     var b = window.EBStore && window.EBStore.backupInfo ? window.EBStore.backupInfo() : null;
     if (!b) return 'нет';
-    try { return new Date(b.savedAt).toLocaleString('ru-RU'); } catch (x) { return 'есть'; }
+    return fmtWhen(b.savedAt);
+  }
+  function pinLabel() {
+    var p = window.EBStore && window.EBStore.pinInfo ? window.EBStore.pinInfo() : null;
+    if (!p) return 'нет';
+    var src = (p.by === 'auto' && p.version) ? 'перед ' + p.version : 'вручную';
+    return fmtWhen(p.savedAt) + ' (' + src + ')';
   }
 
   function diagText() {
@@ -2366,6 +2375,7 @@
       'Repo: ' + (state ? state.settings.repo : '?'),
       'Ключ: ' + (state && state.settings.token ? 'введён' : 'выключен (нет ключа)'),
       'Локальная копия: ' + backupLabel(),
+      'Постоянная копия: ' + pinLabel(),
       bootError ? bootError + ' ' + bootStack : 'Ошибок: нет'
     ].join('\n');
   }
@@ -2439,6 +2449,39 @@
             state.updatedAt = Date.now();
           });
           lastAction = 'копия восстановлена';
+          renderStatus();
+        });
+    });
+    on('pinSaveBtn', 'click', function () {
+      if (!state) return;
+      var info = window.EBStore.pinInfo ? window.EBStore.pinInfo() : null;
+      function doPin() {
+        if (window.EBStore.savePinNow) window.EBStore.savePinNow(state, APP_VERSION);
+        lastAction = 'постоянная копия сохранена';
+        renderStatus();
+      }
+      if (!info) { doPin(); return; }
+      askConfirm('Заменить постоянную копию от ' + fmtWhen(info.savedAt) + '?')
+        .then(function (yes) { if (yes) doPin(); });
+    });
+    on('pinRestoreBtn', 'click', function () {
+      if (!state) return;
+      var info = window.EBStore.pinInfo ? window.EBStore.pinInfo() : null;
+      if (!info) {
+        askText('Постоянная копия не создавалась (кнопка «Сделать постоянную копию» ' +
+          'или автокопия при обновлении приложения)', '', false).then(function () {});
+        return;
+      }
+      askConfirm('Заменить текущие задачи постоянной копией от ' + fmtWhen(info.savedAt) + '? Отменить можно стрелкой ↩.')
+        .then(function (yes) {
+          if (!yes || !state) return;
+          var restored = window.EBStore.restorePin ? window.EBStore.restorePin() : null;
+          if (!restored) return;
+          mutate(function () {
+            state.tasks = L.normalizeTasks(restored.tasks);
+            state.updatedAt = Date.now();
+          });
+          lastAction = 'постоянная копия восстановлена';
           renderStatus();
         });
     });
@@ -2525,6 +2568,10 @@
     loadDoneHidden();
     window.EBStore.load().then(function (s) {
       state = s;
+      /* Первая загрузка новой версии: авто-пин «перед обновлением». */
+      try {
+        if (window.EBStore.pinOnVersion) window.EBStore.pinOnVersion(APP_VERSION);
+      } catch (e) {}
       var repo = el('repoInput');
       if (repo && state.settings.repo) repo.value = state.settings.repo;
       render();

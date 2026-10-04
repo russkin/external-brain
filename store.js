@@ -7,6 +7,12 @@
 (function () {
   var LS_KEY = 'external-brain-v1';
   var BACKUP_KEY = 'external-brain-backup-v1';
+  /* Постоянная («вечная») копия: не двигается автоматически — создаётся
+   * кнопкой «Сделать постоянную копию» или автоматически при смене версии
+   * приложения (первый запуск новой версии, PINVER_KEY хранит увиденную
+   * версию). Авто-пин никогда не перетирает существующую копию. */
+  var PIN_KEY = 'external-brain-pin-v1';
+  var PINVER_KEY = 'external-brain-pin-ver-v1';
   var DB_NAME = 'external-brain';
   var STORE = 'state';
 
@@ -33,6 +39,23 @@
       var o = raw ? JSON.parse(raw) : null;
       return (o && o.state && typeof o.state === 'object') ? o : null;
     } catch (e) { return null; }
+  }
+
+  function pinRead() {
+    try {
+      var raw = localStorage.getItem(PIN_KEY);
+      var o = raw ? JSON.parse(raw) : null;
+      return (o && o.state && typeof o.state === 'object') ? o : null;
+    } catch (e) { return null; }
+  }
+  function pinWrite(state, by, ver) {
+    try {
+      localStorage.setItem(PIN_KEY, JSON.stringify({
+        savedAt: Date.now(), by: by || 'manual', version: ver || '',
+        state: snap(state)
+      }));
+      return true;
+    } catch (e) { return false; }
   }
 
   function lsRead() {
@@ -173,6 +196,37 @@
       if (!b) return null;
       skipBackupOnce = true;
       return b.state;
+    },
+    /* Постоянная копия: { savedAt, by, version, state } или null. */
+    pinInfo: function () { return pinRead(); },
+    /* Кнопка «Сделать постоянную копию» — только вручную перезаписывается. */
+    savePinNow: function (state, ver) {
+      return state ? pinWrite(state, 'manual', ver || '') : false;
+    },
+    /* Первый запуск новой версии приложения: запомнить версию и, если
+     * постоянной копии ещё нет, сохранить текущее состояние (авто-пин
+     * «перед обновлением» — данные на момент первого запуска новой версии
+     * не меняются обновлением). Свежая установка (версии ещё не было)
+     * пин не создаёт — только запоминает версию. */
+    pinOnVersion: function (ver) {
+      try {
+        if (!ver) return false;
+        var last = null;
+        try { last = localStorage.getItem(PINVER_KEY); } catch (e) {}
+        if (last === ver) return false;
+        try { localStorage.setItem(PINVER_KEY, ver); } catch (e) {}
+        if (last == null) return false;              // первый запуск — не обновление
+        if (pinRead() || !lastPersisted) return false;
+        return pinWrite(lastPersisted, 'auto', ver);
+      } catch (e) { return false; }
+    },
+    /* Копия состояния из постоянной точки + защита от перетирания
+     * скользящей копии. null — постоянной копии нет. */
+    restorePin: function () {
+      var p = pinRead();
+      if (!p) return null;
+      skipBackupOnce = true;
+      return p.state;
     }
   };
 })();

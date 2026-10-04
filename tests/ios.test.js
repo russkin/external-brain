@@ -90,6 +90,16 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'нет кнопки восстановления копии');
     assert.ok(appSrc.includes('Локальная копия: ') && appSrc.includes('backupInfo'),
       'копия не видна в диагностике');
+    /* Постоянная («вечная») копия: кнопка + автокопия при обновлении версии. */
+    assert.ok(storeSrc.includes('external-brain-pin-v1') && storeSrc.includes('external-brain-pin-ver-v1'),
+      'нет ключей постоянной копии');
+    assert.ok(storeSrc.includes('savePinNow') && storeSrc.includes('pinOnVersion') &&
+      storeSrc.includes('restorePin'), 'нет API постоянной копии');
+    assert.ok(html.includes('id="pinSaveBtn"') && appSrc.includes('on(\'pinSaveBtn\'') &&
+      html.includes('id="pinRestoreBtn"') && appSrc.includes('on(\'pinRestoreBtn\''),
+      'нет кнопок постоянной копии');
+    assert.ok(appSrc.includes('pinOnVersion(APP_VERSION)') && appSrc.includes('Постоянная копия: '),
+      'нет авто-пина/диагностики постоянной копии');
     assert.ok(html.includes('id="repoBtn"') && appSrc.includes('on(\'repoBtn\''),
       'нет пункта «Репозиторий и токен»');
     assert.ok(html.includes('#gearSettings { display: none;') && html.includes('id="gearSettings"'),
