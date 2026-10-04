@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v68';
+  var APP_VERSION = 'v69';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1831,7 +1831,7 @@
       var rect = null;
       try { rect = div.getBoundingClientRect(); } catch (x) { rect = null; }
       var h = rect ? rect.height : div.offsetHeight || 56;
-      grabDy = rect ? (e.clientY - rect.top) : h / 2;
+      if (grabDy == null) grabDy = rect ? (e.clientY - rect.top) : h / 2;
       divH = h;
       order = rowsOf(box);
       /* Дети (вложенные с большим отступом) прячутся под родителя на время drag.
@@ -1908,6 +1908,13 @@
       pid = e.pointerId;
       x0 = e.clientX;
       y0 = e.clientY;
+      /* grabDy меряем ЗДЕСЬ — по позиции захвата. При старте режима палец
+       * уже уехал на 14+px (первый pointermove на таче ещё крупнее), и
+       * замер там сдвигал dt вниз: дыра не досекала целевой слот, задача
+       * садилась строкой ниже (или на своё место — «перетаскивание ничего
+       * не делает»). */
+      try { grabDy = e.clientY - div.getBoundingClientRect().top; }
+      catch (x) { grabDy = null; }
       lastDx = 0;
       lastScrollTs = 0;
       mode = null;

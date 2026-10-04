@@ -119,6 +119,10 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'commitLine удаляет задачу с пустым текстом вместо очистки');
     assert.ok(appSrc.includes("isTrailing ? 'Новая задача…' : '…'"),
       'пустая задача не отличается плейсхолдером от черновика');
+    /* v69: grabDy — при захвате, иначе дыра недобирает вверх. */
+    assert.ok(appSrc.includes('grabDy = e.clientY - div.getBoundingClientRect().top') &&
+      appSrc.includes('if (grabDy == null)'),
+      'grabDy меряется в pointerdown, а не при старте режима');
     assert.ok(html.includes('id="repoBtn"') && appSrc.includes('on(\'repoBtn\''),
       'нет пункта «Репозиторий и токен»');
     assert.ok(html.includes('#gearSettings { display: none;') && html.includes('id="gearSettings"'),
