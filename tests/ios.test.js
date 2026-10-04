@@ -619,4 +619,9 @@ describe('PWA-оболочка', () => {
     assert.ok(appSrc.includes('serviceWorker'), 'нет регистрации SW');
     assert.ok(appSrc.includes('controllerchange'), 'нет перезагрузки при смене контроллера');
   });
+  it('поделиться приложением: ссылка страницы в системное меню', () => {
+    assert.ok(html.includes('id="shareAppBtn"'), 'нет shareAppBtn в меню');
+    assert.ok(appSrc.includes("on('shareAppBtn'"), 'нет подписки shareAppBtn');
+    assert.ok(appSrc.includes('location.href'), 'шарится не ссылка страницы');
+  });
 });

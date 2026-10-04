@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v66';
+  var APP_VERSION = 'v67';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -2457,6 +2457,12 @@
       if (navigator.share) navigator.share({ text: txt }).catch(function () {});
       else if (navigator.clipboard) navigator.clipboard.writeText(txt).then(function () { lastAction = 'скопировано'; renderStatus(); });
       else askText(txt, '', false).then(function () {});
+    });
+    on('shareAppBtn', 'click', function () {
+      var url = window.location.href;
+      if (navigator.share) navigator.share({ text: url }).catch(function () {});
+      else if (navigator.clipboard) navigator.clipboard.writeText(url).then(function () { lastAction = 'скопировано'; renderStatus(); });
+      else askText(url, '', false).then(function () {});
     });
     on('clearDone', 'click', function () { askClearDone(); });
     on('deleteDoneBtn', 'click', function () { askClearDone(); });
