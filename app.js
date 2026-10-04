@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v56';
+  var APP_VERSION = 'v57';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -732,9 +732,10 @@
       wireLineSwipe(div, null);
     }
     /* Метка времени — НАЛОЖЕНИЕ в правом нижнем углу поля задачи
-     * (position: absolute против .tline, прозрачный фон — CSS .durchip):
-     * тап — та же модалка, что свайп вправо. Пустое время (estMin=0)
-     * — метки нет, угол поля свободен. */
+     * (position: absolute против .tline): тап — та же модалка, что свайп
+     * вправо. Фон прозрачный, пока текст не доходит до метки (см.
+     * updateDurchip — при пересчёте становится непрозрачным). Пустое
+     * время (estMin=0) — метки нет, угол поля свободен. */
     if (!isTrailing && taskId && opts.estMin > 0) {
       var chip = document.createElement('button');
       chip.className = 'durchip';
@@ -759,6 +760,64 @@
     if (!ta || !ta.style) return;
     ta.style.height = 'auto';
     try { ta.style.height = ta.scrollHeight + 'px'; } catch (x) {}
+  }
+
+  /* Фон метки времени: прозрачный, пока текст поля под ней не мешает;
+   * если последняя строка текста доезжает до метки — непрозрачный (цвета
+   * поля), иначе два текста слипаются. Замер зеркалом поля (как в
+   * getCaretCoordinates): браузер сам переносит строки, берём X конца
+   * текста и сравниваем с левым краем метки. */
+  function updateDurchip(inp, chip) {
+    if (!inp || !chip || !chip.style) return;
+    chip.style.backgroundColor = 'transparent';
+    var text = inp.value || '';
+    if (!text) return;
+    var m = document.createElement('div');
+    try {
+      var ir = inp.getBoundingClientRect();
+      var cr = chip.getBoundingClientRect();
+      /* Нет вёрстки (jsdom, скрытая строка) — остаёмся прозрачными. */
+      if (!ir.width || !cr.width) return;
+      var cs = window.getComputedStyle(inp);
+      var props = ['font-family', 'font-size', 'font-weight', 'font-style',
+        'line-height', 'letter-spacing', 'word-spacing', 'text-indent',
+        'text-align', 'text-transform', 'white-space', 'word-break',
+        'overflow-wrap', 'direction', 'padding-top', 'padding-right',
+        'padding-bottom', 'padding-left', 'box-sizing'];
+      m.style.position = 'absolute';
+      m.style.left = (ir.left + (window.pageXOffset || 0)) + 'px';
+      m.style.top = (ir.top + (window.pageYOffset || 0)) + 'px';
+      m.style.width = ir.width + 'px';
+      m.style.visibility = 'hidden';
+      m.style.pointerEvents = 'none';
+      for (var i = 0; i < props.length; i++) {
+        var v = cs.getPropertyValue(props[i]);
+        if (v) m.style.setProperty(props[i], v);
+      }
+      m.appendChild(document.createTextNode(text));
+      /* Пустой маркер после текста: его X = позиция конца последней строки. */
+      var marker = document.createElement('span');
+      m.appendChild(marker);
+      document.body.appendChild(m);
+      var mr = marker.getBoundingClientRect();
+      if (mr.left >= cr.left - 2) {
+        var bg = cs.getPropertyValue('background-color') || '';
+        chip.style.backgroundColor =
+          (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') ? bg : '#fff';
+      }
+    } catch (x) {} finally {
+      if (m.parentNode) m.parentNode.removeChild(m);
+    }
+  }
+
+  /* Пересчитать метки внутри списка: после рендера, набора и ресайза. */
+  function refreshDurchips(box) {
+    if (!box || !box.querySelectorAll) return;
+    var chips = box.querySelectorAll('.durchip');
+    for (var c = 0; c < chips.length; c++) {
+      var rw = chips[c].closest ? chips[c].closest('.tline') : null;
+      updateDurchip(rw && rw.querySelector('.tinput'), chips[c]);
+    }
   }
 
   /* Свайп строки справа налево: открыть флаг «Выполнено»; слева направо
@@ -1279,6 +1338,8 @@
     inp.addEventListener('input', function () {
       if (inputClosed) return;
       autosize(inp);
+      var chipN = div.querySelector ? div.querySelector('.durchip') : null;
+      if (chipN) updateDurchip(inp, chipN);
       if (isTrailing) { trailingText = inp.value; return; }
       if (!taskId) return;
       if (saveTimer) clearTimeout(saveTimer);
@@ -2166,6 +2227,7 @@
     /* Раскрыть многострочные по содержимому (в потоке, после вставки). */
     var areas = box.querySelectorAll ? box.querySelectorAll('.tinput') : [];
     for (var q = 0; q < areas.length; q++) autosize(areas[q]);
+    refreshDurchips(box);
   }
 
   function focusTrailing() {
@@ -2310,6 +2372,16 @@
 
   function boot() {
     wire();
+    /* Клавиатура/поворот меняют ширину поля: перенос строк другой —
+     * пересчитываем, накрыт ли текст меткой времени. */
+    var chipResizeT = null;
+    window.addEventListener('resize', function () {
+      if (chipResizeT) clearTimeout(chipResizeT);
+      chipResizeT = setTimeout(function () {
+        chipResizeT = null;
+        refreshDurchips(el('lines'));
+      }, 120);
+    });
     loadCollapsed();
     window.EBStore.load().then(function (s) {
       state = s;

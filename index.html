@@ -72,8 +72,9 @@
       user-select: none; -webkit-user-select: none; touch-action: pan-y; }
     .tinput::placeholder { color: #aaa; }
     .tinput.is-done { text-decoration: line-through; color: #888; }
-    /* Метка времени — наложение в правом нижнем углу ПОЛЯ задачи,
-     * прозрачный фон (текст поля читается под ней). */
+    /* Метка времени — наложение в правом нижнем углу ПОЛЯ задачи.
+     * Фон по умолчанию прозрачный; если текст доезжает до метки,
+     * app.js (updateDurchip) делает его непрозрачным — цвета поля. */
     .durchip { position: absolute; right: 8px; bottom: 5px; z-index: 1;
       padding: 4px 9px; font-size: 12px; line-height: 1.1; color: #2c6cb0;
       background: transparent; border: 1px solid #4a90e2; border-radius: 999px;

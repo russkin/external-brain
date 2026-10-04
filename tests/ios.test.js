@@ -460,6 +460,16 @@ describe('логика вызывается с state.tasks', () => {
       'редендер не отдаёт estMin в строку');
     assert.ok(appSrc.includes("on('durHp'") && appSrc.includes("on('durMm'"),
       'стрелки модалки подписаны не через on()');
+    assert.ok(appSrc.includes('function updateDurchip') && appSrc.includes('function refreshDurchips'),
+      'нет пересчёта фона метки по тексту поля');
+    assert.ok(appSrc.includes("chip.style.backgroundColor = 'transparent'") &&
+      appSrc.includes("bg !== 'transparent'"),
+      'фон метки не переключается прозрачный/непрозрачный');
+    assert.ok(appSrc.includes('refreshDurchips(box)') &&
+      appSrc.includes('if (chipN) updateDurchip(inp, chipN)'),
+      'рендер/набор текста не пересчитывают фон метки');
+    assert.ok(appSrc.includes("refreshDurchips(el('lines'))"),
+      'ресайз (клавиатура/поворот) не пересчитывает фон метки');
   });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
