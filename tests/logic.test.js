@@ -357,6 +357,19 @@ describe('слияние LWW', () => {
     const e = { id: 'a', title: 'Лок', ts: 100 };
     const q = { id: 'a', title: 'Удал', ts: 100 };
     assert.equal(L.mergeTask(e, q).title, 'Лок');
+    /* Регресс v64: cloneTask терял estMin — слияние стирало ВСЕ метки
+     * времени (в т.ч. при равных ts), включая файл на сервере. */
+    assert.equal(L.mergeTask({ id: 'a', title: 'L', ts: 1, estMin: 45 },
+      { id: 'a', title: 'R', ts: 2 }).estMin, 0, 'победа remote без времени');
+    assert.equal(L.mergeTask({ id: 'a', title: 'L', ts: 2, estMin: 45 },
+      { id: 'a', title: 'R', ts: 1 }).estMin, 45, 'победа local с временем');
+    assert.equal(L.mergeTask({ id: 'a', title: 'L', ts: 2, estMin: 45 },
+      { id: 'a', title: 'R', ts: 2 }).estMin, 45, 'равные ts — локальное время не теряется');
+    const me = L.mergeTasks(
+      [{ id: 'x', title: 'X', ts: 1, createdAt: 1, updatedAt: 1, estMin: 30 }],
+      [{ id: 'y', title: 'Y', ts: 1, createdAt: 2, updatedAt: 1, estMin: 15 }]);
+    assert.equal(me[0].estMin, 30, 'mergeTasks сохранил время x');
+    assert.equal(me[1].estMin, 15, 'mergeTasks сохранил время y');
   });
   it('mergeTasks объединяет наборы', () => {
     const a = [{ id: 'x', title: 'X', status: 'inbox', ts: 100, createdAt: 100, updatedAt: 100 }];

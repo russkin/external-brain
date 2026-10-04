@@ -494,6 +494,7 @@ function cloneTask(t) {
   return {
     id: t.id, title: t.title, status: t.status, project: t.project, frog: t.frog,
     slicesTotal: t.slicesTotal, slicesDone: t.slicesDone, indent: normIndent(t.indent),
+    estMin: normEst(t.estMin),
     createdAt: t.createdAt,
     updatedAt: t.updatedAt, doneAt: t.doneAt, ts: t.ts || 0, deleted: !!t.deleted
   };
