@@ -81,6 +81,15 @@ describe('устойчивость к рассинхрону кэшей', () => 
     assert.ok(appSrc.includes('bootStack'), 'нет bootStack');
     assert.ok(appSrc.includes('lastAction'), 'нет lastAction');
     assert.ok(appSrc.includes('diagBtn'), 'нет diagBtn');
+    assert.ok(storeSrc.includes('external-brain-backup-v1') &&
+      storeSrc.includes('backupWrite(lastPersisted)'),
+      'нет локальной копии state перед каждым сохранением');
+    assert.ok(storeSrc.includes('skipBackupOnce') && storeSrc.includes('restoreBackup'),
+      'восстановление перетирает собственную копию');
+    assert.ok(html.includes('id="restoreBtn"') && appSrc.includes('on(\'restoreBtn\''),
+      'нет кнопки восстановления копии');
+    assert.ok(appSrc.includes('Локальная копия: ') && appSrc.includes('backupInfo'),
+      'копия не видна в диагностике');
   });
 });
 

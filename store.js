@@ -6,8 +6,34 @@
 
 (function () {
   var LS_KEY = 'external-brain-v1';
+  var BACKUP_KEY = 'external-brain-backup-v1';
   var DB_NAME = 'external-brain';
   var STORE = 'state';
+
+  /* Локальная копия состояния («state.json в браузере»): перед каждой
+   * записью в основное хранилище предыдущее сохранённое состояние уходит
+   * в localStorage под BACKUP_KEY — копия всегда «на шаг позади» и
+   * переживает сбой синка/очистку задач. restoreBackup() помечает, что
+   * следующая запись НЕ должна перетирать копию — иначе сам акт
+   * восстановления затёр бы хорошую копию текущим состоянием. */
+  var lastPersisted = null;
+  var skipBackupOnce = false;
+
+  function snap(s) {
+    try { return JSON.parse(JSON.stringify(s)); } catch (e) { return null; }
+  }
+  function backupWrite(prev) {
+    try {
+      localStorage.setItem(BACKUP_KEY, JSON.stringify({ savedAt: Date.now(), state: prev }));
+    } catch (e) {}
+  }
+  function backupRead() {
+    try {
+      var raw = localStorage.getItem(BACKUP_KEY);
+      var o = raw ? JSON.parse(raw) : null;
+      return (o && o.state && typeof o.state === 'object') ? o : null;
+    } catch (e) { return null; }
+  }
 
   function lsRead() {
     try {
@@ -114,22 +140,39 @@
 
   window.EBStore = {
     load: function () {
+      function track(s) { lastPersisted = snap(s); return s; }
       return db().then(function (d) {
-        if (!d) return sanitize(lsRead());
+        if (!d) return track(sanitize(lsRead()));
         return idbGet(d).then(function (s) {
-          return sanitize(s || lsRead());
+          return track(sanitize(s || lsRead()));
         }).catch(function () {
-          return sanitize(lsRead());
+          return track(sanitize(lsRead()));
         });
       });
     },
     save: function (state) {
+      if (skipBackupOnce) skipBackupOnce = false;
+      else if (lastPersisted) backupWrite(lastPersisted);
       state.updatedAt = Date.now();
       var ok = lsWrite(state);
+      if (ok) lastPersisted = snap(state);
       return db().then(function (d) {
         if (!d) return ok && lsWorks();
-        return idbSet(d, state).then(function () { return true; }).catch(function () { return ok; });
+        return idbSet(d, state).then(function () {
+          lastPersisted = snap(state);
+          return true;
+        }).catch(function () { return ok; });
       });
+    },
+    /* { savedAt, state } — копия для диагностики, или null. */
+    backupInfo: function () { return backupRead(); },
+    /* Копия состояния для восстановления + защита от перетирания
+     * самой копии при последующем сохранении. null — копии нет. */
+    restoreBackup: function () {
+      var b = backupRead();
+      if (!b) return null;
+      skipBackupOnce = true;
+      return b.state;
     }
   };
 })();

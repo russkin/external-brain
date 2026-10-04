@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v61';
+  var APP_VERSION = 'v62';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -2349,6 +2349,13 @@
     s.textContent = parts.join(' · ');
   }
 
+  /* Дата локальной копии (store.js) для диагностики. */
+  function backupLabel() {
+    var b = window.EBStore && window.EBStore.backupInfo ? window.EBStore.backupInfo() : null;
+    if (!b) return 'нет';
+    try { return new Date(b.savedAt).toLocaleString('ru-RU'); } catch (x) { return 'есть'; }
+  }
+
   function diagText() {
     var st = state ? L.stats(state.tasks) : {};
     return [
@@ -2358,6 +2365,7 @@
       'Синк: ' + (syncStatus || '—'),
       'Repo: ' + (state ? state.settings.repo : '?'),
       'Ключ: ' + (state && state.settings.token ? 'введён' : 'выключен (нет ключа)'),
+      'Локальная копия: ' + backupLabel(),
       bootError ? bootError + ' ' + bootStack : 'Ошибок: нет'
     ].join('\n');
   }
@@ -2401,6 +2409,26 @@
     });
     on('clearDone', 'click', function () { askClearDone(); });
     on('deleteDoneBtn', 'click', function () { askClearDone(); });
+    on('restoreBtn', 'click', function () {
+      if (!state) return;
+      var info = window.EBStore.backupInfo ? window.EBStore.backupInfo() : null;
+      if (!info) {
+        askText('Локальная копия пока не создавалась', '', false).then(function () {});
+        return;
+      }
+      askConfirm('Заменить текущие задачи локальной копией (состояние до последнего сохранения)? Отменить можно стрелкой ↩.')
+        .then(function (yes) {
+          if (!yes || !state) return;
+          var restored = window.EBStore.restoreBackup ? window.EBStore.restoreBackup() : null;
+          if (!restored) return;
+          mutate(function () {
+            state.tasks = L.normalizeTasks(restored.tasks);
+            state.updatedAt = Date.now();
+          });
+          lastAction = 'копия восстановлена';
+          renderStatus();
+        });
+    });
     on('collapseAllBtn', 'click', function () { setAllCollapsed(true); });
     on('expandAllBtn', 'click', function () { setAllCollapsed(false); });
     on('undoBtn', 'click', function () { doUndo(); });
