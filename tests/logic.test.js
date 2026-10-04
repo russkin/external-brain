@@ -25,6 +25,9 @@ describe('создание и инбокс', () => {
     assert.equal(mk(t, '', 1000), null);
     assert.equal(mk(t, null, 1000), null);
     assert.equal(t.length, 0);
+    const e = L.createTask(t, '', 1000, { allowEmpty: true });
+    assert.equal(e.title, '', 'allowEmpty создаёт пустую задачу');
+    assert.equal(t.length, 1);
   });
   it('заголовок тримится, проект тримится, id генерируется', () => {
     const t = L.blankTasks();
@@ -81,7 +84,7 @@ describe('прояснение (clarify)', () => {
     assert.equal(g.slicesTotal, 5);
     assert.equal(g.title, 'Важное');
   });
-  it('пустое переименование игнорируется, нарезка урезает съеденное', () => {
+  it('пустое переименование очищает заголовок, нарезка урезает съеденное', () => {
     const t = L.blankTasks();
     mk(t, 'Дело', 1000, { id: 'a' });
     L.setSlices(t, 'a', 5, 1500);
@@ -89,7 +92,7 @@ describe('прояснение (clarify)', () => {
     L.completeSlice(t, 'a', 1700);
     L.clarifyTask(t, 'a', { title: '  ', slicesTotal: 1 }, 2000);
     const g = L.getTask(t, 'a');
-    assert.equal(g.title, 'Дело');
+    assert.equal(g.title, '', 'clarifyTask принимает пустой заголовок');
     assert.equal(g.slicesDone, 1);
   });
   it('чужая и удалённая задачи — null', () => {
@@ -231,6 +234,8 @@ describe('списки и фокус', () => {
     L.clarifyTask(t, 'b', { status: 'someday' }, 3000);
     assert.equal(L.somedayList(t).length, 1);
     assert.equal(L.inboxCount(t), 0);
+    t.push({ id: 'z', title: '', status: 'inbox', indent: 0, createdAt: 0, updatedAt: 3000, ts: 3000, deleted: false });
+    assert.equal(L.inboxCount(t), 0, 'задача без текста не считается в инбоксе');
   });
   it('done сортируется свежими первыми', () => {
     const t = L.blankTasks();
@@ -251,6 +256,8 @@ describe('списки и фокус', () => {
     mk(t, 'Лягушка', 2500, { id: 'f' });
     L.clarifyTask(t, 'f', { status: 'next', frog: true }, 3000);
     assert.equal(L.focusTask(t).id, 'f');
+    t.push({ id: 'z', title: '', status: 'next', frog: true, indent: 0, createdAt: 0, updatedAt: 3000, ts: 3000, deleted: false });
+    assert.equal(L.focusTask(t).id, 'f', 'пустая задача не перехватывает фокус дня');
   });
   it('stats считает всё', () => {
     const t = L.blankTasks();
@@ -263,6 +270,7 @@ describe('списки и фокус', () => {
     L.clarifyTask(t, 'w', { status: 'waiting' }, 2000);
     L.clarifyTask(t, 's', { status: 'someday' }, 2000);
     L.completeTask(t, 'd', 2000);
+    t.push({ id: 'z', title: '', status: 'inbox', indent: 0, createdAt: 5000, updatedAt: 1000, ts: 1000, deleted: false });
     const st = L.stats(t);
     assert.deepEqual(st, { inbox: 1, next: 1, waiting: 1, someday: 1, done: 1, hasFrog: true });
   });
@@ -394,6 +402,8 @@ describe('слияние LWW', () => {
     assert.equal(L.isTasksEmpty([]), true);
     assert.equal(L.isTasksEmpty([{ id: 'x', deleted: true, ts: 1 }]), true);
     assert.equal(L.isTasksEmpty(a), false);
+    assert.equal(L.isTasksEmpty([{ id: 'e', title: '', ts: 1, createdAt: 1, updatedAt: 1 }]), false,
+      'задача с пустым текстом — это данные, а не пустое состояние');
   });
   it('mergeDecision: пустое не затирает', () => {
     assert.equal(L.mergeDecision({ tasks: [], updatedAt: 100 }, { tasks: [{ id: 'a', title: 'T' }], updatedAt: 50 }), 'pull');

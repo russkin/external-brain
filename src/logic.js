@@ -67,10 +67,10 @@ function getTask(tasks, id) {
 
 /* Создать задачу в инбоксе. Пустой заголовок — вернуть null, ничего не трогать. */
 function createTask(tasks, title, nowMs, opts) {
-  var t = normTitle(title);
-  if (!t) return null;
-  var now = toInt(nowMs, Date.now());
   opts = opts || {};
+  var t = normTitle(title);
+  if (!t && !opts.allowEmpty) return null;
+  var now = toInt(nowMs, Date.now());
   var task = {
     id: opts.id ? String(opts.id) : makeId(now),
     title: t,
@@ -115,10 +115,7 @@ function clarifyTask(tasks, id, patch, nowMs) {
     task.slicesTotal = st;
     if (task.slicesDone > st) task.slicesDone = st;
   }
-  if (patch.title != null) {
-    var nt = normTitle(patch.title);
-    if (nt) task.title = nt;
-  }
+  if (patch.title != null) task.title = normTitle(patch.title);
   if (patch.indent != null) task.indent = normIndent(patch.indent);
   if (patch.estMin != null) task.estMin = normEst(patch.estMin);
   task.updatedAt = now;
@@ -323,7 +320,7 @@ function completeSlice(tasks, id, nowMs) {
 }
 
 function isAlive(t) {
-  return !!t && !t.deleted && !!t.title;
+  return !!t && !t.deleted;
 }
 
 function byStatus(tasks, status) {
@@ -356,31 +353,36 @@ function doneList(tasks) {
 
 /* Фокус дня: первая лягушка из next, иначе первое next, иначе первый инбокс. */
 function focusTask(tasks) {
-  var nx = nextList(tasks);
+  var nx = nextList(tasks).filter(function (t) { return !!t.title; });
   for (var i = 0; i < nx.length; i++) {
     if (nx[i].frog) return nx[i];
   }
   if (nx.length) return nx[0];
-  var ib = inboxList(tasks);
+  var ib = inboxList(tasks).filter(function (t) { return !!t.title; });
   return ib.length ? ib[0] : null;
 }
 
 function inboxCount(tasks) {
-  return inboxList(tasks).length;
+  return inboxList(tasks).filter(function (t) { return !!t.title; }).length;
 }
 
 function stats(tasks) {
-  var nx = nextList(tasks);
+  var tl = [];
+  for (var i = 0; i < tasks.length; i++) {
+    var t = tasks[i];
+    if (t && !t.deleted && t.title) tl.push(t);
+  }
+  var nx = nextList(tl);
   var hasFrog = false;
   for (var i = 0; i < nx.length; i++) {
     if (nx[i].frog) { hasFrog = true; break; }
   }
   return {
-    inbox: inboxList(tasks).length,
+    inbox: inboxList(tl).length,
     next: nx.length,
-    waiting: waitingList(tasks).length,
-    someday: somedayList(tasks).length,
-    done: doneList(tasks).length,
+    waiting: waitingList(tl).length,
+    someday: somedayList(tl).length,
+    done: doneList(tl).length,
     hasFrog: hasFrog
   };
 }
@@ -540,7 +542,7 @@ function tasksEqual(a, b) {
 function isTasksEmpty(tasks) {
   var n = normalizeTasks(tasks);
   for (var i = 0; i < n.length; i++) {
-    if (!n[i].deleted && n[i].title) return false;
+    if (!n[i].deleted) return false;
   }
   return true;
 }

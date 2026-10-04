@@ -107,6 +107,18 @@ describe('устойчивость к рассинхрону кэшей', () => 
     assert.ok(appSrc.includes('external-brain-undo-v1') && appSrc.includes('external-brain-redo-v1') &&
       appSrc.includes('pushUndo') && appSrc.includes('histLoad') && appSrc.includes('histSave'),
       'история отмены не переживает перезагрузку');
+    /* v67: задачи с пустым текстом — полноценные строки, не черновики. */
+    assert.ok(!appSrc.includes("if (!t || t.deleted || !String(t.title || '').trim()) continue;"),
+      'lineTasks фильтрует пустые задачи');
+    assert.ok(!appSrc.includes('return !t.deleted && t.title;'),
+      'fullList фильтрует пустые задачи');
+    assert.ok(appSrc.includes('placeTaskAfter(trailingAnchorId(), inp.value, indent, true)'),
+      'нет создания пустой задачи по Enter');
+    assert.ok(!appSrc.includes("return 'removed'") &&
+      appSrc.includes("clarifyTask(state.tasks, taskId, { title: '' })"),
+      'commitLine удаляет задачу с пустым текстом вместо очистки');
+    assert.ok(appSrc.includes("isTrailing ? 'Новая задача…' : '…'"),
+      'пустая задача не отличается плейсхолдером от черновика');
     assert.ok(html.includes('id="repoBtn"') && appSrc.includes('on(\'repoBtn\''),
       'нет пункта «Репозиторий и токен»');
     assert.ok(html.includes('#gearSettings { display: none;') && html.includes('id="gearSettings"'),

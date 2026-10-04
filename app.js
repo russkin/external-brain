@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v67';
+  var APP_VERSION = 'v68';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -536,7 +536,7 @@
     var out = [];
     for (var i = 0; i < state.tasks.length; i++) {
       var t = state.tasks[i];
-      if (!t || t.deleted || !String(t.title || '').trim()) continue;
+      if (!t || t.deleted) continue;
       if (t.status === 'done') continue;
       out.push(t);
     }
@@ -550,7 +550,7 @@
 
   /* Полный порядок (включая выполненных) — как в renderLines. */
   function fullList() {
-    return L.normalizeTasks(state.tasks).filter(function (t) { return !t.deleted && t.title; });
+    return L.normalizeTasks(state.tasks).filter(function (t) { return !t.deleted; });
   }
 
   /* Есть ли вложенные у id в ПОЛНОМ порядке: тап по точкам и «свернуть
@@ -756,7 +756,7 @@
     inp.className = 'tinput';
     inp.value = value || '';
     inp.rows = 1;
-    inp.placeholder = 'Новая задача…';
+    inp.placeholder = isTrailing ? 'Новая задача…' : '…';
     inp.autocomplete = 'off';
     inp.setAttribute('aria-label', 'Задача');
     if (opts.doneShown) inp.classList.add('is-done');
@@ -1163,13 +1163,14 @@
   /* Создать задачу сразу под prevId (той же цепочкой Enter вниз).
    * createdAt втискиваем между соседями целым числом; тесно — сдвигаем
    * всех выше на 1 (редко, ms-метки почти всегда с зазором). */
-  function insertTaskAfter(prevId, title, indent, now) {
+  function insertTaskAfter(prevId, title, indent, now, allowEmpty) {
     var alive = lineTasks();
     var idx = -1;
     for (var i = 0; i < alive.length; i++) {
       if (alive[i].id === prevId) { idx = i; break; }
     }
-    if (idx === -1) return L.createTask(state.tasks, title, now, { indent: indent || 0 });
+    var copts = { indent: indent || 0, allowEmpty: !!allowEmpty };
+    if (idx === -1) return L.createTask(state.tasks, title, now, copts);
     var prev = alive[idx];
     var next = alive[idx + 1] || null;
     var slot;
@@ -1185,7 +1186,7 @@
       }
       slot = prev.createdAt + 1;
     }
-    var created = L.createTask(state.tasks, title, now, { indent: indent || 0 });
+    var created = L.createTask(state.tasks, title, now, copts);
     if (created) {
       created.createdAt = slot;
       created.ts = now;
@@ -1194,7 +1195,7 @@
     return created;
   }
 
-  function insertTaskTop(title, now) {
+  function insertTaskTop(title, now, allowEmpty) {
     var alive = lineTasks();
     var slot = now;
     if (alive.length) {
@@ -1208,7 +1209,7 @@
       }
     }
     /* Первая строка всегда без отступа (правило потолка). */
-    var created = L.createTask(state.tasks, title, now, { indent: 0 });
+    var created = L.createTask(state.tasks, title, now, { indent: 0, allowEmpty: !!allowEmpty });
     if (created) {
       created.createdAt = slot;
       created.ts = now;
@@ -1217,24 +1218,24 @@
     return created;
   }
 
-  function placeTaskAfter(prevId, title, indent) {
+  function placeTaskAfter(prevId, title, indent, allowEmpty) {
     var title0 = String(title == null ? '' : title).trim();
-    if (!title0) return null;
+    if (!title0 && !allowEmpty) return null;
     var now = Date.now();
     var created = null;
     mutate(function () {
-      created = insertTaskAfter(prevId, title0, indent, now);
+      created = insertTaskAfter(prevId, title0, indent, now, allowEmpty);
     });
     return created;
   }
 
-  function placeTaskTop(title) {
+  function placeTaskTop(title, allowEmpty) {
     var title0 = String(title == null ? '' : title).trim();
-    if (!title0) return null;
+    if (!title0 && !allowEmpty) return null;
     var now = Date.now();
     var created = null;
     mutate(function () {
-      created = insertTaskTop(title0, now);
+      created = insertTaskTop(title0, now, allowEmpty);
     });
     return created;
   }
@@ -1409,8 +1410,12 @@
     var task = L.getTask(state.tasks, taskId);
     if (!task) return null;
     if (!title) {
-      mutate(function () { L.removeTask(state.tasks, taskId); });
-      return 'removed';
+      /* Пустой текст — задача остаётся пустой (полноценная строка),
+       * а не удаляется: удаление — явный жест (Backspace в пустой). */
+      if (String(task.title || '') !== '') {
+        mutate(function () { L.clarifyTask(state.tasks, taskId, { title: '' }); });
+      }
+      return task;
     }
     if (title !== task.title) {
       mutate(function () { L.clarifyTask(state.tasks, taskId, { title: title }); });
@@ -1492,8 +1497,8 @@
         var oldAnchor = trailingAfterId;
         var oldIndent = trailingIndent;
         var created = (trailingAfterId === 'TOP') ?
-          placeTaskTop(inp.value) :
-          placeTaskAfter(trailingAnchorId(), inp.value, indent);
+          placeTaskTop(inp.value, true) :
+          placeTaskAfter(trailingAnchorId(), inp.value, indent, true);
         if (created) {
           /* Вторая точка в истории: появление нового пустого поля —
            * отменяется отдельно (задача с текстом остаётся). */
