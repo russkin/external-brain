@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v57';
+  var APP_VERSION = 'v58';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1715,6 +1715,8 @@
         _all[_si].style.transition = '';
         _all[_si].style.transform = '';
       }
+      var _sep0 = box.querySelector ? box.querySelector('.done-sep') : null;
+      if (_sep0) { _sep0.style.transition = ''; _sep0.style.transform = ''; }
       var rect = null;
       try { rect = div.getBoundingClientRect(); } catch (x) { rect = null; }
       var h = rect ? rect.height : div.offsetHeight || 56;
@@ -1753,10 +1755,17 @@
       for (var ci = 0; ci < chn.length; ci++) {
         var cr = chn[ci];
         if (cr === div) { phi = fr.length; continue; }
-        if (!cr.classList || !cr.classList.contains('tline') || cr.style.display === 'none') continue;
+        if (!cr.classList) continue;
+        /* Разделитель «Выполнено» — тоже часть потока: без него в каркасе
+         * он не получает сдвиг дыры и во время drag'а уезжает вверх на
+         * holeShift (перекрывает пересечённые строки — выглядят как
+         * улетевшие в выполненные). */
+        var isSep = cr.classList.contains('done-sep');
+        if (!isSep && !cr.classList.contains('tline')) continue;
+        if (cr.style.display === 'none') continue;
         var hr = 0;
         try { hr = cr.getBoundingClientRect().height; } catch (x) { hr = 0; }
-        fr.push({ row: cr, off: acc, h: hr });
+        fr.push({ row: cr, off: acc, h: hr, sep: isSep });
         frSh.push(0);
         acc += hr + LINES_GAP;
       }
@@ -1887,6 +1896,9 @@
        * замороженные оффсеты, строго монотонны: удерживаемый палец стабилен
        * всегда, усилие одинаково вверх/вниз при любой высоте строк. */
       while (phi < fr.length) {
+        /* Дыра живой строки не уходит за разделитель: ниже — только
+         * выполненные, живая задача в их секцию не садится. */
+        if (fr[phi].sep) break;
         if (dt > boxTop + fr[phi].off + PEN) { phi++; setHole(phi); advanced = true; }
         else break;
       }

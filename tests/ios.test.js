@@ -484,6 +484,10 @@ describe('логика вызывается с state.tasks', () => {
   it('групповой drag: дети прячутся под родителя и едут с ним', () => {
     assert.ok(appSrc.includes('kids'), 'дети не собираются при drag');
     assert.ok(appSrc.includes('holeShift'), 'дыра не покрывает весь блок');
+    assert.ok(appSrc.includes("cr.classList.contains('done-sep')"),
+      'разделитель выполненных вне каркаса покоя (уезжает при drag)');
+    assert.ok(appSrc.includes('if (fr[phi].sep) break;'),
+      'дыра может уйти в раздел выполненных');
   });
   it('позиция страницы не прыгает, автопрокрутка не дёргает', () => {
     assert.ok(appSrc.includes('keepY'), 'скролл не сохраняется при перерисовке');
