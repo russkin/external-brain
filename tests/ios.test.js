@@ -511,6 +511,8 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('drag-active'), 'нет drag-active состояния');
     assert.ok(appSrc.includes('persistLineOrder'), 'порядок не сохраняется');
     assert.ok(appSrc.includes('lostpointercapture'), 'нет страховки завершения drag');
+    assert.ok(appSrc.includes('function dropMargins') && appSrc.includes('dropMargins(div, kids)'),
+      'посадка не ставит итоговый отступ в том же кадре (прыжок до render)');
   });
   it('быстрый ввод и фокус дня убраны из оболочки', () => {
     assert.ok(!html.includes('id="focus"'), 'focus остался в index.html');

@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v58';
+  var APP_VERSION = 'v59';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1634,6 +1634,28 @@
       if (kt) L.setIndent(state.tasks, kidId, lineIndent(kt) + delta);
     }
   }
+  /* Отступ строки и детей — по данным задач, В КАДРЕ посадки (сразу после
+   * applyDropIndent): style.margin снят при возврате в поток, а render
+   * только через 220мс — без этого вёрстка отстала бы от данных и строка
+   * (и дети) отсидели бы с отступом 0/старым всю мягкую посадку. */
+  function dropMargins(row, kidRows) {
+    function indOfDrop(r) {
+      var rid = r.getAttribute ? r.getAttribute('data-id') : null;
+      if (rid) {
+        var rt = L.getTask(state.tasks, rid);
+        if (rt) return lineIndent(rt);
+      }
+      if (r.getAttribute && r.getAttribute('data-trailing')) return effTrailingIndent();
+      return 0;
+    }
+    function setDrop(r) {
+      if (!r || !r.style) return;
+      var iv = indOfDrop(r);
+      r.style.marginLeft = iv ? (iv * INDENT_STEP) + 'px' : '';
+    }
+    setDrop(row);
+    for (var dm = 0; dm < (kidRows || []).length; dm++) setDrop(kidRows[dm]);
+  }
   /* Перетаскивание за grip двумя жестами (Pointer Events — мышь и тач):
    * - вверх/вниз: плавный вертикальный drag (призрак + соседи едут);
    * - вправо/влево: сдвиг на ширину отступа — задача входит в группу
@@ -2115,6 +2137,9 @@
         if (di !== -1 && di !== oldPos) {
           applyDropIndent(box, sibs, di, kids);
         }
+        /* Итоговый отступ — в этом же кадре, без ожидания render:
+         * строка и дети встают сразу на место алгоритма. */
+        dropMargins(div, kids);
       }
       div.classList.remove('dragging');
       /* Мягкая посадка: строка и соседи доезжают 200мс, затем сохраняем. */
