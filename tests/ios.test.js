@@ -147,6 +147,10 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('toggleDoneSlide'), 'нет завершения со слайдом');
     assert.ok(appSrc.includes('L.doneList(state.tasks)'), 'нет секции выполненных');
     assert.ok(appSrc.includes('done-sep'), 'нет разделителя выполненных');
+    assert.ok(appSrc.includes("addEventListener('click'") && appSrc.includes('toggleDoneHidden'),
+      'нет тапа по разделителю для скрытия выполненных');
+    assert.ok(appSrc.includes('loadDoneHidden') && appSrc.includes('doneHidden'),
+      'состояние скрытия выполненных не сохраняется');
     assert.ok(appSrc.includes('is-done'), 'нет зачёркивания');
     assert.ok(html.includes('user-select'), 'свайп проигрывает выделению текста');
     assert.ok(appSrc.includes('_swOpen'), 'состояние свайпа рассинхронизировано');

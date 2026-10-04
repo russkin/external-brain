@@ -2,10 +2,11 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v59';
+  var APP_VERSION = 'v60';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
+  var DONE_HIDDEN_KEY = 'external-brain-done-hidden-v1';
   var L = window.EBLogic;
   var state = null;
   var syncStatus = '';
@@ -573,6 +574,28 @@
       }
     }
     saveCollapsed();
+    render();
+  }
+
+  /* Скрытая секция выполненных: локально на устройстве (в синк не ходит).
+   * Разделитель «Выполнено · N» остаётся всегда — он же точка возврата. */
+  var doneHidden = false;
+  function loadDoneHidden() {
+    try {
+      doneHidden = typeof localStorage !== 'undefined' &&
+        localStorage.getItem(DONE_HIDDEN_KEY) === '1';
+    } catch (x) { doneHidden = false; }
+  }
+  function saveDoneHidden() {
+    try {
+      if (typeof localStorage === 'undefined') return;
+      if (doneHidden) localStorage.setItem(DONE_HIDDEN_KEY, '1');
+      else localStorage.removeItem(DONE_HIDDEN_KEY);
+    } catch (x) {}
+  }
+  function toggleDoneHidden() {
+    doneHidden = !doneHidden;
+    saveDoneHidden();
     render();
   }
 
@@ -2255,12 +2278,19 @@
     if (doneVis.length) {
       var sep = document.createElement('div');
       sep.className = 'done-sep';
-      sep.textContent = 'Выполнено · ' + doneVis.length;
+      /* Тап — скрыть/показать все выполненные разом. Стрелка показывает
+       * состояние (▸ скрыты, ▾ видны), разделитель в скрытом состоянии
+       * остаётся: он же точка возврата и кламп дыры при перетаскивании. */
+      sep.textContent = 'Выполнено · ' + doneVis.length + (doneHidden ? ' ▸' : ' ▾');
+      sep.setAttribute('title', doneHidden ? 'Показать выполненные' : 'Скрыть выполненные');
+      sep.addEventListener('click', function () { toggleDoneHidden(); });
       box.appendChild(sep);
-    }
-      for (var dv = 0; dv < doneVis.length; dv++) {
-        box.appendChild(makeLine(doneVis[dv].id, doneVis[dv].title, false, lineIndent(doneVis[dv]), { doneShown: true, estMin: doneVis[dv].estMin }));
+      if (!doneHidden) {
+        for (var dv = 0; dv < doneVis.length; dv++) {
+          box.appendChild(makeLine(doneVis[dv].id, doneVis[dv].title, false, lineIndent(doneVis[dv]), { doneShown: true, estMin: doneVis[dv].estMin }));
+        }
       }
+    }
     /* Раскрыть многострочные по содержимому (в потоке, после вставки). */
     var areas = box.querySelectorAll ? box.querySelectorAll('.tinput') : [];
     for (var q = 0; q < areas.length; q++) autosize(areas[q]);
@@ -2420,6 +2450,7 @@
       }, 120);
     });
     loadCollapsed();
+    loadDoneHidden();
     window.EBStore.load().then(function (s) {
       state = s;
       var repo = el('repoInput');
