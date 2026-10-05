@@ -192,7 +192,7 @@ describe('устойчивость к рассинхрону кэшей', () => 
 
 describe('логика вызывается с state.tasks', () => {
   it('мутации получают state.tasks, а не state', () => {
-    const fns = ['createTask', 'clarifyTask', 'completeTask', 'reopenBranch', 'removeTask', 'setSlices', 'completeSlice', 'setIndent'];
+    const fns = ['createTask', 'clarifyTask', 'completeTask', 'reopenBranch', 'removeTask', 'setIndent'];
     for (const fn of fns) {
       assert.ok(!new RegExp('L\\.' + fn + '\\(state[^.]').test(appSrc), 'найден вызов ' + fn + '(state, …)');
     }

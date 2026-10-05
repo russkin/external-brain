@@ -1,10 +1,9 @@
 # AGENTS.md — Внешний мозг (external-brain)
 
 Простое PWA для списка дел: строки с отступами (группы), выполнение, время
-задачи, история ↩↪, копии, офлайн-синк через GitHub. Модель: статусы
-`inbox/next/done` + нарезка живут в `src/logic.js` и синке, но из UI
-не управляются (`waiting`/`someday`, поле `project` и `focusTask` удалены
-в v76 — в живых задачах не использовались).
+задачи, история ↩↪, копии, офлайн-синк через GitHub. Модель: статусы `inbox/next/done` живут в `src/logic.js` и синке
+(`waiting`/`someday`, поле `project`, `focusTask` удалены в v76, нарезка —
+в v77; в живых задачах не использовались).
 Репозиторий: `git@github.com:russkin/external-brain.git`, ветка `main`.
 Прод: https://russkin.github.io/external-brain/ (GitHub Pages, source = GitHub Actions).
 ЖИВЫЕ ДАННЫЕ: `kalugin-a/brain-data` (`data/state.json`, ветка `main`, приватный
@@ -12,7 +11,7 @@
 russkin/external-brain. Код по умолчанию смотрит в russkin/external-brain —
 дефолты в коде не менять. Переезд на личный репозиторий остаётся возможным
 через настройку repo в приложении.
-Текущая версия: v76 (октябрь 2026). Тестов: 137 (`logic` + `ios` + `sync` + `sync-devices`).
+Текущая версия: v77 (октябрь 2026). Тестов: 135 (`logic` + `ios` + `sync` + `sync-devices`).
 Тестовая платформа: смартфон Honor 400 Pro, Android 16 (планшет в этом проекте НЕ
 используется — все замечания и проверки идут на телефоне).
 

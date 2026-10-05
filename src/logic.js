@@ -3,15 +3,16 @@
  * Модель (плоский список, v76): значения 'waiting'/'someday' и поле 'project'
  *   УДАЛЕНЫ (H-07, в живых задачах не использовались); старые данные с ними
  *   нормализация молча приводит к 'inbox'/без проекта (как лягушка в v72).
- *   task = { id, title, status, slicesTotal, slicesDone,
+ *   task = { id, title, status, estMin,
  *            indent, createdAt, updatedAt, doneAt, ts, deleted }
  *   status: 'inbox' (новые) | 'next' (в работе) | 'done' (готово)
  *   indent: уровень отступа 0..8 — задача с отступом входит в группу задачи
  *           без отступа (или с меньшим отступом) сверху.
  * Правила:
  *   - всё новое падает в инбокс (capture), цель — пустой инбокс;
- *   - прояснение (clarify) раскладывает инбокс по статусам/проектам;
- *   - слон режется на бифштексы (slicesTotal/slicesDone), съел все — задача готова;
+ *   - прояснение (clarify) правит поля задачи;
+ *   - нарезка (slicesTotal/slicesDone, setSlices/completeSlice) УДАЛЕНА в v77 —
+ *     из UI не управлялась, в живых задачах не использовалась;
  *   - удаление — tombstone (deleted=true), чтобы синк не воскрешал/не терял.
  */
 'use strict';
@@ -71,8 +72,6 @@ function createTask(tasks, title, nowMs, opts) {
     id: opts.id ? String(opts.id) : makeId(now),
     title: t,
     status: 'inbox',
-    slicesTotal: toInt(opts.slicesTotal, 0),
-    slicesDone: 0,
     estMin: normEst(opts.estMin),
     indent: normIndent(opts.indent),
     createdAt: now,
@@ -81,13 +80,12 @@ function createTask(tasks, title, nowMs, opts) {
     ts: now,
     deleted: false
   };
-  if (task.slicesTotal > 1000) task.slicesTotal = 1000;
   tasks.push(task);
   return task;
 }
 
 /* Прояснение: разложить задачу из инбокса (или любую) по полям.
- * patch: { status, slicesTotal, title, indent, estMin }.
+ * patch: { status, title, indent, estMin }.
  * Невалидный status игнорируется. */
 function clarifyTask(tasks, id, patch, nowMs) {
   var task = getTask(tasks, id);
@@ -100,12 +98,6 @@ function clarifyTask(tasks, id, patch, nowMs) {
       task.status = s;
       task.doneAt = (s === 'done') ? now : 0;
     }
-  }
-  if (patch.slicesTotal != null) {
-    var st = toInt(patch.slicesTotal, task.slicesTotal);
-    if (st > 1000) st = 1000;
-    task.slicesTotal = st;
-    if (task.slicesDone > st) task.slicesDone = st;
   }
   if (patch.title != null) task.title = normTitle(patch.title);
   if (patch.indent != null) task.indent = normIndent(patch.indent);
@@ -215,19 +207,6 @@ function removeTask(tasks, id, nowMs) {
   return task;
 }
 
-function setSlices(tasks, id, total, nowMs) {
-  var task = getTask(tasks, id);
-  if (!task || task.deleted) return null;
-  var now = toInt(nowMs, Date.now());
-  var st = toInt(total, 0);
-  if (st > 1000) st = 1000;
-  task.slicesTotal = st;
-  if (task.slicesDone > st) task.slicesDone = st;
-  task.updatedAt = now;
-  task.ts = now;
-  return task;
-}
-
 /* Отступ: задача с отступом входит в группу задачи сверху.
  * Уровень ограничен 0..MAX_INDENT; правило «не глубже соседа сверху +1»
  * держит UI, сюда приходит уже проверенное значение. */
@@ -285,22 +264,6 @@ function isHiddenByCollapse(arr, idx, collapsed) {
   return false;
 }
 
-/* Съесть один бифштекс. Все съедены (total>0) — задача автоматически готова. */
-function completeSlice(tasks, id, nowMs) {
-  var task = getTask(tasks, id);
-  if (!task || task.deleted) return null;
-  var now = toInt(nowMs, Date.now());
-  if (task.slicesTotal <= 0) return task;
-  if (task.slicesDone < task.slicesTotal) task.slicesDone += 1;
-  if (task.slicesDone >= task.slicesTotal) {
-    task.status = 'done';
-    task.doneAt = now;
-  }
-  task.updatedAt = now;
-  task.ts = now;
-  return task;
-}
-
 function isAlive(t) {
   return !!t && !t.deleted;
 }
@@ -348,7 +311,6 @@ function shareItem(t) {
   var pad = '';
   for (var k = 0; k < normIndent(t.indent); k++) pad += '  ';
   var s = pad + '- ' + t.title;
-  if (t.slicesTotal > 0) s += ' (' + t.slicesDone + '/' + t.slicesTotal + ')';
   return s;
 }
 
@@ -399,10 +361,6 @@ function normalizeTask(t) {
   var id = String(t.id || '');
   if (!id) return null;
   var status = isStatus(t.status) ? t.status : 'inbox';
-  var slicesTotal = toInt(t.slicesTotal, 0);
-  if (slicesTotal > 1000) slicesTotal = 1000;
-  var slicesDone = toInt(t.slicesDone, 0);
-  if (slicesDone > slicesTotal) slicesDone = slicesTotal;
   var createdAt = toInt(t.createdAt, 0);
   var updatedAt = toInt(t.updatedAt, 0);
   var doneAt = (status === 'done') ? toInt(t.doneAt, updatedAt) : 0;
@@ -412,8 +370,6 @@ function normalizeTask(t) {
     id: id.slice(0, 64),
     title: normTitle(t.title),
     status: status,
-    slicesTotal: slicesTotal,
-    slicesDone: slicesDone,
     estMin: normEst(t.estMin),
     indent: indent,
     createdAt: createdAt,
@@ -446,8 +402,7 @@ function normalizeTasks(tasks) {
 
 function cloneTask(t) {
   return {
-    id: t.id, title: t.title, status: t.status,
-    slicesTotal: t.slicesTotal, slicesDone: t.slicesDone, indent: normIndent(t.indent),
+    id: t.id, title: t.title, status: t.status, indent: normIndent(t.indent),
     estMin: normEst(t.estMin),
     createdAt: t.createdAt,
     updatedAt: t.updatedAt, doneAt: t.doneAt, ts: t.ts || 0, deleted: !!t.deleted
@@ -522,12 +477,10 @@ var api = {
   reopenTask: reopenTask,
   reopenBranch: reopenBranch,
   removeTask: removeTask,
-  setSlices: setSlices,
   setIndent: setIndent,
   hasKids: hasKids,
   isDoneShown: isDoneShown,
   isHiddenByCollapse: isHiddenByCollapse,
-  completeSlice: completeSlice,
   inboxList: inboxList,
   nextList: nextList,
   doneList: doneList,
