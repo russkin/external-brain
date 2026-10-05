@@ -177,6 +177,16 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'нет индикатора сети (цвет/МБ/с) в шапке');
     assert.ok(html.includes('id="netStatus"') && html.includes('id="netType"'),
       'нет элементов сети в шапке');
+    /* v75: журнал синка уходит на сервер при github-ошибке (как в purchases). */
+    assert.ok(appSrc.includes('function maybePublishJournal()') &&
+      appSrc.includes("if (/github-/.test(lastErrMsg)) maybePublishJournal();") &&
+      appSrc.includes("'logs/sync-'"),
+      'нет публикации журнала в logs/');
+    assert.ok(appSrc.includes("now - lastJournalPublish < 15 * 60 * 1000"),
+      'нет лимита 15 минут на публикацию журнала');
+    assert.ok(appSrc.includes('external-brain-device-v1') &&
+      appSrc.includes("'Публикация журнала: '") && appSrc.includes("' · id '"),
+      'нет deviceId/строк публикации в диагностике');
   });
 });
 

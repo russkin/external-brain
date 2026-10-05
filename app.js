@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v74';
+  var APP_VERSION = 'v75';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -35,14 +35,62 @@
         lastErrAt = +r.errAt || 0;
         lastErrMsg = String(r.err || '').slice(0, 120);
         syncLog = Array.isArray(r.log) ? r.log.slice(-50) : [];
+        pubAt = +r.pubAt || 0;
+        pubStatus = String(r.pub || '').slice(0, 120);
       }
     } catch (x) {}
   }
   function syncLogSave() {
     try {
       localStorage.setItem(SYNCLOG_KEY, JSON.stringify({
-        at: lastSyncAt, errAt: lastErrAt, err: lastErrMsg, log: syncLog.slice(-50)
+        at: lastSyncAt, errAt: lastErrAt, err: lastErrMsg, log: syncLog.slice(-50),
+        pubAt: pubAt, pub: pubStatus
       }));
+    } catch (x) {}
+  }
+
+  /* Публикация журнала в logs/ при ошибке синка — как в purchases:
+   * не чаще раза в 15 минут (иначе спам коммитами), имя в сутки
+   * logs/sync-ГГГГ-ММ-ДД-<device>.json, обрывы сети (без github-) не публикуем. */
+  var lastJournalPublish = 0;
+  var pubAt = 0, pubStatus = '';
+  var DEVICE_KEY = 'external-brain-device-v1';
+  function journalDeviceId() {
+    try {
+      var id = localStorage.getItem(DEVICE_KEY);
+      if (!id) {
+        id = Math.random().toString(16).slice(2, 10);
+        localStorage.setItem(DEVICE_KEY, id);
+      }
+      return id;
+    } catch (x) { return 'nodev'; }
+  }
+  function logFileName() {
+    var d = new Date();
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return 'logs/sync-' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' +
+      p(d.getDate()) + '-' + journalDeviceId() + '.json';
+  }
+  function maybePublishJournal() {
+    try {
+      var st = state && state.settings;
+      if (!st || !st.repo || !st.token) return;
+      var now = Date.now();
+      if (now - lastJournalPublish < 15 * 60 * 1000) return;
+      lastJournalPublish = now;
+      var body = {
+        device: journalDeviceId(),
+        version: APP_VERSION,
+        at: new Date(now).toISOString(),
+        journal: syncLog.slice(-50)
+      };
+      window.EBSync.publishFile(st.repo, st.token, logFileName(), body).then(function (res) {
+        pubAt = Date.now();
+        pubStatus = String(res || '');
+        syncLogPush('публикация журнала: ' + pubStatus);
+        syncLogSave();
+        renderStatus();
+      });
     } catch (x) {}
   }
 
@@ -428,6 +476,9 @@
         if (syncFails <= 5) {
           setTimeout(function () { doSync(); }, 2000);
         }
+        /* Обрыв сети (без github-) публиковать бессмысленно — сети нет
+         * и для самой публикации (как в purchases). */
+        if (/github-/.test(lastErrMsg)) maybePublishJournal();
       } else {
         syncFails = 0;
         lastSyncAt = Date.now();
@@ -454,6 +505,7 @@
       syncLogPush('ошибка синка: ' + lastErrMsg);
       syncLogSave();
       setLight('red', false);
+      if (/github-/.test(lastErrMsg)) maybePublishJournal();
       renderStatus();
       return 'error';
     });
@@ -2552,9 +2604,11 @@
       ' · свёрнуто групп ' + collapsedN);
     lines.push('История: ↩ ' + undoStack.length + ' · ↪ ' + redoStack.length);
     lines.push('Сеть: ' + connLine());
-    lines.push('Устройство: ' + deviceLine());
+    lines.push('Устройство: ' + deviceLine() + ' · id ' + journalDeviceId());
     lines.push('Repo: ' + (state ? state.settings.repo : '?'));
     lines.push('Ключ: ' + (state && state.settings.token ? 'введён' : 'выключен (нет ключа)'));
+    lines.push('Публикация журнала: ' +
+      (pubAt ? fmtDT(pubAt) + ' · ' + pubStatus : 'ещё не было'));
     lines.push('Локальная копия: ' + backupLabel());
     lines.push('Постоянная копия: ' + pinLabel());
     if (lastAction) lines.push('Последнее действие: ' + lastAction);

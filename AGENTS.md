@@ -7,7 +7,7 @@
 из UI не управляются.
 Репозиторий: `git@github.com:russkin/external-brain.git`, ветка `main`.
 Прод: https://russkin.github.io/external-brain/ (GitHub Pages, source = GitHub Actions).
-Текущая версия: v74 (октябрь 2026). Тестов: 137 (`logic` + `ios` + `sync` + `sync-devices`).
+Текущая версия: v75 (октябрь 2026). Тестов: 137 (`logic` + `ios` + `sync` + `sync-devices`).
 Тестовая платформа: смартфон Honor 400 Pro, Android 16 (планшет в этом проекте НЕ
 используется — все замечания и проверки идут на телефоне).
 
@@ -49,7 +49,8 @@ Docs-only правки версию НЕ bump'ят. Есть регресс-те
   single-flight синк, ретраи ошибок, проверка обновлений.
 - `store.js` — IndexedDB + fallback localStorage (`external-brain-v1`), `sanitize` нормализует.
 - `sync.js` — синк через GitHub Contents API, UMD (браузер + `require` в тестах),
-  `timedFetch` (таймаут 20 сек), GET мимо HTTP-кэша (`no-store`).
+  `timedFetch` (таймаут 20 сек), GET мимо HTTP-кэша (`no-store`),
+  `publishFile` (публикация файла в репозиторий — журнал в `logs/`).
 - `src/logic.js` — чистая логика без DOM (UMD), вся мутабельность задач здесь.
 - `sw.js`, `manifest.webmanifest`, `icon.svg` + `icon-192/512.png` (PNG обязательны —
   старый Chrome один SVG не признаёт и ставит битый ярлык). Install берёт файлы строго из сети
@@ -186,8 +187,17 @@ Docs-only правки версию НЕ bump'ят. Есть регресс-те
   offline/connection change в `wire()`. Мёртвый код purchases исключён:
   CSS `.group`/`.group-title`/`.row-name`/`.row-name.done`, экспорты
   `STATUSES`/`makeId`/`MAX_INDENT` из api `src/logic.js`. Журнал синка хранится
-  только локально (localStorage `external-brain-synclog-v1`, «Журнал:» в
-  диагностике ⓘ), на сервер в `logs/` не публикуется.
+  локально (localStorage `external-brain-synclog-v1`, «Журнал:» в
+  диагностике ⓘ).
+- Публикация журнала на сервер (v75, как в purchases): при ошибке синка с
+  `github-` в тексте (сетевые обрывы не публикуем — сети нет и для публикации)
+  вызывается `maybePublishJournal()`: не чаще раза в 15 минут (иначе спам
+  коммитами), файл в сутки `logs/sync-ГГГГ-ММ-ДД-<device>.json` (device —
+  случайный id в localStorage `external-brain-device-v1`), тело
+  `{ device, version, at, journal }` (последние 50 записей) через `publishFile`.
+  Статус/время публикации пишутся в synclog (`pubAt`/`pub`) и видны в
+  диагностике: строка «Публикация журнала: …», id устройства — в «Устройство:».
+  Лог-коммиты деплой не триггерят (`paths-ignore: data/**, logs/**`).
 - Вертикальный drag (v69, грабль): `grabDy` (сдвиг «призрака» и `dt` для
   дыры) меряется в `pointerdown` по позиции захвата, НЕ в `startVertical` —
   там палец уже уехал на 14+px (на таче первый `pointermove` ещё крупнее),
