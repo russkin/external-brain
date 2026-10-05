@@ -1,5 +1,5 @@
 'use strict';
-/* Unit-тесты чистой логики (src/logic.js): инбокс, прояснение, лягушки, слоны, слияние. */
+/* Unit-тесты чистой логики (src/logic.js): инбокс, прояснение, слоны, слияние. */
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -74,13 +74,13 @@ describe('прояснение (clarify)', () => {
     L.clarifyTask(t, 'a', { status: 'next' }, 3000);
     assert.equal(L.getTask(t, 'a').doneAt, 0);
   });
-  it('проект, лягушка, нарезка, переименование', () => {
+  it('проект, нарезка, переименование; поле frog выпилено', () => {
     const t = L.blankTasks();
     mk(t, 'Дело', 1000, { id: 'a' });
     L.clarifyTask(t, 'a', { project: 'Работа', frog: true, slicesTotal: 5, title: 'Важное' }, 2000);
     const g = L.getTask(t, 'a');
     assert.equal(g.project, 'Работа');
-    assert.equal(g.frog, true);
+    assert.equal(g.frog, undefined);
     assert.equal(g.slicesTotal, 5);
     assert.equal(g.title, 'Важное');
   });
@@ -148,30 +148,26 @@ describe('готово / вернуть / удалить', () => {
     assert.equal(L.completeTask(t, 'z', 1), null);
     assert.equal(L.reopenTask(t, 'z', 1), null);
     assert.equal(L.removeTask(t, 'z', 1), null);
-    assert.equal(L.setFrog(t, 'z', true, 1), null);
     assert.equal(L.setSlices(t, 'z', 3, 1), null);
     assert.equal(L.completeSlice(t, 'z', 1), null);
   });
 });
 
-describe('лягушки и слоны', () => {
-  it('setFrog вкл/выкл', () => {
-    const t = L.blankTasks();
-    mk(t, 'Дело', 1000, { id: 'a' });
-    L.setFrog(t, 'a', true, 2000);
-    assert.equal(L.getTask(t, 'a').frog, true);
-    L.setFrog(t, 'a', false, 3000);
-    assert.equal(L.getTask(t, 'a').frog, false);
+describe('слоны', () => {
+  it('лягушка выпилен: setFrog отсутствует в API', () => {
+    assert.equal(L.setFrog, undefined);
+    assert.equal(typeof L.setFrog, 'undefined');
   });
-  it('next: лягушки первые', () => {
+  it('next: frog не пишется и не влияет на порядок', () => {
     const t = L.blankTasks();
     mk(t, 'Обычное', 1000, { id: 'a' });
-    mk(t, 'Лягушка', 2000, { id: 'b' });
-    L.clarifyTask(t, 'a', { status: 'next' }, 3000);
-    L.clarifyTask(t, 'b', { status: 'next', frog: true }, 3000);
+    mk(t, 'Второе', 2000, { id: 'b' });
+    L.clarifyTask(t, 'a', { status: 'next', frog: true }, 3000);
+    L.clarifyTask(t, 'b', { status: 'next' }, 3000);
+    assert.equal(L.getTask(t, 'a').frog, undefined);
     const nx = L.nextList(t);
-    assert.equal(nx[0].id, 'b');
-    assert.equal(nx[1].id, 'a');
+    assert.equal(nx[0].id, 'a');
+    assert.equal(nx[1].id, 'b');
   });
   it('без лягушек — по времени создания', () => {
     const t = L.blankTasks();
@@ -245,7 +241,7 @@ describe('списки и фокус', () => {
     L.completeTask(t, 'b', 3000);
     assert.equal(L.doneList(t)[0].id, 'b');
   });
-  it('фокус: лягушка > следующее > инбокс > null', () => {
+  it('фокус: следующее > инбокс > null', () => {
     const t = L.blankTasks();
     assert.equal(L.focusTask(t), null);
     mk(t, 'Мысль', 1000, { id: 'i' });
@@ -253,11 +249,8 @@ describe('списки и фокус', () => {
     mk(t, 'Действие', 2000, { id: 'n' });
     L.clarifyTask(t, 'n', { status: 'next' }, 3000);
     assert.equal(L.focusTask(t).id, 'n');
-    mk(t, 'Лягушка', 2500, { id: 'f' });
-    L.clarifyTask(t, 'f', { status: 'next', frog: true }, 3000);
-    assert.equal(L.focusTask(t).id, 'f');
-    t.push({ id: 'z', title: '', status: 'next', frog: true, indent: 0, createdAt: 0, updatedAt: 3000, ts: 3000, deleted: false });
-    assert.equal(L.focusTask(t).id, 'f', 'пустая задача не перехватывает фокус дня');
+    t.push({ id: 'z', title: '', status: 'next', indent: 0, createdAt: 0, updatedAt: 3000, ts: 3000, deleted: false });
+    assert.equal(L.focusTask(t).id, 'n', 'пустая задача не перехватывает фокус дня');
   });
   it('stats считает всё', () => {
     const t = L.blankTasks();
@@ -266,18 +259,18 @@ describe('списки и фокус', () => {
     mk(t, 'W', 1000, { id: 'w' });
     mk(t, 'S', 1000, { id: 's' });
     mk(t, 'D', 1000, { id: 'd' });
-    L.clarifyTask(t, 'n', { status: 'next', frog: true }, 2000);
+    L.clarifyTask(t, 'n', { status: 'next' }, 2000);
     L.clarifyTask(t, 'w', { status: 'waiting' }, 2000);
     L.clarifyTask(t, 's', { status: 'someday' }, 2000);
     L.completeTask(t, 'd', 2000);
     t.push({ id: 'z', title: '', status: 'inbox', indent: 0, createdAt: 5000, updatedAt: 1000, ts: 1000, deleted: false });
     const st = L.stats(t);
-    assert.deepEqual(st, { inbox: 1, next: 1, waiting: 1, someday: 1, done: 1, hasFrog: true });
+    assert.deepEqual(st, { inbox: 1, next: 1, waiting: 1, someday: 1, done: 1 });
   });
   it('shareText: пусто и с данными', () => {
     assert.equal(L.shareText(L.blankTasks()), '');
     const t = L.blankTasks();
-    mk(t, 'Лягушка', 1000, { id: 'f', project: 'Дом', frog: true });
+    mk(t, 'Лягушка', 1000, { id: 'f', project: 'Дом' });
     L.clarifyTask(t, 'f', { status: 'next', slicesTotal: 3 }, 2000);
     const txt = L.shareText(t);
     assert.ok(txt.includes('Лягушка'));
@@ -316,7 +309,7 @@ describe('нормализация', () => {
     assert.equal(n.status, 'inbox');
     assert.equal(n.slicesTotal, 0);
     assert.equal(n.slicesDone, 0);
-    assert.equal(n.frog, true);
+    assert.equal(n.frog, undefined);
   });
   it('estMin: мусор и потолки, новая задача без времени', () => {
     assert.equal(L.normalizeTask({ id: 'a', title: 'x', estMin: '75' }).estMin, 75);

@@ -90,6 +90,20 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'нет кнопки восстановления копии');
     assert.ok(appSrc.includes('Локальная копия: ') && appSrc.includes('backupInfo'),
       'копия не видна в диагностике');
+    /* Диагностика v72: сжатая статистика + синк/размер/сеть/устройство/SW. */
+    assert.ok(appSrc.includes("'Задач: ' + alive + ' · готово '"), 'нет строки «Задач: N · готово M»');
+    assert.ok(!appSrc.includes('Лягушка: '), 'строка диагностики про лягушку не удалена');
+    assert.ok(appSrc.includes("'Обновление: SW '"), 'нет строки SW/кэша');
+    assert.ok(appSrc.includes('external-brain-synclog-v1'), 'нет времени последнего синка');
+    assert.ok(appSrc.includes("'Ошибка синка: '"), 'нет строки ошибки синка');
+    assert.ok(appSrc.includes("'Каталог: '"), 'нет времени каталога');
+    assert.ok(appSrc.includes("' · свёрнуто групп '") && appSrc.includes("'История: ↩ '"),
+      'нет локальных флагов/истории');
+    assert.ok(appSrc.includes("'Размер: '") && appSrc.includes("'Сеть: '") &&
+      appSrc.includes("'Устройство: '") && appSrc.includes("'Последнее действие: '"),
+      'нет размера/сети/устройства/последнего действия');
+    assert.ok(appSrc.includes('function diagSwInfo()') && appSrc.includes('diagText().then'),
+      'diagText не асинхронный/без SW-инфо');
     /* Постоянная («вечная») копия: кнопка + автокопия при обновлении версии. */
     assert.ok(storeSrc.includes('external-brain-pin-v1') && storeSrc.includes('external-brain-pin-ver-v1'),
       'нет ключей постоянной копии');
@@ -149,11 +163,11 @@ describe('устойчивость к рассинхрону кэшей', () => 
 
 describe('логика вызывается с state.tasks', () => {
   it('мутации получают state.tasks, а не state', () => {
-    const fns = ['createTask', 'clarifyTask', 'completeTask', 'reopenTask', 'removeTask', 'setFrog', 'setSlices', 'completeSlice', 'setIndent'];
+    const fns = ['createTask', 'clarifyTask', 'completeTask', 'reopenBranch', 'removeTask', 'setSlices', 'completeSlice', 'setIndent'];
     for (const fn of fns) {
       assert.ok(!new RegExp('L\\.' + fn + '\\(state[^.]').test(appSrc), 'найден вызов ' + fn + '(state, …)');
     }
-    for (const fn of ['createTask', 'clarifyTask', 'removeTask', 'getTask', 'setIndent', 'reopenTask']) {
+    for (const fn of ['createTask', 'clarifyTask', 'removeTask', 'getTask', 'setIndent', 'reopenBranch']) {
       assert.ok(appSrc.includes('L.' + fn + '(state.tasks,'), 'нет вызова ' + fn + '(state.tasks, …)');
     }
   });
@@ -222,7 +236,7 @@ describe('логика вызывается с state.tasks', () => {
   });
   it('возврат из выполненных и история undo/redo', () => {
     assert.ok(appSrc.includes('Не выполнено'), 'нет флага возврата');
-    assert.ok(appSrc.includes('L.reopenTask(state.tasks'), 'нет возврата задачи');
+    assert.ok(appSrc.includes('L.reopenBranch(state.tasks'), 'нет возврата задачи');
     assert.ok(appSrc.includes('completeBranch'), 'ветка не выполняется целиком');
     assert.ok(appSrc.includes('reopenBranch'), 'ветка не возвращается целиком');
     assert.ok(appSrc.includes('hasLiveParent'), 'нет проверки живого родителя при возврате ветки');

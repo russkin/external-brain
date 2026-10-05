@@ -1,7 +1,7 @@
 /* logic.js — чистая логика «Внешнего мозга» без DOM.
  * Совместимость: ES2017 без optional chaining, работает в Node и в браузере.
  * Модель (джедайские техники, упрощённо):
- *   task = { id, title, status, project, frog, slicesTotal, slicesDone,
+ *   task = { id, title, status, project, slicesTotal, slicesDone,
  *            indent, createdAt, updatedAt, doneAt, ts, deleted }
  *   status: 'inbox' (сбор) | 'next' (следующие действия) | 'waiting' (ожидание) |
  *           'someday' (когда-нибудь) | 'done' (готово)
@@ -10,7 +10,6 @@
  * Правила:
  *   - всё новое падает в инбокс (capture), цель — пустой инбокс;
  *   - прояснение (clarify) раскладывает инбокс по статусам/проектам;
- *   - лягушка (frog) — самая неприятная задача дня, идёт первой;
  *   - слон режется на бифштексы (slicesTotal/slicesDone), съел все — задача готова;
  *   - удаление — tombstone (deleted=true), чтобы синк не воскрешал/не терял.
  */
@@ -76,7 +75,6 @@ function createTask(tasks, title, nowMs, opts) {
     title: t,
     status: 'inbox',
     project: normProject(opts.project),
-    frog: !!opts.frog,
     slicesTotal: toInt(opts.slicesTotal, 0),
     slicesDone: 0,
     estMin: normEst(opts.estMin),
@@ -93,7 +91,7 @@ function createTask(tasks, title, nowMs, opts) {
 }
 
 /* Прояснение: разложить задачу из инбокса (или любую) по полям.
- * patch: { status, project, frog, slicesTotal, title, indent, estMin }.
+ * patch: { status, project, slicesTotal, title, indent, estMin }.
  * Невалидный status игнорируется. */
 function clarifyTask(tasks, id, patch, nowMs) {
   var task = getTask(tasks, id);
@@ -108,7 +106,6 @@ function clarifyTask(tasks, id, patch, nowMs) {
     }
   }
   if (patch.project != null) task.project = normProject(patch.project);
-  if (patch.frog != null) task.frog = !!patch.frog;
   if (patch.slicesTotal != null) {
     var st = toInt(patch.slicesTotal, task.slicesTotal);
     if (st > 1000) st = 1000;
@@ -223,16 +220,6 @@ function removeTask(tasks, id, nowMs) {
   return task;
 }
 
-function setFrog(tasks, id, frog, nowMs) {
-  var task = getTask(tasks, id);
-  if (!task || task.deleted) return null;
-  var now = toInt(nowMs, Date.now());
-  task.frog = !!frog;
-  task.updatedAt = now;
-  task.ts = now;
-  return task;
-}
-
 function setSlices(tasks, id, total, nowMs) {
   var task = getTask(tasks, id);
   if (!task || task.deleted) return null;
@@ -331,10 +318,9 @@ function inboxList(tasks) {
   return byStatus(tasks, 'inbox').sort(function (a, b) { return a.createdAt - b.createdAt; });
 }
 
-/* Следующие: сначала лягушки, затем по времени создания. */
+/* Следующие: по времени создания. */
 function nextList(tasks) {
   return byStatus(tasks, 'next').sort(function (a, b) {
-    if (!!a.frog !== !!b.frog) return a.frog ? -1 : 1;
     return a.createdAt - b.createdAt;
   });
 }
@@ -351,12 +337,9 @@ function doneList(tasks) {
   return byStatus(tasks, 'done').sort(function (a, b) { return b.doneAt - a.doneAt; });
 }
 
-/* Фокус дня: первая лягушка из next, иначе первое next, иначе первый инбокс. */
+/* Фокус дня: первое следующее, иначе первый инбокс. */
 function focusTask(tasks) {
   var nx = nextList(tasks).filter(function (t) { return !!t.title; });
-  for (var i = 0; i < nx.length; i++) {
-    if (nx[i].frog) return nx[i];
-  }
   if (nx.length) return nx[0];
   var ib = inboxList(tasks).filter(function (t) { return !!t.title; });
   return ib.length ? ib[0] : null;
@@ -373,17 +356,12 @@ function stats(tasks) {
     if (t && !t.deleted && t.title) tl.push(t);
   }
   var nx = nextList(tl);
-  var hasFrog = false;
-  for (var i = 0; i < nx.length; i++) {
-    if (nx[i].frog) { hasFrog = true; break; }
-  }
   return {
     inbox: inboxList(tl).length,
     next: nx.length,
     waiting: waitingList(tl).length,
     someday: somedayList(tl).length,
-    done: doneList(tl).length,
-    hasFrog: hasFrog
+    done: doneList(tl).length
   };
 }
 
@@ -392,7 +370,7 @@ function stats(tasks) {
 function shareItem(t) {
   var pad = '';
   for (var k = 0; k < normIndent(t.indent); k++) pad += '  ';
-  var s = pad + '- ' + (t.frog ? 'FROG ' : '') + t.title;
+  var s = pad + '- ' + t.title;
   if (t.project) s += ' [' + t.project + ']';
   if (t.slicesTotal > 0) s += ' (' + t.slicesDone + '/' + t.slicesTotal + ')';
   return s;
@@ -459,7 +437,6 @@ function normalizeTask(t) {
     title: normTitle(t.title),
     status: status,
     project: normProject(t.project),
-    frog: !!t.frog,
     slicesTotal: slicesTotal,
     slicesDone: slicesDone,
     estMin: normEst(t.estMin),
@@ -494,7 +471,7 @@ function normalizeTasks(tasks) {
 
 function cloneTask(t) {
   return {
-    id: t.id, title: t.title, status: t.status, project: t.project, frog: t.frog,
+    id: t.id, title: t.title, status: t.status, project: t.project,
     slicesTotal: t.slicesTotal, slicesDone: t.slicesDone, indent: normIndent(t.indent),
     estMin: normEst(t.estMin),
     createdAt: t.createdAt,
@@ -572,7 +549,6 @@ var api = {
   reopenTask: reopenTask,
   reopenBranch: reopenBranch,
   removeTask: removeTask,
-  setFrog: setFrog,
   setSlices: setSlices,
   setIndent: setIndent,
   MAX_INDENT: MAX_INDENT,

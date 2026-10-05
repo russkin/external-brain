@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v71';
+  var APP_VERSION = 'v72';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -13,6 +13,30 @@
   var lastAction = '';
   var bootError = '';
   var bootStack = '';
+
+  /* Диагностика синка: время последнего успеха/ошибки переживает
+   * перезагрузку (иначе после F5 «когда был синк» не ответить). */
+  var SYNCLOG_KEY = 'external-brain-synclog-v1';
+  var lastSyncAt = 0;
+  var lastErrAt = 0;
+  var lastErrMsg = '';
+  function syncLogLoad() {
+    try {
+      var r = JSON.parse(localStorage.getItem(SYNCLOG_KEY));
+      if (r && typeof r === 'object') {
+        lastSyncAt = +r.at || 0;
+        lastErrAt = +r.errAt || 0;
+        lastErrMsg = String(r.err || '').slice(0, 120);
+      }
+    } catch (x) {}
+  }
+  function syncLogSave() {
+    try {
+      localStorage.setItem(SYNCLOG_KEY, JSON.stringify({
+        at: lastSyncAt, errAt: lastErrAt, err: lastErrMsg
+      }));
+    } catch (x) {}
+  }
 
   function el(id) { return document.getElementById(id); }
 
@@ -219,7 +243,10 @@
     if (!state) return null;
     var before = snapFull();
     var r = fn();
-    if (snapTasks() !== before.tasks) pushUndo(before);
+    if (snapTasks() !== before.tasks) {
+      pushUndo(before);
+      state.updatedAt = Date.now();
+    }
     if (!dragActive) render();
     save();
     updateHistoryButtons();
@@ -232,6 +259,7 @@
     try { snap = JSON.parse(tasksJson); } catch (x) { snap = []; }
     if (!Array.isArray(snap)) snap = [];
     if (snapTasks() !== tasksJson) {
+      state.updatedAt = now;
       var keep = {}, out = [], i, t, c;
       for (i = 0; i < snap.length; i++) {
         t = snap[i];
@@ -383,6 +411,9 @@
       syncFlying = false;
       syncStatus = res.status;
       if (res.status === 'error') {
+        lastErrAt = Date.now();
+        lastErrMsg = String(res.error || 'ошибка').slice(0, 120);
+        syncLogSave();
         setLight('red', false);
         syncFails += 1;
         if (syncFails <= 5) {
@@ -390,8 +421,13 @@
         }
       } else {
         syncFails = 0;
+        lastSyncAt = Date.now();
+        lastErrMsg = '';
+        lastErrAt = 0;
+        syncLogSave();
         setLight(res.status === 'in-sync' ? 'green' : 'green', false);
         if (res.status === 'pulled' || res.status === 'merged') {
+          state.updatedAt = Date.now();
           window.EBStore.save(state);
           render();
         }
@@ -403,6 +439,9 @@
     }).catch(function (e) {
       syncFlying = false;
       syncStatus = 'error: ' + String(e && e.message || e).slice(0, 120);
+      lastErrAt = Date.now();
+      lastErrMsg = String(e && e.message || e).slice(0, 120);
+      syncLogSave();
       setLight('red', false);
       renderStatus();
       return 'error';
@@ -463,53 +502,6 @@
   }
 
   /* --- Рендер --- */
-
-  function taskRow(t, buttons) {
-    var div = document.createElement('div');
-    div.className = 'row';
-    var cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = t.status === 'done';
-    cb.setAttribute('aria-label', 'Готово');
-    cb.addEventListener('change', function () {
-      mutate(function () {
-        if (cb.checked) L.completeTask(state.tasks, t.id);
-        else L.reopenTask(state.tasks, t.id);
-      });
-    });
-    div.appendChild(cb);
-    var nm = document.createElement('span');
-    nm.className = 'row-name' + (t.status === 'done' ? ' done' : '');
-    var label = t.title;
-    if (t.project) label += ' [' + t.project + ']';
-    if (t.slicesTotal > 0) label += ' (' + t.slicesDone + '/' + t.slicesTotal + ')';
-    if (t.frog) label = 'FROG ' + label;
-    nm.textContent = label;
-    div.appendChild(nm);
-    buttons.forEach(function (b) {
-      var btn = document.createElement('button');
-      btn.textContent = b[0];
-      btn.title = b[1] || b[0];
-      btn.addEventListener('click', function () { b[2](t); });
-      div.appendChild(btn);
-    });
-    return div;
-  }
-
-  function renderGroup(boxId, title, list, mkButtons) {
-    var box = el(boxId);
-    if (!box) return;
-    box.innerHTML = '';
-    if (!list.length) { box.style.display = 'none'; return; }
-    box.style.display = '';
-    var h = document.createElement('div');
-    h.className = 'group-title';
-    h.textContent = title + ' (' + list.length + ')';
-    box.appendChild(h);
-    list.forEach(function (t) {
-      box.appendChild(taskRow(t, mkButtons(t)));
-    });
-  }
 
   function render() {
     if (!state) return;
@@ -2449,19 +2441,93 @@
     return fmtWhen(p.savedAt) + ' (' + src + ')';
   }
 
+  function fmtDT(ms) {
+    try {
+      var d = new Date(ms);
+      var p = function (n) { return (n < 10 ? '0' : '') + n; };
+      return p(d.getDate()) + '.' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    } catch (x) { return '—'; }
+  }
+  function connLine() {
+    try {
+      var c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (!c) return 'н/д';
+      var parts = [];
+      if (c.effectiveType) parts.push(c.effectiveType);
+      if (typeof c.downlink === 'number') parts.push(c.downlink + ' Мбит/с');
+      return parts.length ? parts.join(' · ') : 'н/д';
+    } catch (x) { return 'н/д'; }
+  }
+  function deviceLine() {
+    try {
+      var ua = navigator.userAgent || '';
+      var os = 'Другое';
+      if (/Android/i.test(ua)) os = 'Android';
+      else if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
+      else if (/Windows/i.test(ua)) os = 'Windows';
+      else if (/Mac OS X/i.test(ua)) os = 'macOS';
+      else if (/Linux/i.test(ua)) os = 'Linux';
+      var br = '';
+      var m = ua.match(/(?:Chrome|Chromium|Edg)\/([\d.]+)/);
+      if (m) br = 'Chrome ' + m[1].split('.')[0];
+      else if ((m = ua.match(/Firefox\/([\d.]+)/))) br = 'Firefox ' + m[1].split('.')[0];
+      else if ((m = ua.match(/Version\/([\d.]+).*Safari/))) br = 'Safari ' + m[1].split('.')[0];
+      return os + (br ? ' · ' + br : '');
+    } catch (x) { return 'н/д'; }
+  }
+  /* SW и версия кэша — асинхронно (caches.keys), поэтому diagText — промис. */
+  function diagSwInfo() {
+    try {
+      if (!('serviceWorker' in navigator)) return Promise.resolve('нет поддержки');
+      var act = navigator.serviceWorker.controller ? 'активен' : 'не активен';
+      if (typeof caches === 'undefined' || !caches || !caches.keys) {
+        return Promise.resolve(act + ', кэш н/д');
+      }
+      return caches.keys().then(function (ks) {
+        var hit = '';
+        for (var i = 0; i < ks.length; i++) {
+          if (String(ks[i]).indexOf('extbrain-') === 0) hit = String(ks[i]);
+        }
+        return act + (hit ? ', ' + hit : ', кэш пуст');
+      }).catch(function () { return act; });
+    } catch (x) { return Promise.resolve('н/д'); }
+  }
+
   function diagText() {
-    var st = state ? L.stats(state.tasks) : {};
-    return [
+    var st = state ? L.stats(state.tasks)
+      : { inbox: 0, next: 0, waiting: 0, someday: 0, done: 0 };
+    var alive = (st.inbox || 0) + (st.next || 0) + (st.waiting || 0) + (st.someday || 0);
+    var recs = 0, bytes = 0;
+    try {
+      recs = state ? state.tasks.length : 0;
+      bytes = JSON.stringify(state ? state.tasks : []).length;
+    } catch (x) {}
+    var collapsedN = 0;
+    for (var id in collapsed) if (collapsed[id]) collapsedN++;
+    var lines = [
       'Внешний мозг ' + APP_VERSION,
-      'Задач: инбокс ' + st.inbox + ', следующих ' + st.next + ', ожидание ' + st.waiting + ', когда-нибудь ' + st.someday + ', готово ' + st.done,
-      'Лягушка: ' + (st.hasFrog ? 'есть' : 'нет'),
-      'Синк: ' + (syncStatus || '—'),
-      'Repo: ' + (state ? state.settings.repo : '?'),
-      'Ключ: ' + (state && state.settings.token ? 'введён' : 'выключен (нет ключа)'),
-      'Локальная копия: ' + backupLabel(),
-      'Постоянная копия: ' + pinLabel(),
-      bootError ? bootError + ' ' + bootStack : 'Ошибок: нет'
-    ].join('\n');
+      'Задач: ' + alive + ' · готово ' + (st.done || 0),
+      'Размер: ' + recs + ' записей · ' +
+        (bytes < 1024 ? bytes + ' Б' : (bytes / 1024).toFixed(1) + ' КБ'),
+      'Синк: ' + (syncStatus || '—') + (lastSyncAt ? ' (в ' + fmtDT(lastSyncAt) + ')' : '')
+    ];
+    if (lastErrMsg) lines.push('Ошибка синка: ' + fmtDT(lastErrAt) + ' — ' + lastErrMsg);
+    lines.push('Каталог: ' + (state && state.updatedAt ? fmtDT(state.updatedAt) : '—'));
+    lines.push('Локально: выполненные ' + (doneHidden ? 'скрыты' : 'видны') +
+      ' · свёрнуто групп ' + collapsedN);
+    lines.push('История: ↩ ' + undoStack.length + ' · ↪ ' + redoStack.length);
+    lines.push('Сеть: ' + connLine());
+    lines.push('Устройство: ' + deviceLine());
+    lines.push('Repo: ' + (state ? state.settings.repo : '?'));
+    lines.push('Ключ: ' + (state && state.settings.token ? 'введён' : 'выключен (нет ключа)'));
+    lines.push('Локальная копия: ' + backupLabel());
+    lines.push('Постоянная копия: ' + pinLabel());
+    if (lastAction) lines.push('Последнее действие: ' + lastAction);
+    lines.push(bootError ? bootError + ' ' + bootStack : 'Ошибок: нет');
+    return diagSwInfo().then(function (sw) {
+      lines.splice(1, 0, 'Обновление: SW ' + sw);
+      return lines.join('\n');
+    });
   }
 
   /* Удалить выполненные — с подтверждением (кнопка в шапке и в ⚙). */
@@ -2486,7 +2552,9 @@
       ensureTokenInput();
     });
     on('diagBtn', 'click', function () {
-      askText(diagText(), '', false).then(function () {});
+      diagText().then(function (txt) {
+        askText(txt, '', false).then(function () {});
+      });
     });
     /* Репозиторий и токен — только для администратора: сначала предупреждение,
      * поля (и поле токена) скрыты, пока не подтверждено. */
@@ -2656,6 +2724,7 @@
     });
     loadCollapsed();
     loadDoneHidden();
+    syncLogLoad();
     window.EBStore.load().then(function (s) {
       state = s;
       /* Первая загрузка новой версии: авто-пин «перед обновлением». */
