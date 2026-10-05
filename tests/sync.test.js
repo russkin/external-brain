@@ -109,7 +109,7 @@ describe('syncNow: базовые исходы', () => {
     const base = demoTasks(100);
     L.createTask(base, 'Общая', 100, { id: 'shared' });
     const remoteTasks = L.normalizeTasks(base);
-    L.clarifyTask(remoteTasks, 'shared', { status: 'waiting' }, 200);
+    L.clarifyTask(remoteTasks, 'shared', { status: 'next' }, 200);
     const remote = { tasks: remoteTasks, updatedAt: 200 };
     const fetch = stubFetch(async (url, opts) => {
       if (opts.method === 'PUT') return { status: 201, ok: true, json: async () => ({}) };

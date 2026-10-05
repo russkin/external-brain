@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v75';
+  var APP_VERSION = 'v76';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -2582,8 +2582,8 @@
 
   function diagText() {
     var st = state ? L.stats(state.tasks)
-      : { inbox: 0, next: 0, waiting: 0, someday: 0, done: 0 };
-    var alive = (st.inbox || 0) + (st.next || 0) + (st.waiting || 0) + (st.someday || 0);
+      : { inbox: 0, next: 0, done: 0 };
+    var alive = (st.inbox || 0) + (st.next || 0);
     var recs = 0, bytes = 0;
     try {
       recs = state ? state.tasks.length : 0;
@@ -2739,6 +2739,11 @@
       if (navigator.share) navigator.share({ text: url }).catch(function () {});
       else if (navigator.clipboard) navigator.clipboard.writeText(url).then(function () { lastAction = 'скопировано'; renderStatus(); });
       else askText(url, '', false).then(function () {});
+    });
+    on('guideBtn', 'click', function () {
+      var w = null;
+      try { w = window.open('./docs/USER_GUIDE.html', '_blank', 'noopener'); } catch (e) { w = null; }
+      if (!w) window.location.href = './docs/USER_GUIDE.html';
     });
     on('clearDone', 'click', function () { askClearDone(); });
     on('deleteDoneBtn', 'click', function () { askClearDone(); });

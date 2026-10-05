@@ -29,11 +29,11 @@ describe('создание и инбокс', () => {
     assert.equal(e.title, '', 'allowEmpty создаёт пустую задачу');
     assert.equal(t.length, 1);
   });
-  it('заголовок тримится, проект тримится, id генерируется', () => {
+  it('заголовок тримится, id генерируется, проекта больше нет', () => {
     const t = L.blankTasks();
     const a = mk(t, '  Дело  ', 1000, { project: '  Дом ' });
     assert.equal(a.title, 'Дело');
-    assert.equal(a.project, 'Дом');
+    assert.equal(a.project, undefined, 'поле project удалено из модели');
     assert.ok(a.id);
     const b = mk(t, 'Второе', 1001);
     assert.notEqual(a.id, b.id);
@@ -55,7 +55,7 @@ describe('прояснение (clarify)', () => {
   it('раскладывает инбокс по статусам', () => {
     const t = L.blankTasks();
     mk(t, 'Дело', 1000, { id: 'a' });
-    for (const s of ['next', 'waiting', 'someday', 'done']) {
+    for (const s of ['next', 'done']) {
       L.clarifyTask(t, 'a', { status: s }, 2000);
       assert.equal(L.getTask(t, 'a').status, s);
     }
@@ -74,12 +74,12 @@ describe('прояснение (clarify)', () => {
     L.clarifyTask(t, 'a', { status: 'next' }, 3000);
     assert.equal(L.getTask(t, 'a').doneAt, 0);
   });
-  it('проект, нарезка, переименование; поле frog выпилено', () => {
+  it('нарезка, переименование; поля project и frog выпилены', () => {
     const t = L.blankTasks();
     mk(t, 'Дело', 1000, { id: 'a' });
     L.clarifyTask(t, 'a', { project: 'Работа', frog: true, slicesTotal: 5, title: 'Важное' }, 2000);
     const g = L.getTask(t, 'a');
-    assert.equal(g.project, 'Работа');
+    assert.equal(g.project, undefined);
     assert.equal(g.frog, undefined);
     assert.equal(g.slicesTotal, 5);
     assert.equal(g.title, 'Важное');
@@ -225,10 +225,10 @@ describe('списки и фокус', () => {
     mk(t, 'Раньше', 1000, { id: 'a' });
     const ib = L.inboxList(t);
     assert.equal(ib[0].id, 'a');
-    L.clarifyTask(t, 'a', { status: 'waiting' }, 3000);
-    assert.equal(L.waitingList(t).length, 1);
-    L.clarifyTask(t, 'b', { status: 'someday' }, 3000);
-    assert.equal(L.somedayList(t).length, 1);
+    L.clarifyTask(t, 'a', { status: 'next' }, 3000);
+    assert.equal(L.nextList(t).length, 1);
+    L.clarifyTask(t, 'b', { status: 'done' }, 3000);
+    assert.equal(L.doneList(t).length, 1);
     assert.equal(L.inboxCount(t), 0);
     t.push({ id: 'z', title: '', status: 'inbox', indent: 0, createdAt: 0, updatedAt: 3000, ts: 3000, deleted: false });
     assert.equal(L.inboxCount(t), 0, 'задача без текста не считается в инбоксе');
@@ -241,40 +241,37 @@ describe('списки и фокус', () => {
     L.completeTask(t, 'b', 3000);
     assert.equal(L.doneList(t)[0].id, 'b');
   });
-  it('фокус: следующее > инбокс > null', () => {
+  it('waiting/someday/project/focusTask удалены из API', () => {
+    assert.equal(L.waitingList, undefined);
+    assert.equal(L.somedayList, undefined);
+    assert.equal(L.focusTask, undefined);
+    const n = L.normalizeTask({ id: 'x', title: 'Старая', status: 'waiting', project: 'Дом' });
+    assert.equal(n.status, 'inbox', 'старый waiting гасится в inbox');
+    assert.equal(n.project, undefined);
     const t = L.blankTasks();
-    assert.equal(L.focusTask(t), null);
-    mk(t, 'Мысль', 1000, { id: 'i' });
-    assert.equal(L.focusTask(t).id, 'i');
-    mk(t, 'Действие', 2000, { id: 'n' });
-    L.clarifyTask(t, 'n', { status: 'next' }, 3000);
-    assert.equal(L.focusTask(t).id, 'n');
-    t.push({ id: 'z', title: '', status: 'next', indent: 0, createdAt: 0, updatedAt: 3000, ts: 3000, deleted: false });
-    assert.equal(L.focusTask(t).id, 'n', 'пустая задача не перехватывает фокус дня');
+    mk(t, 'Дело', 1000, { id: 'a' });
+    L.clarifyTask(t, 'a', { status: 'someday' }, 2000);
+    assert.equal(L.getTask(t, 'a').status, 'inbox', 'someday игнорируется');
   });
   it('stats считает всё', () => {
     const t = L.blankTasks();
     mk(t, 'I', 1000, { id: 'i' });
     mk(t, 'N', 1000, { id: 'n' });
-    mk(t, 'W', 1000, { id: 'w' });
-    mk(t, 'S', 1000, { id: 's' });
     mk(t, 'D', 1000, { id: 'd' });
     L.clarifyTask(t, 'n', { status: 'next' }, 2000);
-    L.clarifyTask(t, 'w', { status: 'waiting' }, 2000);
-    L.clarifyTask(t, 's', { status: 'someday' }, 2000);
     L.completeTask(t, 'd', 2000);
     t.push({ id: 'z', title: '', status: 'inbox', indent: 0, createdAt: 5000, updatedAt: 1000, ts: 1000, deleted: false });
     const st = L.stats(t);
-    assert.deepEqual(st, { inbox: 1, next: 1, waiting: 1, someday: 1, done: 1 });
+    assert.deepEqual(st, { inbox: 1, next: 1, done: 1 });
   });
   it('shareText: пусто и с данными', () => {
     assert.equal(L.shareText(L.blankTasks()), '');
     const t = L.blankTasks();
-    mk(t, 'Лягушка', 1000, { id: 'f', project: 'Дом' });
+    mk(t, 'Лягушка', 1000, { id: 'f' });
     L.clarifyTask(t, 'f', { status: 'next', slicesTotal: 3 }, 2000);
     const txt = L.shareText(t);
     assert.ok(txt.includes('Лягушка'));
-    assert.ok(txt.includes('[Дом]'));
+    assert.ok(!txt.includes('['), 'проектов в шаринге больше нет');
     assert.ok(txt.includes('(0/3)'));
   });
   it('shareText: как на экране — порядок, отступы, выполненные ниже', () => {

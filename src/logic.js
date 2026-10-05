@@ -1,10 +1,11 @@
 /* logic.js — чистая логика «Внешнего мозга» без DOM.
  * Совместимость: ES2017 без optional chaining, работает в Node и в браузере.
- * Модель (джедайские техники, упрощённо):
- *   task = { id, title, status, project, slicesTotal, slicesDone,
+ * Модель (плоский список, v76): значения 'waiting'/'someday' и поле 'project'
+ *   УДАЛЕНЫ (H-07, в живых задачах не использовались); старые данные с ними
+ *   нормализация молча приводит к 'inbox'/без проекта (как лягушка в v72).
+ *   task = { id, title, status, slicesTotal, slicesDone,
  *            indent, createdAt, updatedAt, doneAt, ts, deleted }
- *   status: 'inbox' (сбор) | 'next' (следующие действия) | 'waiting' (ожидание) |
- *           'someday' (когда-нибудь) | 'done' (готово)
+ *   status: 'inbox' (новые) | 'next' (в работе) | 'done' (готово)
  *   indent: уровень отступа 0..8 — задача с отступом входит в группу задачи
  *           без отступа (или с меньшим отступом) сверху.
  * Правила:
@@ -15,16 +16,12 @@
  */
 'use strict';
 
-var STATUSES = ['inbox', 'next', 'waiting', 'someday', 'done'];
+var STATUSES = ['inbox', 'next', 'done'];
 
 var _counter = 0;
 
 function normTitle(s) {
   return String(s == null ? '' : s).trim().slice(0, 500);
-}
-
-function normProject(s) {
-  return String(s == null ? '' : s).trim().slice(0, 120);
 }
 
 function isStatus(s) {
@@ -74,7 +71,6 @@ function createTask(tasks, title, nowMs, opts) {
     id: opts.id ? String(opts.id) : makeId(now),
     title: t,
     status: 'inbox',
-    project: normProject(opts.project),
     slicesTotal: toInt(opts.slicesTotal, 0),
     slicesDone: 0,
     estMin: normEst(opts.estMin),
@@ -91,7 +87,7 @@ function createTask(tasks, title, nowMs, opts) {
 }
 
 /* Прояснение: разложить задачу из инбокса (или любую) по полям.
- * patch: { status, project, slicesTotal, title, indent, estMin }.
+ * patch: { status, slicesTotal, title, indent, estMin }.
  * Невалидный status игнорируется. */
 function clarifyTask(tasks, id, patch, nowMs) {
   var task = getTask(tasks, id);
@@ -105,7 +101,6 @@ function clarifyTask(tasks, id, patch, nowMs) {
       task.doneAt = (s === 'done') ? now : 0;
     }
   }
-  if (patch.project != null) task.project = normProject(patch.project);
   if (patch.slicesTotal != null) {
     var st = toInt(patch.slicesTotal, task.slicesTotal);
     if (st > 1000) st = 1000;
@@ -325,24 +320,8 @@ function nextList(tasks) {
   });
 }
 
-function waitingList(tasks) {
-  return byStatus(tasks, 'waiting').sort(function (a, b) { return a.createdAt - b.createdAt; });
-}
-
-function somedayList(tasks) {
-  return byStatus(tasks, 'someday').sort(function (a, b) { return a.createdAt - b.createdAt; });
-}
-
 function doneList(tasks) {
   return byStatus(tasks, 'done').sort(function (a, b) { return b.doneAt - a.doneAt; });
-}
-
-/* Фокус дня: первое следующее, иначе первый инбокс. */
-function focusTask(tasks) {
-  var nx = nextList(tasks).filter(function (t) { return !!t.title; });
-  if (nx.length) return nx[0];
-  var ib = inboxList(tasks).filter(function (t) { return !!t.title; });
-  return ib.length ? ib[0] : null;
 }
 
 function inboxCount(tasks) {
@@ -359,8 +338,6 @@ function stats(tasks) {
   return {
     inbox: inboxList(tl).length,
     next: nx.length,
-    waiting: waitingList(tl).length,
-    someday: somedayList(tl).length,
     done: doneList(tl).length
   };
 }
@@ -371,7 +348,6 @@ function shareItem(t) {
   var pad = '';
   for (var k = 0; k < normIndent(t.indent); k++) pad += '  ';
   var s = pad + '- ' + t.title;
-  if (t.project) s += ' [' + t.project + ']';
   if (t.slicesTotal > 0) s += ' (' + t.slicesDone + '/' + t.slicesTotal + ')';
   return s;
 }
@@ -436,7 +412,6 @@ function normalizeTask(t) {
     id: id.slice(0, 64),
     title: normTitle(t.title),
     status: status,
-    project: normProject(t.project),
     slicesTotal: slicesTotal,
     slicesDone: slicesDone,
     estMin: normEst(t.estMin),
@@ -471,7 +446,7 @@ function normalizeTasks(tasks) {
 
 function cloneTask(t) {
   return {
-    id: t.id, title: t.title, status: t.status, project: t.project,
+    id: t.id, title: t.title, status: t.status,
     slicesTotal: t.slicesTotal, slicesDone: t.slicesDone, indent: normIndent(t.indent),
     estMin: normEst(t.estMin),
     createdAt: t.createdAt,
@@ -555,10 +530,7 @@ var api = {
   completeSlice: completeSlice,
   inboxList: inboxList,
   nextList: nextList,
-  waitingList: waitingList,
-  somedayList: somedayList,
   doneList: doneList,
-  focusTask: focusTask,
   inboxCount: inboxCount,
   stats: stats,
   shareText: shareText,

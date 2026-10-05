@@ -75,14 +75,14 @@ describe('два устройства', () => {
     await b.api.syncNow(b.state);
     L.clarifyTask(a.state.tasks, 't', { title: 'Ранняя', status: 'next' }, 200);
     a.state.updatedAt = 200;
-    L.clarifyTask(b.state.tasks, 't', { title: 'Поздняя', status: 'waiting' }, 300);
+    L.clarifyTask(b.state.tasks, 't', { title: 'Поздняя', status: 'done' }, 300);
     b.state.updatedAt = 300;
     await a.api.syncNow(a.state);
     await b.api.syncNow(b.state);
     await a.api.syncNow(a.state);
     const ga = L.getTask(a.state.tasks, 't');
     assert.equal(ga.title, 'Поздняя');
-    assert.equal(ga.status, 'waiting');
+    assert.equal(ga.status, 'done');
     assert.ok(L.tasksEqual(a.state.tasks, b.state.tasks));
   });
 
