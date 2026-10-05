@@ -538,9 +538,7 @@ function mergeDecision(localState, remoteState) {
 }
 
 var api = {
-  STATUSES: STATUSES,
   blankTasks: blankTasks,
-  makeId: makeId,
   getTask: getTask,
   createTask: createTask,
   clarifyTask: clarifyTask,
@@ -551,7 +549,6 @@ var api = {
   removeTask: removeTask,
   setSlices: setSlices,
   setIndent: setIndent,
-  MAX_INDENT: MAX_INDENT,
   hasKids: hasKids,
   isDoneShown: isDoneShown,
   isHiddenByCollapse: isHiddenByCollapse,

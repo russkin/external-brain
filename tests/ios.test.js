@@ -166,6 +166,17 @@ describe('устойчивость к рассинхрону кэшей', () => 
     assert.ok(html.includes('#gearSettings { display: none;') && html.includes('id="gearSettings"'),
       'поля repo/токен не скрыты до предупреждения');
     assert.ok(appSrc.includes('только для администратора'), 'нет предупреждения для администратора');
+    /* v74: светофор «!» при 409/422 + тап по нему — принудительный синк; сеть ⇅ в шапке. */
+    assert.ok(appSrc.includes("color === 'red' && /github-put (409|422)/.test(err)") &&
+      appSrc.includes("n.textContent = alert ? '!' : ''"),
+      'нет красного «!» на светофоре при 409/422');
+    assert.ok(appSrc.includes("on('syncLight', 'click', function () { doSync(true); })"),
+      'нет тапа по светофору — принудительного синка');
+    assert.ok(appSrc.includes('function renderNet()') && appSrc.includes("net.textContent = '⇅'") &&
+      appSrc.includes("' МБ/с'") && appSrc.includes("addEventListener('offline', renderNet)"),
+      'нет индикатора сети (цвет/МБ/с) в шапке');
+    assert.ok(html.includes('id="netStatus"') && html.includes('id="netType"'),
+      'нет элементов сети в шапке');
   });
 });
 

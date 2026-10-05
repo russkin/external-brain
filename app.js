@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v73';
+  var APP_VERSION = 'v74';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -466,15 +466,38 @@
     n.style.background = map[color] || map.gray;
     if (blink) n.classList.add('blink');
     else n.classList.remove('blink');
-    n.classList.remove('alert');
+    /* Конфликт записи (409/422) — красный «!» (как в purchases); тап — синк. */
+    var err = (syncStatus || '') + ' ' + (lastErrMsg || '');
+    var alert = color === 'red' && /github-put (409|422)/.test(err);
+    n.classList.toggle('alert', alert);
+    n.textContent = alert ? '!' : '';
+    if (color === 'yellow') n.title = 'Идёт синхронизация…';
+    else if (alert) n.title = 'Конфликт записи (409/422). Нажми — принудительный синк.';
+    else if (color === 'red') n.title = (syncStatus || 'Ошибка синка') + '. Нажми — попробовать снова.';
+    else if (color === 'green') n.title = 'Синк: ' + (syncStatus || 'выполнено') + '. Нажми — синхронизировать.';
+    else n.title = state && state.settings.token
+      ? 'Синк ещё не запускался. Нажми — синхронизировать.'
+      : 'Синк выключен (нет ключа).';
   }
 
-  function setAlert() {
-    var n = el('syncLight');
-    if (!n) return;
-    n.classList.add('alert');
-    n.style.background = '#f44336';
-    n.textContent = '!';
+  /* Шапка ⇅: цвет — online/offline, подпись — скорость (downlink → МБ/с,
+   * отдаёт не каждый браузер, на iPhone пусто). */
+  function renderNet() {
+    var net = el('netStatus');
+    if (net) {
+      net.textContent = '⇅';
+      net.style.color = navigator.onLine ? '#2e9e44' : '#bbb';
+      net.title = navigator.onLine ? 'Есть сеть' : 'Нет сети';
+    }
+    var speed = '';
+    try {
+      var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (conn && conn.downlink > 0) {
+        speed = String(Math.round(conn.downlink / 8 * 100) / 100).replace('.', ',') + ' МБ/с';
+      }
+    } catch (e) { speed = ''; }
+    var nt = el('netType');
+    if (nt) nt.textContent = (navigator.onLine && speed) ? speed : '';
   }
 
   /* --- Проверка новой версии: качает app.js мимо кэша SW --- */
@@ -2423,6 +2446,7 @@
   }
 
   function renderStatus() {
+    renderNet();
     var s = el('status');
     if (!s || !state) return;
     var st = L.stats(state.tasks);
@@ -2640,6 +2664,8 @@
         });
     });
     on('syncNowBtn', 'click', function () { doSync(true); });
+    /* Тап по светофору — принудительный синк (как в purchases). */
+    on('syncLight', 'click', function () { doSync(true); });
     on('installBtn', 'click', function () {
       if (window._deferredPrompt) {
         window._deferredPrompt.prompt();
@@ -2773,7 +2799,11 @@
     });
     window.addEventListener('focus', onForeground);
     window.addEventListener('pageshow', onForeground);
-    window.addEventListener('online', function () { doSync(true); });
+    window.addEventListener('online', function () { renderNet(); doSync(true); });
+    window.addEventListener('offline', renderNet);
+    if (navigator.connection && navigator.connection.addEventListener) {
+      navigator.connection.addEventListener('change', renderNet);
+    }
   }
 
   function setupPolling() {
