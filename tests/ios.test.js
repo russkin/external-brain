@@ -123,6 +123,22 @@ describe('устойчивость к рассинхрону кэшей', () => 
     assert.ok(appSrc.includes('grabDy = e.clientY - div.getBoundingClientRect().top') &&
       appSrc.includes('if (grabDy == null)'),
       'grabDy меряется в pointerdown, а не при старте режима');
+    /* v70: тап мимо с пустым черновиком создаёт пустую задачу —
+     * но только по свежему pointerdown (программный blur не плодит пустые). */
+    assert.ok(appSrc.includes('if (!title && !fresh) return;'),
+      'пустое поле создаётся не по любому blur');
+    assert.ok(appSrc.includes('placeTaskTop(title, true)') &&
+      appSrc.includes('placeTaskAfter(trailingAnchorId(), title, indent, true)'),
+      'blur-создание пустой без allowEmpty');
+    /* v70: каретка в начале ПУСТОЙ строки — не «вставка сверху»:
+     * иначе вторая пустая прыгает выше первой. */
+    assert.ok(/atStart = inp\.selectionStart === 0 && inp\.selectionEnd === 0 &&\s*\n\s*!!String\(inp\.value \|\| ''\)\.trim\(\)/.test(appSrc),
+      'atStart считает пустую строку вставкой сверху');
+    /* v70: после драга ЧЕРЕЗ черновик якорь поля пересчитывается по DOM —
+     * иначе data-id-порядок не меняется и render возвращает всё назад. */
+    assert.ok(appSrc.includes('var reordered = persistLineOrder();') &&
+      appSrc.includes('trailingAfterId = newAfterB'),
+      'нет пересчёта якоря черновика после драга');
     assert.ok(html.includes('id="repoBtn"') && appSrc.includes('on(\'repoBtn\''),
       'нет пункта «Репозиторий и токен»');
     assert.ok(html.includes('#gearSettings { display: none;') && html.includes('id="gearSettings"'),

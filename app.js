@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v69';
+  var APP_VERSION = 'v70';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1303,9 +1303,12 @@
     if (draftTapBusy) return;
     if (!inp || !document.contains(inp)) return;
     var title = String(trailingText || '').trim();
-    if (!title) return;
-    var focusId = null;
     var fresh = (Date.now() - lastPDts) < 700;
+    /* Пустое поле фиксируем ТОЛЬКО по настоящему тапу мимо (свежий
+     * pointerdown): программный blur (снятие фокуса при отметке
+     * выполненной, клавиатура ушла) не должен плодить пустые задачи. */
+    if (!title && !fresh) return;
+    var focusId = null;
     if (fresh && lastPDTarget && lastPDTarget.closest) {
       if (lastPDTarget.closest('.grip') || lastPDTarget.closest('.doneflag')) return;
       var row = lastPDTarget.closest('.tline');
@@ -1323,8 +1326,8 @@
       }
     }
     var created = (trailingAfterId === 'TOP') ?
-      placeTaskTop(title) :
-      placeTaskAfter(trailingAnchorId(), title, indent);
+      placeTaskTop(title, true) :
+      placeTaskAfter(trailingAnchorId(), title, indent, true);
     if (!created) return;
     /* Поле гасим ДО следующего render (mutate уже отрендерил с текстом
      * рядом с новой задачей — дубль живёт один кадр, как у Enter). */
@@ -1455,7 +1458,8 @@
       else renderStatus();
     });
     if (isTrailing) {
-      /* Потеря фокуса с текстом = создание задачи. Отложенный запуск:
+      /* Потеря фокуса = создание задачи: с набранной текстом — задача,
+       * с пустым полем — пустая задача (v70). Отложенный запуск:
        * focus нового элемента и lastPD должны успеть устаканиться. */
       inp.addEventListener('blur', function () {
         if (draftBlurTimer) clearTimeout(draftBlurTimer);
@@ -1580,7 +1584,12 @@
        * действие (вплоть до воскрешения удалённого в выполненных). */
       var moved = L.getTask(state.tasks, taskId);
       if (moved && moved.status !== 'done') {
-        var atStart = inp.selectionStart === 0 && inp.selectionEnd === 0;
+        /* Пустое поле у пустой задачи: каретка и так в «начале» — это не
+         * «вставка сверху», а следующее поле ПОД строкой (иначе вторая
+         * пустая прыгает выше первой). Вставка сверху — только при
+         * каретке в начале НАБРАННОГО текста. */
+        var atStart = inp.selectionStart === 0 && inp.selectionEnd === 0 &&
+          !!String(inp.value || '').trim();
         var newIndent = lineIndent(moved);
         var newAnchor = taskId;
         var lt = lineTasks();
@@ -1627,21 +1636,21 @@
       var t = id ? L.getTask(state.tasks, id) : null;
       if (t && !t.deleted && t.status !== 'done') domAlive.push(id);
     }
-    if (!domAlive.length) return;
+    if (!domAlive.length) return false;
     var cur = lineTasks().map(function (t) { return t.id; });
     if (cur.length === domAlive.length) {
       var same = true;
       for (var k = 0; k < domAlive.length; k++) {
         if (domAlive[k] !== cur[k]) { same = false; break; }
       }
-      if (same) return;
+      if (same) return false;
     }
     /* Уехавший блок — непрерывный отрезок отличий (drag двигает целиком). */
     var bs = -1, be = -1;
     for (var d = 0; d < domAlive.length && d < cur.length; d++) {
       if (domAlive[d] !== cur[d]) { if (bs === -1) bs = d; be = d; }
     }
-    if (bs === -1) return;
+    if (bs === -1) return false;
     var before = snapFull();
     var now = Date.now();
     function at(idx) {
@@ -1685,6 +1694,7 @@
     pushUndo(before);
     save();
     updateHistoryButtons();
+    return true;
   }
 
   /* Отступ строки после вертикального перетаскивания: смотрят соседи
@@ -2265,7 +2275,38 @@
       }
       order = null;
       kids = [];
-      persistLineOrder();
+      var reordered = persistLineOrder();
+      /* Задачу тащили ЧЕРЕЗ черновик (или мимо него): data-id-порядок мог
+       * не измениться — persist no-op, а render вернул бы поле на старый
+       * якорь («всё возвращается на свои места»). Якорь поля — живая
+       * строка непосредственно над ним (или TOP), отступ — по соседям,
+       * как при переносе самого поля. Если порядок задач уже переставлен,
+       * его undo-слепок (snapFull) несёт и старый якорь — второй шаг
+       * истории не плодим. */
+      var dRowB = box && box.querySelector ? box.querySelector('.tline[data-trailing]') : null;
+      if (dRowB && myTask()) {
+        var prB = dRowB.previousSibling, pIdB = null;
+        while (prB) {
+          if (prB.getAttribute && prB.getAttribute('data-id')) { pIdB = prB.getAttribute('data-id'); break; }
+          prB = prB.previousSibling;
+        }
+        var newAfterB = pIdB || 'TOP';
+        var pTB = pIdB ? L.getTask(state.tasks, pIdB) : null;
+        var nRB = dRowB.nextSibling, nIdB = null;
+        while (nRB) {
+          if (nRB.getAttribute && nRB.getAttribute('data-id')) { nIdB = nRB.getAttribute('data-id'); break; }
+          nRB = nRB.nextSibling;
+        }
+        var nTB = nIdB ? L.getTask(state.tasks, nIdB) : null;
+        var pIndB = pTB ? lineIndent(pTB) : 0;
+        var nIndB = nTB ? lineIndent(nTB) : -1;
+        var wantIndB = !pTB ? 0 : (nIndB === pIndB + 1 ? nIndB : pIndB);
+        if (newAfterB !== trailingAfterId || wantIndB !== trailingIndent) {
+          if (!reordered) { pushUndo(snapFull()); updateHistoryButtons(); }
+          trailingAfterId = newAfterB;
+          trailingIndent = wantIndB;
+        }
+      }
       setTimeout(function () {
         div.style.transition = '';
         div.style.transform = '';
