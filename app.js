@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v72';
+  var APP_VERSION = 'v73';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -20,6 +20,13 @@
   var lastSyncAt = 0;
   var lastErrAt = 0;
   var lastErrMsg = '';
+  /* Кольцо последних синк-событий для «Журнал:» в диагностике —
+   * как в purchases (там journal.js): успехи и ошибки, последние 50. */
+  var syncLog = [];
+  function syncLogPush(text) {
+    syncLog.push({ t: Date.now(), text: String(text).slice(0, 300) });
+    if (syncLog.length > 50) syncLog.shift();
+  }
   function syncLogLoad() {
     try {
       var r = JSON.parse(localStorage.getItem(SYNCLOG_KEY));
@@ -27,13 +34,14 @@
         lastSyncAt = +r.at || 0;
         lastErrAt = +r.errAt || 0;
         lastErrMsg = String(r.err || '').slice(0, 120);
+        syncLog = Array.isArray(r.log) ? r.log.slice(-50) : [];
       }
     } catch (x) {}
   }
   function syncLogSave() {
     try {
       localStorage.setItem(SYNCLOG_KEY, JSON.stringify({
-        at: lastSyncAt, errAt: lastErrAt, err: lastErrMsg
+        at: lastSyncAt, errAt: lastErrAt, err: lastErrMsg, log: syncLog.slice(-50)
       }));
     } catch (x) {}
   }
@@ -413,6 +421,7 @@
       if (res.status === 'error') {
         lastErrAt = Date.now();
         lastErrMsg = String(res.error || 'ошибка').slice(0, 120);
+        syncLogPush('ошибка синка: ' + lastErrMsg);
         syncLogSave();
         setLight('red', false);
         syncFails += 1;
@@ -424,6 +433,7 @@
         lastSyncAt = Date.now();
         lastErrMsg = '';
         lastErrAt = 0;
+        syncLogPush('синк: ' + res.status);
         syncLogSave();
         setLight(res.status === 'in-sync' ? 'green' : 'green', false);
         if (res.status === 'pulled' || res.status === 'merged') {
@@ -441,6 +451,7 @@
       syncStatus = 'error: ' + String(e && e.message || e).slice(0, 120);
       lastErrAt = Date.now();
       lastErrMsg = String(e && e.message || e).slice(0, 120);
+      syncLogPush('ошибка синка: ' + lastErrMsg);
       syncLogSave();
       setLight('red', false);
       renderStatus();
@@ -2524,10 +2535,71 @@
     lines.push('Постоянная копия: ' + pinLabel());
     if (lastAction) lines.push('Последнее действие: ' + lastAction);
     lines.push(bootError ? bootError + ' ' + bootStack : 'Ошибок: нет');
+    if (syncLog.length) {
+      lines.push('Журнал:');
+      var from = Math.max(0, syncLog.length - 12);
+      for (var k = from; k < syncLog.length; k++) {
+        lines.push('  ' + fmtDT(syncLog[k].t) + ' [sync] ' + syncLog[k].text);
+      }
+    }
     return diagSwInfo().then(function (sw) {
       lines.splice(1, 0, 'Обновление: SW ' + sw);
       return lines.join('\n');
     });
+  }
+
+  /* Окно диагностики как в purchases (showInfo): OK + Поделиться,
+   * поле ввода и «Отмена» скрыты. Закрытие возвращает дефолты кнопок,
+   * чтобы askText/askConfirm не показывали «Поделиться» вместо «Очистить». */
+  function showInfo(title, body, shareable) {
+    var back = el('modalBack'), text = el('modalText'), input = el('modalInput');
+    var ok = el('modalOk'), clear = el('modalClear'), cancel = el('modalCancel');
+    if (!back || !ok || !text) return Promise.resolve();
+    text.textContent = title + '\n\n' + body;
+    if (input) input.style.display = 'none';
+    ok.textContent = 'OK';
+    if (clear) {
+      clear.textContent = 'Поделиться';
+      clear.style.display = shareable ? '' : 'none';
+    }
+    if (cancel) cancel.style.display = 'none';
+    back.classList.add('open');
+    return new Promise(function (resolve) {
+      function done() {
+        back.classList.remove('open');
+        ok.onclick = null;
+        if (clear) { clear.onclick = null; clear.textContent = 'Очистить'; clear.style.display = 'none'; }
+        if (cancel) { cancel.onclick = null; cancel.style.display = ''; }
+        if (input) input.style.display = '';
+        resolve();
+      }
+      ok.onclick = done;
+      if (cancel) cancel.onclick = done;
+      if (clear) {
+        clear.onclick = function () {
+          var t = shareable;
+          done();
+          shareDiag(t);
+        };
+      }
+    });
+  }
+
+  /* Отправка текста наружу: системное меню, иначе буфер, иначе окно. */
+  function shareDiag(text) {
+    if (navigator.share) {
+      try {
+        var p = navigator.share({ title: 'Диагностика', text: text });
+        if (p && p.catch) p.catch(function () {});
+        return;
+      } catch (e) {}
+    }
+    function manual(title, body) { showInfo(title, body, null); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        manual('Готово', 'Скопировано — вставь в мессенджер.\n\n' + text);
+      }, function () { manual('Скопируй вручную', text); });
+    } else manual('Скопируй вручную', text);
   }
 
   /* Удалить выполненные — с подтверждением (кнопка в шапке и в ⚙). */
@@ -2553,7 +2625,7 @@
     });
     on('diagBtn', 'click', function () {
       diagText().then(function (txt) {
-        askText(txt, '', false).then(function () {});
+        showInfo('Диагностика', txt, txt);
       });
     });
     /* Репозиторий и токен — только для администратора: сначала предупреждение,

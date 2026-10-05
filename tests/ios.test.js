@@ -104,6 +104,14 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'нет размера/сети/устройства/последнего действия');
     assert.ok(appSrc.includes('function diagSwInfo()') && appSrc.includes('diagText().then'),
       'diagText не асинхронный/без SW-инфо');
+    /* Окно диагностики как в purchases: OK + Поделиться, журнал синка внизу. */
+    assert.ok(appSrc.includes("showInfo('Диагностика', txt, txt)"),
+      'диагностика не открывается через showInfo');
+    assert.ok(appSrc.includes("clear.textContent = 'Поделиться'") &&
+      appSrc.includes("cancel.style.display = 'none'"),
+      'нет кнопок OK+Поделиться / скрытой Отмены');
+    assert.ok(appSrc.includes("lines.push('Журнал:')") && appSrc.includes("syncLogPush('ошибка синка: "),
+      'нет журнала синк-ошибок в диагностике');
     /* Постоянная («вечная») копия: кнопка + автокопия при обновлении версии. */
     assert.ok(storeSrc.includes('external-brain-pin-v1') && storeSrc.includes('external-brain-pin-ver-v1'),
       'нет ключей постоянной копии');
