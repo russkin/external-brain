@@ -523,6 +523,9 @@ describe('логика вызывается с state.tasks', () => {
       'метка родителя не считается автоматически');
     assert.ok(appSrc.includes('sum += lineEstMin(full[j])') && appSrc.includes('ij === pin + 1'),
       'сумма идёт не по первому вложению');
+    /* v71: выполненные вложения не входят в авто-сумму родителя. */
+    assert.ok(appSrc.includes("if (full[j].status === 'done') continue;"),
+      'выполненные вложения считаются в метке времени родителя');
     assert.ok(swBlock.includes('_swBlockUntil'), 'клик после свайпа не заглушен (двойная модалка/фокус)');
     assert.ok(swBlock.includes('div._swRArm = false'), 'отменённый свайп не оставляет флаг');
     assert.ok(appSrc.includes('function askDuration'), 'нет модалки времени');

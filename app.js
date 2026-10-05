@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v70';
+  var APP_VERSION = 'v71';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -713,6 +713,8 @@
   /* Метка времени строки (opts.estMin в makeLine): у обычной задачи — своё
    * estMin; у РОДИТЕЛЯ — авто-сумма первого вложения (дети уровня indent+1;
    * у вложенных-родителей — их такая же сумма, т.е. итог по всем своим).
+   * Выполненные вложения в сумму НЕ входят (v71): чип родителя — только
+   * остаток невыполненного; когда всё закрыто — сумма 0 и метки нет.
    * Своё estMin родителя в вёрстку не идёт — ему время ставить нельзя
    * (openDuration закрыт), данные не трогаем на случай расформировки группы:
    * без детей задача снова показывает своё время. Появление метки у родителя
@@ -731,6 +733,7 @@
     for (var j = pi + 1; j < full.length; j++) {
       var ij = lineIndent(full[j]);
       if (ij <= pin) break;
+      if (full[j].status === 'done') continue;
       if (ij === pin + 1) sum += lineEstMin(full[j]);
     }
     return sum;
