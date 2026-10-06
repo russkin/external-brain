@@ -66,7 +66,8 @@ Docs-only правки версию НЕ bump'ят. Есть регресс-те
   (`cache: 'reload'`, иначе Pages с `max-age=600` кладёт старье).
 - `data/state.json` — ОБЩИЙ файл синка в репозитории: `{ updatedAt, tasks }`. Seed
   закоммичен один раз; дальше его правят устройства по API — при коммитах кода
-  `data/**` не трогать (в workflow `paths-ignore`, синк-коммиты деплой не триггерят).
+  `data/**` не трогать (в workflow `paths-ignore: data/**, logs/**` — синк-
+  и журнал-коммиты деплой не триггерят).
 - `.github/workflows/pages.yml` — job `test` (все 4 файла), сборка `_site/` (явный список
   файлов, без `.env`/`.git`), deploy.
 - `tests/` — `logic.test.js`, `ios.test.js` (строковые регрессы app.js/index.html/sw.js),
