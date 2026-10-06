@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v79';
+  var APP_VERSION = 'v80';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -2487,8 +2487,9 @@
     }
     /* Выполненные — под полем добавления, новые выше старых. Строка под
      * свёрнутым родителем прячется вместе с живыми детьми (иначе
-     * последняя дочерняя висит под свёрнутой группой). Сепаратор — если
-     * после скрытия хоть что-то видно. */
+     * последняя дочерняя висит под свёрнутой группой). Сепаратор — пока
+     * есть хоть один выполненный, даже если все спрятаны в свёрнутых
+     * группах (счётчик показывает видимых). */
     var done = L.doneList(state.tasks);
     var doneVis = [];
     for (var d = 0; d < done.length; d++) {
@@ -2496,7 +2497,7 @@
       var dHide = (di != null) ? L.isHiddenByCollapse(full, di, collapsed) : false;
       if (!dHide) doneVis.push(done[d]);
     }
-    if (doneVis.length) {
+    if (done.length) {
       var sep = document.createElement('div');
       sep.className = 'done-sep';
       /* Тап — скрыть/показать все выполненные разом. Стрелка показывает
