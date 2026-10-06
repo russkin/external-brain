@@ -35,7 +35,7 @@
   старый Chrome один SVG не признаёт и ставит битый ярлык)
 - `data/state.json` — ОБЩИЙ файл синка в репозитории: `{ updatedAt, tasks }`
 - `tests/` — unit-тесты (`node --test tests/logic.test.js tests/ios.test.js tests/sync.test.js tests/sync-devices.test.js`),
-  покрытие logic.js/sync.js ≥90% строк и веток
+  покрытие logic.js/sync.js ≥90% строк и ≥89% веток
 - `docs/USER_GUIDE.md` (+ `.html` для офлайна, ссылка из ⚙), `AGENTS.md`
 
 ## Разработка
@@ -44,7 +44,7 @@
 # тесты (обязательно перед публикацией)
 node --test tests/logic.test.js tests/ios.test.js tests/sync.test.js tests/sync-devices.test.js
 
-# покрытие (не менее 90% строк и веток logic.js/sync.js)
+# покрытие (строки ≥90%, ветки ≥89% logic.js/sync.js)
 node --test --experimental-test-coverage tests/logic.test.js tests/ios.test.js tests/sync.test.js tests/sync-devices.test.js
 
 # локальный предпросмотр

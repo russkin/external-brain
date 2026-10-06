@@ -31,7 +31,7 @@ purchases, но проекты РАЗОШЛИСЬ и независимы: ра�
 ## Регламент публикации (обязательный после КАЖДОГО коммита)
 
 1. `node --test tests/logic.test.js tests/ios.test.js tests/sync.test.js tests/sync-devices.test.js` — всё зелёное.
-2. Покрытие: `node --test --experimental-test-coverage ...` — logic.js/sync.js ≥90% строк и веток.
+2. Покрытие: `node --test --experimental-test-coverage ...` — logic.js/sync.js ≥90% строк и ≥89% веток (UMD-хвост `else if (typeof window…)` в Node не покрыть — H-11).
 3. `git commit`, затем push. Прямой push без токена не взлетит (origin — SSH):
    `git push "https://x-access-token:${GITHUB_TOKEN}@github.com/russkin/external-brain.git" main:main`
    Токен брать из локального `.env` (`GITHUB_TOKEN`), в выводе затирать через
