@@ -674,6 +674,9 @@ describe('логика вызывается с state.tasks', () => {
       appSrc.includes("on('searchCancel'") && appSrc.includes("on('searchUp'") &&
       appSrc.includes("on('searchDown'"), 'кнопки поиска не подписаны');
     assert.ok(appSrc.includes('searchScrollY'), 'Отмена не возвращает скролл');
+    assert.ok(html.includes('search-hit') && appSrc.includes('applySearchHit'),
+      'нет подсветки текущего совпадения');
+    assert.ok(html.includes('type="search"'), 'поле поиска не type=search (полоса автозаполнения)');
     assert.ok(appSrc.includes('visualViewport') && appSrc.includes('searchLift'),
       'оверлей не поднимается над клавиатурой — кнопки перекрыты');
     assert.ok(appSrc.includes('searchLanded'),

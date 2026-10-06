@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v86';
+  var APP_VERSION = 'v87';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -602,6 +602,9 @@
     renderLines();
     renderStatus();
     updateHistoryButtons();
+    /* Подсветка поиска переживает перерисовки (фоновый синк): строка
+     * та же (по id), скролл не трогаем — только класс. */
+    if (searchIdx >= 0 && searchIdx < searchIds.length) applySearchHit(searchIds[searchIdx]);
     try {
       var curY = window.pageYOffset || 0;
       if (curY !== keepY) window.scrollTo(0, keepY);
@@ -2816,6 +2819,7 @@
     updateSearchUI();
   }
   function closeSearch(restore) {
+    applySearchHit(null);
     searchUnlift();
     var bar = el('searchBar');
     if (bar) bar.classList.remove('open');
@@ -2884,6 +2888,21 @@
     if (y < 0) y = 0;
     try { window.scrollTo(0, y); } catch (x) {}
   }
+  /* Подсветка текущего совпадения: снять со старой, поставить на новую.
+   * Только классы — вёрстка не едет. Вызывать после каждого render(),
+   * иначе фоновый синк снесут подсветку вместе со строками. */
+  function applySearchHit(id) {
+    var box = el('lines');
+    if (!box || !box.querySelectorAll) return;
+    var marked = box.querySelectorAll('.tline.search-hit');
+    var i;
+    for (i = 0; i < marked.length; i++) marked[i].classList.remove('search-hit');
+    if (!id) return;
+    var rows = box.querySelectorAll('.tline[data-id]');
+    for (i = 0; i < rows.length; i++) {
+      if (rows[i].getAttribute('data-id') === id) { rows[i].classList.add('search-hit'); break; }
+    }
+  }
   function gotoSearch(i) {
     if (!searchIds.length) return;
     if (i < 0) i = 0;
@@ -2892,6 +2911,7 @@
     searchLanded = true;
     ensureSearchVisible(searchIds[i]);
     scrollToSearchRow(searchIds[i]);
+    applySearchHit(searchIds[i]);
     updateSearchUI();
   }
   function doSearch() {
@@ -2906,7 +2926,7 @@
     searchIds = L.searchTasks(live.concat(dn), q);
     searchIdx = searchIds.length ? 0 : -1;
     if (searchIds.length) gotoSearch(0);
-    else updateSearchUI();
+    else { applySearchHit(null); updateSearchUI(); }
   }
 
   function wire() {

@@ -123,6 +123,9 @@
     #searchBtns { display: flex; gap: 8px; }
     #searchBtns button { flex: 1 1 auto; white-space: nowrap; }
     #searchBtns button:disabled { opacity: .35; }
+    /* Подсветка текущего совпадения: outline не сдвигает вёрстку
+     * (в отличие от border) — дыра и скролл не едут. */
+    .tline.search-hit .tinput { outline: 3px solid #4caf50; outline-offset: 2px; }
     .gear-settings { padding: 8px 12px 12px; border-top: 1px solid #eee; }
     .gear-settings input { display: block; width: 100%; box-sizing: border-box;
       font-size: 14px; padding: 8px 10px; margin: 0 0 8px; }
@@ -176,7 +179,7 @@
     <footer id="status">Загрузка…</footer>
 
     <div id="searchBar">
-      <input id="searchInput" autocomplete="off" inputmode="search" enterkeyhint="search" placeholder="Найти задачу…" aria-label="Текст поиска" />
+      <input id="searchInput" type="search" name="eb-search" autocomplete="off" inputmode="search" enterkeyhint="search" placeholder="Найти задачу…" aria-label="Текст поиска" />
       <div id="searchCounts"><span id="searchTotal">Совпадений: 0</span><span id="searchPos">0/0</span></div>
       <div id="searchBtns">
         <button id="searchGo">Поиск</button>
