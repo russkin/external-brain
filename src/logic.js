@@ -268,6 +268,24 @@ function isAlive(t) {
   return !!t && !t.deleted;
 }
 
+/* Поиск: регистр не важен, ё=е. Пустой запрос — пусто. Возвращает id
+ * в порядке переданного массива (порядок экрана готовит вызывающий). */
+function normSearch(s) {
+  return String(s == null ? '' : s).toLowerCase().replace(/ё/g, 'е');
+}
+
+function searchTasks(tasks, query) {
+  var q = normSearch(query).trim();
+  if (!q || !Array.isArray(tasks)) return [];
+  var out = [];
+  for (var i = 0; i < tasks.length; i++) {
+    var t = tasks[i];
+    if (!t || t.deleted || !t.title) continue;
+    if (normSearch(t.title).indexOf(q) !== -1) out.push(t.id);
+  }
+  return out;
+}
+
 function byStatus(tasks, status) {
   return tasks.filter(function (t) { return isAlive(t) && t.status === status; });
 }
@@ -487,6 +505,7 @@ var api = {
   inboxCount: inboxCount,
   stats: stats,
   shareText: shareText,
+  searchTasks: searchTasks,
   fmtDur: fmtDur,
   normalizeTask: normalizeTask,
   normalizeTasks: normalizeTasks,

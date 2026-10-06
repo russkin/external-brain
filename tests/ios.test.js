@@ -662,6 +662,21 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('function dropMargins') && appSrc.includes('dropMargins(div, kids)'),
       'посадка не ставит итоговый отступ в том же кадре (прыжок до render)');
   });
+  it('поиск: кнопка, оверлей, проводка', () => {
+    assert.ok(html.includes('id="searchBtn"'), 'нет кнопки поиска в шапке');
+    for (const sid of ['searchBar', 'searchInput', 'searchTotal', 'searchPos', 'searchGo', 'searchCancel', 'searchUp', 'searchDown']) {
+      assert.ok(html.includes('id="' + sid + '"'), 'нет ' + sid + ' в оверлее поиска');
+    }
+    for (const fn of ['openSearch', 'closeSearch', 'doSearch', 'gotoSearch', 'updateSearchUI', 'ensureSearchVisible', 'scrollToSearchRow']) {
+      assert.ok(appSrc.includes('function ' + fn), 'нет ' + fn);
+    }
+    assert.ok(appSrc.includes("on('searchBtn'") && appSrc.includes("on('searchGo'") &&
+      appSrc.includes("on('searchCancel'") && appSrc.includes("on('searchUp'") &&
+      appSrc.includes("on('searchDown'"), 'кнопки поиска не подписаны');
+    assert.ok(appSrc.includes('searchScrollY'), 'Отмена не возвращает скролл');
+    assert.ok(appSrc.includes('collapsed[lt[i].id]') || appSrc.includes('delete collapsed'),
+      'переход не разворачивает свёрнутые группы');
+  });
   it('быстрый ввод и фокус дня убраны из оболочки', () => {
     assert.ok(!html.includes('id="focus"'), 'focus остался в index.html');
     assert.ok(!html.includes('id="quick"'), 'quick остался в index.html');

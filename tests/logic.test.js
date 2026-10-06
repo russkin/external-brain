@@ -269,6 +269,36 @@ describe('списки и фокус', () => {
   });
 });
 
+describe('поиск', () => {
+  function seed() {
+    const t = L.blankTasks();
+    mk(t, 'Купить молоко', 1000, { id: 'a' });
+    mk(t, 'Ёлка и ель', 2000, { id: 'b' });
+    mk(t, 'МОЛОКО убежало', 3000, { id: 'c' });
+    mk(t, '', 4000, { id: 'e', allowEmpty: true });
+    return t;
+  }
+  it('пустой запрос — пусто', () => {
+    assert.deepEqual(L.searchTasks(seed(), ''), []);
+    assert.deepEqual(L.searchTasks(seed(), '   '), []);
+  });
+  it('регистр не важен, порядок — как на экране', () => {
+    assert.deepEqual(L.searchTasks(seed(), 'молоко'), ['a', 'c']);
+  });
+  it('ё равно е', () => {
+    assert.deepEqual(L.searchTasks(seed(), 'елка'), ['b']);
+    assert.deepEqual(L.searchTasks(seed(), 'ЁЛКА'), ['b']);
+  });
+  it('пустые и удалённые не ищутся', () => {
+    const t = seed();
+    L.removeTask(t, 'a', 5000);
+    assert.deepEqual(L.searchTasks(t, 'молоко'), ['c']);
+  });
+  it('не-массив и мусор — пусто', () => {
+    assert.deepEqual(L.searchTasks(null, 'x'), []);
+  });
+});
+
 describe('нормализация', () => {
   it('normalizeTask отбрасывает мусор', () => {
     assert.equal(L.normalizeTask(null), null);

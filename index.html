@@ -112,6 +112,17 @@
     #gearMenu button:last-child { border-bottom: none; }
     #gearSettings { display: none; }
     #gearSettings.open { display: block; }
+    #searchBar { display: none; position: fixed; left: 0; right: 0; bottom: 0;
+      background: #fff; border-top: 1px solid #ddd; z-index: 45;
+      padding: 10px 14px calc(12px + env(safe-area-inset-bottom)); }
+    #searchBar.open { display: block; }
+    #searchInput { width: 100%; box-sizing: border-box; font-size: 18px;
+      padding: 10px; margin-bottom: 8px; }
+    #searchCounts { display: flex; justify-content: space-between; font-size: 13px;
+      color: #666; margin-bottom: 8px; }
+    #searchBtns { display: flex; gap: 8px; }
+    #searchBtns button { flex: 1 1 auto; white-space: nowrap; }
+    #searchBtns button:disabled { opacity: .35; }
     .gear-settings { padding: 8px 12px 12px; border-top: 1px solid #eee; }
     .gear-settings input { display: block; width: 100%; box-sizing: border-box;
       font-size: 14px; padding: 8px 10px; margin: 0 0 8px; }
@@ -128,6 +139,7 @@
       <button id="gearBtn" title="Меню" aria-label="Меню">⚙</button>
     </div>
     <div id="headActions">
+      <button id="searchBtn" class="hbtn" title="Поиск по задачам" aria-label="Поиск по задачам">🔍</button>
       <button id="collapseAllBtn" class="hbtn" title="Свернуть все группы" aria-label="Свернуть все группы">📁</button>
       <button id="expandAllBtn" class="hbtn" title="Развернуть все группы" aria-label="Развернуть все группы">📂</button>
       <button id="undoBtn" class="hbtn" title="Отменить" aria-label="Отменить">↩</button>
@@ -161,7 +173,18 @@
     <div id="lines"></div>
   </main>
 
-  <footer id="status">Загрузка…</footer>
+    <footer id="status">Загрузка…</footer>
+
+    <div id="searchBar">
+      <input id="searchInput" autocomplete="off" placeholder="Найти задачу…" aria-label="Текст поиска" />
+      <div id="searchCounts"><span id="searchTotal">Совпадений: 0</span><span id="searchPos">0/0</span></div>
+      <div id="searchBtns">
+        <button id="searchGo">Поиск</button>
+        <button id="searchCancel">Отмена</button>
+        <button id="searchUp">Вверх</button>
+        <button id="searchDown">Вниз</button>
+      </div>
+    </div>
 
   <div id="modalBack">
     <div id="modalBox">
