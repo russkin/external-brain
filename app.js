@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v82';
+  var APP_VERSION = 'v83';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1885,12 +1885,15 @@
       if (pid == null || mode !== 'vertical' || !order) { stopEdge(); return; }
       var dir = edgeZone(lastY);
       if (!dir) { stopEdge(); return; }
-      /* Разгон чем дольше держим: 12px → до 24px за тик 50мс. */
+      /* Тише: 8px → до 16px за тик 60мс, чтобы названия читались. */
       var hold = Date.now() - edgeStart;
-      var step = 12 + Math.min(12, Math.floor(hold / 400) * 6);
+      var step = 8 + Math.min(8, Math.floor(hold / 500) * 2);
       try {
         window.scrollBy(0, dir * step);
-        if (pinY != null) pinY += dir * step;
+        /* Пин — с РЕАЛЬНОГО смещения, а не += шаг: у края scrollBy
+         * клампится (страница стоит), а пин убегал бы дальше — потом
+         * onPinScroll дёргал страницу обратно и вверх было не уехать. */
+        if (pinY != null) pinY = window.pageYOffset;
         lastScrollTs = Date.now();
       } catch (x) {}
       updateHole(lastY);
@@ -2169,7 +2172,7 @@
       if (dragDist > 40 && edgeZone(e.clientY)) {
         if (!edgeTimer) {
           edgeStart = Date.now();
-          try { edgeTimer = setInterval(edgeTick, 50); } catch (x) { edgeTimer = null; }
+          try { edgeTimer = setInterval(edgeTick, 60); } catch (x) { edgeTimer = null; }
         }
       } else stopEdge();
       if (e.cancelable) e.preventDefault();
