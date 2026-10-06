@@ -50,7 +50,7 @@ describe('service worker: методика кэша', () => {
     assert.ok(appSrc.includes('caches.delete'), 'нет чистки кэша при обновлении');
   });
   it('в кэш положены все части оболочки', () => {
-    for (const u of ['index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png']) {
+    for (const u of ["'./'", 'index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'docs/USER_GUIDE.html']) {
       assert.ok(swSrc.includes(u), 'нет ' + u + ' в ASSETS');
     }
   });
