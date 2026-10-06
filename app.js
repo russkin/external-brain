@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v78';
+  var APP_VERSION = 'v79';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1707,7 +1707,10 @@
    * не трогаем — поэтому вернувшаяся из выполненных встаёт на своё место,
    * а синк не дёргается лишний раз. Тесно (зазор исчерпан) — перенумеровать
    * всех живых. Выполненные и tombstone не трогаем никогда. */
-  function persistLineOrder() {
+  /* beforeOverride — слепок ДО мутации отступа (applyDropIndent): финиш
+   * вызывает persist уже после неё, и свежий snapFull() нёс бы новый отступ —
+   * отмена возвращала бы порядок, но не отступ. */
+  function persistLineOrder(beforeOverride) {
     var box = el('lines');
     if (!box || !state) return;
     var domAlive = [];
@@ -1732,7 +1735,7 @@
       if (domAlive[d] !== cur[d]) { if (bs === -1) bs = d; be = d; }
     }
     if (bs === -1) return false;
-    var before = snapFull();
+    var before = beforeOverride || snapFull();
     var now = Date.now();
     function at(idx) {
       var tt = L.getTask(state.tasks, domAlive[idx]);
@@ -2332,6 +2335,10 @@
         for (var p1 = 0; p1 < sibs.length; p1++) {
           if (sibs[p1] === div) di = p1;
         }
+        /* Слепок ДО мутации отступа: persistLineOrder позовём ниже, а его
+         * свежий snapFull() уже содержал бы новый отступ — отмена вернула
+         * бы порядок, но не уровень (родитель не возвращался на отступ 0). */
+        var preDrop = (di !== -1 && di !== oldPos) ? snapFull() : null;
         if (di !== -1 && di !== oldPos) {
           applyDropIndent(box, sibs, di, kids);
         }
@@ -2371,7 +2378,15 @@
       }
       order = null;
       kids = [];
-      var reordered = persistLineOrder();
+      var reordered = persistLineOrder(preDrop);
+      /* Порядок не сдвинулся, а отступ — да: изменение есть, а шага истории
+       * нет (persist вернул false). Пушим досдвиговый слепок, иначе ↩
+       * откатит чужое более раннее действие вместо отступа. */
+      if (!reordered && preDrop && snapTasks() !== preDrop.tasks) {
+        pushUndo(preDrop);
+        updateHistoryButtons();
+        reordered = true;
+      }
       /* Задачу тащили ЧЕРЕЗ черновик (или мимо него): data-id-порядок мог
        * не измениться — persist no-op, а render вернул бы поле на старый
        * якорь («всё возвращается на свои места»). Якорь поля — живая

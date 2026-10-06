@@ -158,9 +158,17 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'atStart считает пустую строку вставкой сверху');
     /* v70: после драга ЧЕРЕЗ черновик якорь поля пересчитывается по DOM —
      * иначе data-id-порядок не меняется и render возвращает всё назад. */
-    assert.ok(appSrc.includes('var reordered = persistLineOrder();') &&
+    assert.ok(appSrc.includes('var reordered = persistLineOrder(preDrop)') &&
       appSrc.includes('trailingAfterId = newAfterB'),
       'нет пересчёта якоря черновика после драга');
+    /* Отмена возвращает и отступ: слепок истории — до applyDropIndent,
+     * иначе ↩ возвращал порядок, но не уровень (родитель не уходил с 1 на 0). */
+    assert.ok(appSrc.includes('var preDrop = (di !== -1 && di !== oldPos) ? snapFull() : null'),
+      'нет досдвигового слепка перед applyDropIndent');
+    assert.ok(appSrc.includes('function persistLineOrder(beforeOverride)'),
+      'persistLineOrder не принимает досдвиговый слепок');
+    assert.ok(appSrc.includes('if (!reordered && preDrop && snapTasks() !== preDrop.tasks)'),
+      'чистое изменение отступа без сдвига порядка не пишется в историю');
     assert.ok(html.includes('id="repoBtn"') && appSrc.includes('on(\'repoBtn\''),
       'нет пункта «Репозиторий и токен»');
     assert.ok(html.includes('#gearSettings { display: none;') && html.includes('id="gearSettings"'),
