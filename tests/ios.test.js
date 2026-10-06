@@ -609,6 +609,16 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('if (fr[phi].sep) break;'),
       'дыра может уйти в раздел выполненных');
   });
+  it('каркас drag не считает спрятанных классом: дыра не плывёт мимо свёрнутых', () => {
+    assert.ok(appSrc.includes('collapsed-kid') && appSrc.includes('rowShown'),
+      'нет проверки видимости ряда (класс collapsed-kid)');
+    assert.ok(appSrc.includes('if (!rowShown(cr)) continue'),
+      'замороженный каркас включает спрятанные ряды (фантомные зазоры)');
+    assert.ok(appSrc.includes('visKids'),
+      'зазоры дыры считаются по всем детям, включая невидимых');
+    assert.ok(appSrc.includes('if (row2 === div || !row2.parentNode || !rowShown(row2)) continue'),
+      'слепок посадки включает спрятанные ряды');
+  });
   it('позиция страницы не прыгает, автопрокрутка не дёргает', () => {
     assert.ok(appSrc.includes('keepY'), 'скролл не сохраняется при перерисовке');
     assert.ok(appSrc.includes('scrollTo(0, keepY)'), 'скролл не возвращается');

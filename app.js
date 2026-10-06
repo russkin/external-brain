@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v77';
+  var APP_VERSION = 'v78';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1867,6 +1867,16 @@
     function rowsOf(box) {
       return Array.prototype.slice.call(box.querySelectorAll('.tline'));
     }
+    /* Виден ли ряд в потоке: свёрнутые дети прячутся КЛАССОМ collapsed-kid
+     * (index.html), а не инлайн-стилем — проверка только style.display их
+     * не видит и считает занимающими место (дыра плывёт вверх по мере
+     * движения вниз мимо свёрнутых групп). */
+    function rowShown(cr) {
+      if (!cr) return false;
+      if (cr.style && cr.style.display === 'none') return false;
+      if (cr.classList && cr.classList.contains('collapsed-kid')) return false;
+      return true;
+    }
     function myTask() {
       var id = div.getAttribute ? div.getAttribute('data-id') : null;
       return id ? L.getTask(state.tasks, id) : null;
@@ -1929,7 +1939,11 @@
        * Высоту меряем ДО скрытия. */
       holeH = h;
       kids = [];
+      /* Видимых детей — для зазоров дыры: уже спрятанные (свёрнутые) места
+       * не занимают, их зазоры в holeShift не считаем. Сами скрытые дети
+       * в kids[] остаются — финиш возвращает блок в DOM целиком. */
       var mine0 = myTask();
+      var visKids = 0;
       if (mine0) {
         var lv0 = lineIndent(mine0);
         var started = false;
@@ -1939,6 +1953,7 @@
           var kidId = order[k].getAttribute ? order[k].getAttribute('data-id') : null;
           var kt = kidId ? L.getTask(state.tasks, kidId) : null;
           if (kt && lineIndent(kt) > lv0) {
+            if (rowShown(order[k])) visKids++;
             try { holeH += order[k].getBoundingClientRect().height; } catch (x) {}
             kids.push(order[k]);
           } else break;
@@ -1948,7 +1963,7 @@
       /* Замороженный покой (как в присланном алгоритме): каркас из строк
        * (без тянущейся и спрятанных детей) с оффсетами за один проход.
        * Дыра = блок + съеденные потоком зазоры, чтобы захват не дёргал список. */
-      holeShift = holeH + (kids.length + 1) * LINES_GAP;
+      holeShift = holeH + (visKids + 1) * LINES_GAP;
       fr = [];
       frSh = [];
       phi = 0;
@@ -1964,7 +1979,7 @@
          * улетевшие в выполненные). */
         var isSep = cr.classList.contains('done-sep');
         if (!isSep && !cr.classList.contains('tline')) continue;
-        if (cr.style.display === 'none') continue;
+        if (!rowShown(cr)) continue;
         var hr = 0;
         try { hr = cr.getBoundingClientRect().height; } catch (x) { hr = 0; }
         fr.push({ row: cr, off: acc, h: hr, sep: isSep });
@@ -2228,7 +2243,7 @@
       if (box && order) {
         for (var j = 0; j < order.length; j++) {
           var row2 = order[j];
-          if (row2 === div || !row2.parentNode || row2.style.display === 'none') continue;
+          if (row2 === div || !row2.parentNode || !rowShown(row2)) continue;
           var r = row2.getBoundingClientRect();
           preTops.push({ el: row2, top: r.top });
         }
