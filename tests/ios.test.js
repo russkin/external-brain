@@ -526,8 +526,8 @@ describe('логика вызывается с state.tasks', () => {
       'закрытие клавиатуры после жеста не подстраховано пином');
     assert.ok(appSrc.includes('Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx) * 2'),
       'порог вертикали не симметричен горизонтали — дрожь пальца лочит не тот режим');
-    var iA = appSrc.indexOf('lastScrollTs > 90');
-    assert.ok(iA !== -1 && appSrc.slice(iA, iA + 320).includes('pinY'),
+    var iA = appSrc.indexOf('function edgeTick');
+    assert.ok(iA !== -1 && appSrc.slice(iA, iA + 800).includes('pinY'),
       'автопрокрутка не двигает пин — страница дёрнется обратно');
     var iL = appSrc.indexOf("grip.addEventListener('lostpointercapture'");
     assert.ok(iL !== -1 && appSrc.slice(iL, iL + 400).includes('setPointerCapture'),
@@ -635,6 +635,12 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('minHeight'), 'высота списка не фиксируется на время drag');
     assert.ok(appSrc.includes('lastScrollTs'), 'автопрокрутка без троттлинга');
     assert.ok(appSrc.includes('dragDist'), 'автопрокрутка без порога движения');
+    assert.ok(appSrc.includes('setInterval(edgeTick, 50)'),
+      'автопрокрутка только по движению пальца — стоящий палец не крутит');
+    assert.ok(appSrc.includes('updateHole(lastY)'),
+      'дыра не едет за страницей на тиках автопрокрутки');
+    assert.ok(/function finish\(e\)[\s\S]{0,300}stopEdge\(\);/.test(appSrc),
+      'таймер автопрокрутки не гасится на финише жеста');
   });
   it('перетаскивание: слепок на захвате, сдвиги соседей, посадка после', () => {
     assert.ok(appSrc.includes('pointerdown'), 'нет pointerdown на grip');

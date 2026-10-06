@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v80';
+  var APP_VERSION = 'v81';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1846,6 +1846,55 @@
    * Направление определяется первым движением: горизонталь (|dx|>|dy|*2). */
   function wireLineDrag(div, grip, inp) {
     var pid = null, grabDy = 0, divH = 0, holeH = 0, holeShift = 0, x0 = 0, y0 = 0;
+    /* Автопрокрутка у краёв — по таймеру: стоящий палец pointermove не шлёт,
+     * и прокрутка только по движению глохла после пары рывков. */
+    var edgeTimer = null, lastY = 0, edgeStart = 0;
+    function edgeZone(y) {
+      if (y < 70) return -1;
+      if (y > (window.innerHeight || 800) - 70) return 1;
+      return 0;
+    }
+    function stopEdge() {
+      if (edgeTimer) { try { clearInterval(edgeTimer); } catch (x) {} }
+      edgeTimer = null;
+    }
+    /* Пересчёт дыры по координате пальца: живой верх коробки + замороженные
+     * оффсеты. Вынесено отдельно, чтобы тик автопрокрутки двигал дыру вслед
+     * за уезжающей из-под неподвижного пальца страницей. */
+    function updateHole(clientY) {
+      var box = el('lines');
+      if (!box || !order) return false;
+      var dt = clientY - grabDy;
+      div.style.top = dt + 'px';
+      var boxTop = 0;
+      try { boxTop = box.getBoundingClientRect().top; } catch (x) { boxTop = 0; }
+      var advanced = false;
+      while (phi < fr.length) {
+        if (fr[phi].sep) break;
+        if (dt > boxTop + fr[phi].off + PEN) { phi++; setHole(phi); advanced = true; }
+        else break;
+      }
+      while (phi > 0) {
+        var pv = fr[phi - 1];
+        if (dt < boxTop + pv.off + pv.h - PEN) { phi--; setHole(phi); advanced = true; }
+        else break;
+      }
+      return advanced;
+    }
+    function edgeTick() {
+      if (pid == null || mode !== 'vertical' || !order) { stopEdge(); return; }
+      var dir = edgeZone(lastY);
+      if (!dir) { stopEdge(); return; }
+      /* Разгон чем дольше держим: 12px → до 36px за тик 50мс. */
+      var hold = Date.now() - edgeStart;
+      var step = 12 + Math.min(24, Math.floor(hold / 400) * 6);
+      try {
+        window.scrollBy(0, dir * step);
+        if (pinY != null) pinY += dir * step;
+        lastScrollTs = Date.now();
+      } catch (x) {}
+      updateHole(lastY);
+    }
     var mode = null, lastDx = 0, lastScrollTs = 0, phi = 0;
     var order = null, kids = [], fr = [], frSh = [];
     var indentCur = 0, indentMax = 0;
@@ -2109,55 +2158,29 @@
         return;
       }
       if (!order) return;
-      /* Ведущие края тянущейся: низ идёт за пальцем со сдвигом grabDy. */
-      var dt = e.clientY - grabDy;
-      div.style.top = dt + 'px';
-      /* Всё в покое: живой верх коробки (несмотря на скролл) + замороженные
-       * оффсеты. Замеров рядов нет — недолётным анимациям нечего болтать. */
-      var boxTop = 0;
-      try { boxTop = box.getBoundingClientRect().top; } catch (x) { boxTop = 0; }
+      lastY = e.clientY;
       /* Дыра липкая: стоит, пока ведущий край не въедет в следующий ряд
        * на PEN px. Усилие симметрично вверх и вниз при любой высоте строк. */
-      var advanced = false;
-      /* Дыра липкая: верх дыры следует за верхом тянущейся. Пороги —
-       * замороженные оффсеты, строго монотонны: удерживаемый палец стабилен
-       * всегда, усилие одинаково вверх/вниз при любой высоте строк. */
-      while (phi < fr.length) {
-        /* Дыра живой строки не уходит за разделитель: ниже — только
-         * выполненные, живая задача в их секцию не садится. */
-        if (fr[phi].sep) break;
-        if (dt > boxTop + fr[phi].off + PEN) { phi++; setHole(phi); advanced = true; }
-        else break;
-      }
-      while (phi > 0) {
-        var pv = fr[phi - 1];
-        if (dt < boxTop + pv.off + pv.h - PEN) { phi--; setHole(phi); advanced = true; }
-        else break;
-      }
-      if (!advanced) return;
+      updateHole(e.clientY);
       /* Автопрокрутка у краёв — только при уверенном движении (иначе страница
-       * сдвигается от лёгкого касания): дальше 40px от захвата, не чаще 90мс. */
+       * сдвигается от лёгкого касания): дальше 40px от захвата. Дальше едет
+       * таймер edgeTick, а не движения пальца. */
       var dragDist = Math.abs(e.clientY - y0);
-      var nowMs = Date.now();
-      if (dragDist > 40 && nowMs - lastScrollTs > 90) {
-        try {
-          if (e.clientY < 70) {
-            window.scrollBy(0, -12);
-            if (pinY != null) pinY -= 12;
-            lastScrollTs = nowMs;
-          } else if (e.clientY > (window.innerHeight || 800) - 70) {
-            window.scrollBy(0, 12);
-            if (pinY != null) pinY += 12;
-            lastScrollTs = nowMs;
-          }
-        } catch (x) {}
-      }
+      if (dragDist > 40 && edgeZone(e.clientY)) {
+        if (!edgeTimer) {
+          edgeStart = Date.now();
+          try { edgeTimer = setInterval(edgeTick, 50); } catch (x) { edgeTimer = null; }
+        }
+      } else stopEdge();
       if (e.cancelable) e.preventDefault();
     });
     function finish(e) {
       if (pid == null) return;
       if (e && e.pointerId != null && e.pointerId !== pid) return;
       pid = null;
+      /* Таймер краевой прокрутки гасим всегда — иначе страница уедет сама
+       * после отпускания пальца. */
+      stopEdge();
       dragActive = false;
       document.removeEventListener('pointerup', finish);
       document.removeEventListener('pointercancel', finish);
