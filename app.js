@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v81';
+  var APP_VERSION = 'v82';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1850,8 +1850,8 @@
      * и прокрутка только по движению глохла после пары рывков. */
     var edgeTimer = null, lastY = 0, edgeStart = 0;
     function edgeZone(y) {
-      if (y < 70) return -1;
-      if (y > (window.innerHeight || 800) - 70) return 1;
+      if (y < 110) return -1;
+      if (y > (window.innerHeight || 800) - 110) return 1;
       return 0;
     }
     function stopEdge() {
@@ -1885,9 +1885,9 @@
       if (pid == null || mode !== 'vertical' || !order) { stopEdge(); return; }
       var dir = edgeZone(lastY);
       if (!dir) { stopEdge(); return; }
-      /* Разгон чем дольше держим: 12px → до 36px за тик 50мс. */
+      /* Разгон чем дольше держим: 12px → до 24px за тик 50мс. */
       var hold = Date.now() - edgeStart;
-      var step = 12 + Math.min(24, Math.floor(hold / 400) * 6);
+      var step = 12 + Math.min(12, Math.floor(hold / 400) * 6);
       try {
         window.scrollBy(0, dir * step);
         if (pinY != null) pinY += dir * step;
