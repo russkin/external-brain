@@ -635,7 +635,7 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('minHeight'), 'высота списка не фиксируется на время drag');
     assert.ok(appSrc.includes('lastScrollTs'), 'автопрокрутка без троттлинга');
     assert.ok(appSrc.includes('dragDist'), 'автопрокрутка без порога движения');
-    assert.ok(appSrc.includes('setInterval(edgeTick, 60)'),
+    assert.ok(appSrc.includes('setInterval(edgeTick, 20)'),
       'автопрокрутка только по движению пальца — стоящий палец не крутит');
     assert.ok(appSrc.includes('pinY = window.pageYOffset'),
       'пин убегает дальше клампа — дёргает страницу обратно');

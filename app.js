@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v83';
+  var APP_VERSION = 'v84';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1885,9 +1885,11 @@
       if (pid == null || mode !== 'vertical' || !order) { stopEdge(); return; }
       var dir = edgeZone(lastY);
       if (!dir) { stopEdge(); return; }
-      /* Тише: 8px → до 16px за тик 60мс, чтобы названия читались. */
+      /* Плавно и тихо: мелкие шаги 3→5px, но часто (тик 20мс) —
+       * как строки под тянущейся (у них transition .18s). Редкие крупные
+       * шаги давали дёрганье. */
       var hold = Date.now() - edgeStart;
-      var step = 8 + Math.min(8, Math.floor(hold / 500) * 2);
+      var step = 3 + Math.min(2, Math.floor(hold / 600));
       try {
         window.scrollBy(0, dir * step);
         /* Пин — с РЕАЛЬНОГО смещения, а не += шаг: у края scrollBy
@@ -2172,7 +2174,7 @@
       if (dragDist > 40 && edgeZone(e.clientY)) {
         if (!edgeTimer) {
           edgeStart = Date.now();
-          try { edgeTimer = setInterval(edgeTick, 60); } catch (x) { edgeTimer = null; }
+          try { edgeTimer = setInterval(edgeTick, 20); } catch (x) { edgeTimer = null; }
         }
       } else stopEdge();
       if (e.cancelable) e.preventDefault();
