@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v85';
+  var APP_VERSION = 'v86';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -2758,7 +2758,30 @@
    * нажатии клавиатура прячется и прыгаем к первому совпадению.
    * Переход разворачивает предков и секцию выполненных. Зелёной рамки
    * нет — текущее совпадение видно по центру экрана и счётчику i/N. */
-  var searchIds = [], searchIdx = -1, searchScrollY = 0;
+  var searchIds = [], searchIdx = -1, searchScrollY = 0, searchLanded = false;
+  /* Оверлей над клавиатурой: сама клавиатура (и её полоса с картой/
+   * ключом/геопозицией) — системная, кнопки оверлея она перекрывает.
+   * Поднимаем оверлей на высоту клавиатуры через visualViewport. */
+  function searchLift() {
+    var bar = el('searchBar');
+    if (!bar || !bar.classList.contains('open')) return;
+    var off = 0;
+    try {
+      if (window.visualViewport) {
+        off = (window.innerHeight || 0) - window.visualViewport.height -
+          (window.visualViewport.offsetTop || 0);
+        if (!(off > 0)) off = 0;
+      }
+    } catch (x) { off = 0; }
+    bar.style.bottom = off ? off + 'px' : '';
+  }
+  function searchUnlift() {
+    try {
+      if (window.visualViewport) window.visualViewport.removeEventListener('resize', searchLift);
+    } catch (x) {}
+    var bar = el('searchBar');
+    if (bar) bar.style.bottom = '';
+  }
   function searchSetDisabled(id, v) {
     var b = el(id);
     if (b) b.disabled = !!v;
@@ -2779,23 +2802,31 @@
     try { searchScrollY = window.pageYOffset; } catch (x) { searchScrollY = 0; }
     searchIds = [];
     searchIdx = -1;
+    searchLanded = false;
     var bar = el('searchBar');
     if (bar) bar.classList.add('open');
     var gm = el('gearMenu');
     if (gm) gm.classList.remove('open');
+    try {
+      if (window.visualViewport) window.visualViewport.addEventListener('resize', searchLift);
+    } catch (x) {}
+    searchLift();
     var inp = el('searchInput');
     if (inp) { inp.value = ''; try { inp.focus(); } catch (x) {} }
     updateSearchUI();
   }
   function closeSearch(restore) {
+    searchUnlift();
     var bar = el('searchBar');
     if (bar) bar.classList.remove('open');
     var inp = el('searchInput');
     if (inp) { try { inp.blur(); } catch (x) {} }
     searchIds = [];
     searchIdx = -1;
-    /* Отмена возвращает страницу туда, где была при открытии. */
-    if (restore) { try { window.scrollTo(0, searchScrollY); } catch (x) {} }
+    /* Отмена: ничего не искали — вернуть страницу на место открытия;
+     * поиск останавливался на задаче — оставить как есть. */
+    if (restore && !searchLanded) { try { window.scrollTo(0, searchScrollY); } catch (x) {} }
+    searchLanded = false;
   }
   /* Цель видна: разворачиваем предков (свёрнутые группы) и секцию
    * выполненных, если совпадение там. */
@@ -2858,6 +2889,7 @@
     if (i < 0) i = 0;
     if (i > searchIds.length - 1) i = searchIds.length - 1;
     searchIdx = i;
+    searchLanded = true;
     ensureSearchVisible(searchIds[i]);
     scrollToSearchRow(searchIds[i]);
     updateSearchUI();
@@ -2939,6 +2971,15 @@
       searchIds = [];
       searchIdx = -1;
       updateSearchUI();
+    });
+    on('searchInput', 'keydown', function (e) {
+      if (e && e.key === 'Enter') {
+        var inp = el('searchInput');
+        if (inp && String(inp.value).trim()) {
+          if (e.cancelable) e.preventDefault();
+          doSearch();
+        }
+      }
     });
     on('clearDone', 'click', function () { askClearDone(); });
     on('deleteDoneBtn', 'click', function () { askClearDone(); });

@@ -674,6 +674,10 @@ describe('логика вызывается с state.tasks', () => {
       appSrc.includes("on('searchCancel'") && appSrc.includes("on('searchUp'") &&
       appSrc.includes("on('searchDown'"), 'кнопки поиска не подписаны');
     assert.ok(appSrc.includes('searchScrollY'), 'Отмена не возвращает скролл');
+    assert.ok(appSrc.includes('visualViewport') && appSrc.includes('searchLift'),
+      'оверлей не поднимается над клавиатурой — кнопки перекрыты');
+    assert.ok(appSrc.includes('searchLanded'),
+      'Отмена всегда возвращает скролл, даже если поиск останавливался');
     assert.ok(appSrc.includes('collapsed[lt[i].id]') || appSrc.includes('delete collapsed'),
       'переход не разворачивает свёрнутые группы');
   });
