@@ -702,6 +702,8 @@ describe('логика вызывается с state.tasks', () => {
       'нет пункта и подменю «Резервная копия»');
     assert.ok(html.includes('#backupMenu { display: none;'),
       'подменю копий видно сразу');
+    assert.ok(html.includes('#backupMenu') && html.includes('rgba('),
+      'у подменю нет подложки как в покупках');
     assert.ok(appSrc.includes("on('backupBtn'"), 'подменю не открывается');
     for (const sid of ['restoreBtn', 'pinSaveBtn', 'pinRestoreBtn']) {
       assert.ok(html.includes('id="' + sid + '"'), 'нет ' + sid);
