@@ -106,7 +106,8 @@
     #gearMenu { display: none; position: fixed; top: 54px; right: 8px; background: #fff;
       border: 1px solid #ddd; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,.2);
       z-index: 40; min-width: 240px; overflow: hidden; }
-    #gearMenu.open { display: block; }
+    #gearMenu.open { display: block; max-height: calc(100vh - 70px); overflow-y: auto;
+      -webkit-overflow-scrolling: touch; }
     #gearMenu button { display: block; width: 100%; text-align: left; background: none;
       border: none; border-bottom: 1px solid #f0f0f0; padding: 12px 14px; }
     #gearMenu button:last-child { border-bottom: none; }

@@ -697,6 +697,10 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('collapsed[lt[i].id]') || appSrc.includes('delete collapsed'),
       'переход не разворачивает свёрнутые группы');
   });
+  it('меню не вылезает за маленький экран', () => {
+    assert.ok(/#gearMenu\.open\s*\{[^}]*max-height:\s*calc\(100vh - 70px\)[^}]*overflow-y:\s*auto/.test(html),
+      'меню без потолка высоты и прокрутки');
+  });
   it('инструкция — нативная ссылка в новой вкладке (без двойного открытия)', () => {
     assert.ok(html.includes('id="guideBtn"'), 'нет пункта инструкции в меню');
     assert.ok(html.includes('target="_blank"'), 'инструкция не в новой вкладке');
