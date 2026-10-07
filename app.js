@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v97';
+  var APP_VERSION = 'v98';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -718,18 +718,6 @@
     } catch (x) {}
   }
   /* Полный порядок задач (живые + выполненные) для обхода предков. */
-  function fullOrdered() {
-    var a = [], i;
-    for (i = 0; i < state.tasks.length; i++) {
-      if (state.tasks[i] && state.tasks[i].id) a.push(state.tasks[i]);
-    }
-    a.sort(function (x, y) {
-      var cx = x.createdAt || 0, cy = y.createdAt || 0;
-      if (cx !== cy) return cx - cy;
-      return x.id < y.id ? -1 : (x.id > y.id ? 1 : 0);
-    });
-    return a;
-  }
   /* Виден ли хоть один выполненный прямо сейчас: секция не скрыта
    * тумблером и хотя бы один не спрятан сворачиванием групп. */
   function anyDoneShown() {
@@ -737,7 +725,10 @@
     var dn = [];
     try { dn = L.doneList(state.tasks); } catch (x) { dn = []; }
     if (!dn.length) return false;
-    var full = fullOrdered();
+    /* Тот же массив, что у renderLines: удалённые tombstone сдвигали
+     * индексы в собственном порядке — обход находил чужих «предков»:
+     * разворачивались живые ветки, а выполненные оставались скрыты. */
+    var full = fullList();
     function idxOf(id) {
       for (var i = 0; i < full.length; i++) if (full[i].id === id) return i;
       return -1;
@@ -754,7 +745,7 @@
     if (!state) return false;
     var dn = [];
     try { dn = L.doneList(state.tasks); } catch (x) { dn = []; }
-    var full = fullOrdered();
+    var full = fullList();
     var changed = false, d, i;
     function idxOf(id) {
       for (var k = 0; k < full.length; k++) if (full[k].id === id) return k;

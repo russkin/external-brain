@@ -282,6 +282,8 @@ describe('логика вызывается с state.tasks', () => {
       'счётчик показывает видимых, а не всех выполненных');
     assert.ok(appSrc.includes('function expandDoneParents') && appSrc.includes('anyDoneShown'),
       'тап по разделителю не разворачивает спрятанных в группах выполненных');
+    assert.ok(!appSrc.includes('fullOrdered'),
+      'обход предков по своему порядку: tombstone сдвигают индексы, разворачиваются чужие ветки');
     assert.ok(appSrc.includes('is-done'), 'нет зачёркивания');
     assert.ok(html.includes('user-select'), 'свайп проигрывает выделению текста');
     assert.ok(appSrc.includes('_swOpen'), 'состояние свайпа рассинхронизировано');
