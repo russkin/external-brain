@@ -110,6 +110,11 @@
     #gearMenu button { display: block; width: 100%; text-align: left; background: none;
       border: none; border-bottom: 1px solid #f0f0f0; padding: 12px 14px; }
     #gearMenu button:last-child { border-bottom: none; }
+    /* Пункт-ссылка (инструкция): как кнопка меню, но нативный переход —
+     * window.open + запасной location давали ДВЕ страницы (open возвращает
+     * null, когда вкладка уходит во внешний браузер). */
+    #gearMenu a { display: block; text-align: left; padding: 12px 14px;
+      color: inherit; text-decoration: none; border-bottom: 1px solid #f0f0f0; }
     #gearSettings { display: none; }
     #gearSettings.open { display: block; }
     #searchBar { display: none; position: fixed; left: 0; right: 0; bottom: 0;
@@ -157,7 +162,7 @@
     <button id="installBtn">📲 Установить приложение</button>
     <button id="shareBtn">📤 Поделиться списком</button>
     <button id="shareAppBtn">🔗 Поделиться приложением</button>
-    <button id="guideBtn">📖 Инструкция</button>
+    <a id="guideBtn" href="./docs/USER_GUIDE.html" target="_blank" rel="noopener">📖 Инструкция</a>
     <button id="clearDone">Удалить выполненные</button>
     <button id="restoreBtn">♻ Восстановить копию задач</button>
     <button id="pinSaveBtn">💾 Сделать постоянную копию</button>

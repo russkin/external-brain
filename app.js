@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v88';
+  var APP_VERSION = 'v89';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -2977,11 +2977,6 @@
       if (navigator.share) navigator.share({ text: url }).catch(function () {});
       else if (navigator.clipboard) navigator.clipboard.writeText(url).then(function () { lastAction = 'скопировано'; renderStatus(); });
       else askText(url, '', false).then(function () {});
-    });
-    on('guideBtn', 'click', function () {
-      var w = null;
-      try { w = window.open('./docs/USER_GUIDE.html', '_blank', 'noopener'); } catch (e) { w = null; }
-      if (!w) window.location.href = './docs/USER_GUIDE.html';
     });
     on('searchBtn', 'click', function () { openSearch(); });
     on('searchGo', 'click', function () { doSearch(); });

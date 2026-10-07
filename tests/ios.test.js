@@ -684,6 +684,12 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('collapsed[lt[i].id]') || appSrc.includes('delete collapsed'),
       'переход не разворачивает свёрнутые группы');
   });
+  it('инструкция — нативная ссылка в новой вкладке (без двойного открытия)', () => {
+    assert.ok(html.includes('id="guideBtn"'), 'нет пункта инструкции в меню');
+    assert.ok(html.includes('target="_blank"'), 'инструкция не в новой вкладке');
+    assert.ok(!appSrc.includes("window.open('./docs/USER_GUIDE.html'"),
+      'window.open + location дают две страницы инструкции');
+  });
   it('быстрый ввод и фокус дня убраны из оболочки', () => {
     assert.ok(!html.includes('id="focus"'), 'focus остался в index.html');
     assert.ok(!html.includes('id="quick"'), 'quick остался в index.html');
