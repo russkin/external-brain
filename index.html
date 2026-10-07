@@ -115,8 +115,17 @@
      * null, когда вкладка уходит во внешний браузер). */
     #gearMenu a { display: block; text-align: left; padding: 12px 14px;
       color: inherit; text-decoration: none; border-bottom: 1px solid #f0f0f0; }
-    #gearSettings { display: none; }
-    #gearSettings.open { display: block; }
+    #repoModalBack { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,.4); z-index: 50; align-items: center; justify-content: center; padding: 20px; }
+    #repoModalBack.open { display: flex; }
+    #repoModalBox { background: #fff; border-radius: 10px; padding: 18px; width: 100%; max-width: 380px;
+      max-height: calc(100vh - 40px); overflow-y: auto; }
+    #repoModalText { margin-bottom: 10px; font-size: 14px; }
+    #repoModalText small { display: block; color: #666; margin-top: 6px; }
+    #repoModalInput { width: 100%; box-sizing: border-box; font-size: 16px; padding: 10px; margin-bottom: 8px; }
+    #repoTokenWrap input { width: 100%; box-sizing: border-box; font-size: 16px; padding: 10px; margin-bottom: 12px; }
+    #repoModalBox .row { display: flex; gap: 8px; }
+    #repoModalBox .row button { flex: 1 1 auto; }
     #searchBar { display: none; position: fixed; left: 0; right: 0; bottom: 0;
       background: #fff; border-top: 1px solid #ddd; z-index: 45;
       padding: 10px 14px calc(12px + env(safe-area-inset-bottom)); }
@@ -168,13 +177,6 @@
     <button id="pinSaveBtn">💾 Сделать постоянную копию</button>
     <button id="pinRestoreBtn">♻ Восстановить постоянную копию</button>
     <button id="repoBtn">🔑 Репозиторий и токен</button>
-    <div class="gear-settings" id="gearSettings">
-      <input id="repoInput" placeholder="owner/repo" autocomplete="off" />
-      <span id="tokenWrap"></span>
-      <button id="saveSettings">Сохранить</button>
-      <small>Без токена всё работает локально и офлайн.
-        <span id="appVer"></span></small>
-    </div>
   </div>
 
   <main>
@@ -193,6 +195,16 @@
         <button id="searchDown">Вниз</button>
       </div>
     </div>
+
+  <div id="repoModalBack">
+    <div id="repoModalBox">
+      <div id="repoModalText">Репозиторий и токен<small>Без токена всё работает локально и офлайн.
+        <span id="appVer"></span></small></div>
+      <input id="repoModalInput" placeholder="owner/repo" autocomplete="off" aria-label="Репозиторий" />
+      <span id="repoTokenWrap"></span>
+      <div class="row"><button id="repoSaveBtn">Сохранить</button><button id="repoCancelBtn">Отмена</button></div>
+    </div>
+  </div>
 
   <div id="modalBack">
     <div id="modalBox">

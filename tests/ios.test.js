@@ -171,8 +171,11 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'чистое изменение отступа без сдвига порядка не пишется в историю');
     assert.ok(html.includes('id="repoBtn"') && appSrc.includes('on(\'repoBtn\''),
       'нет пункта «Репозиторий и токен»');
-    assert.ok(html.includes('#gearSettings { display: none;') && html.includes('id="gearSettings"'),
-      'поля repo/токен не скрыты до предупреждения');
+    assert.ok(html.includes('id="repoModalBack"') && html.includes('#repoModalBack { display: none;'),
+      'настройки — не модальное окно по центру');
+    assert.ok(html.includes('id="repoModalInput"') && html.includes('id="repoSaveBtn"') &&
+      html.includes('id="repoCancelBtn"'),
+      'в окне настроек нет двух полей и кнопок Сохранить/Отмена');
     assert.ok(appSrc.includes('только для администратора'), 'нет предупреждения для администратора');
     /* v74: светофор «!» при 409/422 + тап по нему — принудительный синк; сеть ⇅ в шапке. */
     assert.ok(appSrc.includes("color === 'red' && /github-put (409|422)/.test(err)") &&
@@ -747,7 +750,8 @@ describe('PWA-оболочка', () => {
   it('токен живёт только в настройках', () => {
     assert.ok(!/type="password"/.test(html), 'постоянное поле пароля в html');
     assert.ok(appSrc.includes('tokenInput'), 'нет tokenInput');
-    assert.ok(appSrc.includes('tokenWrap'), 'нет tokenWrap');
+    assert.ok(appSrc.includes('repoTokenBuild') && appSrc.includes('repoTokenDestroy'),
+      'поле токена не создаётся/удаляется вместе с окном');
   });
   it('хранилище scoped под проект', () => {
     assert.ok(storeSrc.includes('external-brain-v1'), 'не тот LS-ключ');

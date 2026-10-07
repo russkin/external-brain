@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v90';
+  var APP_VERSION = 'v91';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -3003,9 +3003,6 @@
     var gear = el('gearMenu');
     on('gearBtn', 'click', function () {
       if (gear) gear.classList.toggle('open');
-      var gs = el('gearSettings');
-      if (gs && gear && !gear.classList.contains('open')) gs.classList.remove('open');
-      ensureTokenInput();
     });
     on('diagBtn', 'click', function () {
       diagText().then(function (txt) {
@@ -3013,16 +3010,46 @@
       });
     });
     /* Репозиторий и токен — только для администратора: сначала предупреждение,
-     * поля (и поле токена) скрыты, пока не подтверждено. */
+     * затем модальное окно по центру с двумя полями и кнопками
+     * Сохранить/Отмена (в маленьком экране меню не переполняется). */
     on('repoBtn', 'click', function () {
       askConfirm('Настройки репозитория и токена — только для администратора. ' +
         'Неверные значения нарушат синхронизацию на этом устройстве. Открыть?').then(function (ok) {
           if (!ok) return;
-          var gs = el('gearSettings');
-          if (gs) gs.classList.add('open');
-          ensureTokenInput();
+          openRepoModal();
         });
     });
+    /* Поле токена живёт в DOM только пока открыто окно настроек: иначе Chrome
+     * видит пару «текст + пароль» и предлагает сохранить токен как логин. */
+    function repoTokenBuild() {
+      var wrap = el('repoTokenWrap');
+      if (!wrap) return;
+      wrap.innerHTML = '';
+      var inp = document.createElement('input');
+      inp.id = 'tokenInput';
+      inp.type = 'password';
+      inp.placeholder = 'GitHub token';
+      inp.autocomplete = 'off';
+      inp.setAttribute('aria-label', 'Токен');
+      if (state && state.settings.token) inp.value = state.settings.token;
+      wrap.appendChild(inp);
+    }
+    function repoTokenDestroy() {
+      var wrap = el('repoTokenWrap');
+      if (wrap) wrap.innerHTML = '';
+    }
+    function openRepoModal() {
+      var repo = el('repoModalInput');
+      if (repo) repo.value = (state && state.settings.repo) || '';
+      repoTokenBuild();
+      var back = el('repoModalBack');
+      if (back) back.classList.add('open');
+    }
+    function closeRepoModal() {
+      repoTokenDestroy();
+      var back = el('repoModalBack');
+      if (back) back.classList.remove('open');
+    }
     on('syncNowBtn', 'click', function () { doSync(true); });
     /* Тап по светофору — принудительный синк (как в purchases). */
     on('syncLight', 'click', function () { doSync(true); });
@@ -3130,33 +3157,20 @@
     on('durHm', 'click', function () { durTot = Math.max(durTot - 60, 0); durRender(); });
     on('durMp', 'click', function () { durTot = Math.min(durTot + 5, 59999); durRender(); });
     on('durMm', 'click', function () { durTot = Math.max(durTot - 5, 0); durRender(); });
-    on('saveSettings', 'click', function () {
-      var repo = el('repoInput');
+    on('repoSaveBtn', 'click', function () {
+      var repo = el('repoModalInput');
       var tok = document.getElementById('tokenInput');
       mutate(function () {
         if (repo && repo.value) state.settings.repo = repo.value.trim();
         if (tok) state.settings.token = tok.value.trim();
       });
-      var tw = el('tokenWrap');
-      if (tw) tw.innerHTML = '';
-      var gs = el('gearSettings');
-      if (gs) gs.classList.remove('open');
+      closeRepoModal();
       if (gear) gear.classList.remove('open');
       doSync(true);
     });
-    /* Поле токена живёт в DOM только при открытых настройках: иначе Chrome
-     * видит пару «текст + пароль» и предлагает сохранить токен как логин. */
-    function ensureTokenInput() {
-      var wrap = el('tokenWrap');
-      if (!wrap || document.getElementById('tokenInput')) return;
-      var inp = document.createElement('input');
-      inp.id = 'tokenInput';
-      inp.type = 'password';
-      inp.placeholder = 'GitHub token';
-      inp.autocomplete = 'off';
-      if (state && state.settings.token) inp.value = state.settings.token;
-      wrap.appendChild(inp);
-    }
+    on('repoCancelBtn', 'click', function () {
+      closeRepoModal();
+    });
     var sl = el('syncLight');
     if (sl) sl.addEventListener('click', function () { doSync(true); });
     window.addEventListener('beforeinstallprompt', function (e) {
@@ -3213,8 +3227,6 @@
       try {
         if (window.EBStore.pinOnVersion) window.EBStore.pinOnVersion(APP_VERSION);
       } catch (e) {}
-      var repo = el('repoInput');
-      if (repo && state.settings.repo) repo.value = state.settings.repo;
       render();
       setLight(state.settings.token ? 'gray' : 'gray', false);
       syncStatus = state.settings.token ? '' : 'выключен (нет ключа)';
