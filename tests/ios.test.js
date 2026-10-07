@@ -715,6 +715,10 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(/#gearMenu\.open\s*\{[^}]*max-height:\s*calc\(100vh - 70px\)[^}]*overflow-y:\s*auto/.test(html),
       'меню без потолка высоты и прокрутки');
   });
+  it('ввод на iOS: поле печатаемое (без user-select:none)', () => {
+    assert.ok(/\.tinput\s*\{[^}]*-webkit-user-select:\s*text/.test(html),
+      'поле с запретом выделения — на iOS клавиатура есть, а печати нет');
+  });
   it('инструкция — нативная ссылка в новой вкладке (без двойного открытия)', () => {
     assert.ok(html.includes('id="guideBtn"'), 'нет пункта инструкции в меню');
     assert.ok(html.includes('target="_blank"'), 'инструкция не в новой вкладке');
