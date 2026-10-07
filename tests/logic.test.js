@@ -1,5 +1,5 @@
 'use strict';
-/* Unit-тесты чистой логики (src/logic.js): инбокс, прояснение, слияние. */
+/* Unit-тесты чистой логики (src/logic.js): входящие, правка полей, слияние. */
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -46,7 +46,7 @@ describe('создание и инбокс', () => {
   });
   it('нарезка удалена: opts.slicesTotal игнорируется', () => {
     const t = L.blankTasks();
-    const task = mk(t, 'Слон', 1000, { slicesTotal: 5000 });
+    const task = mk(t, 'Дело', 1000, { slicesTotal: 5000 });
     assert.equal(task.slicesTotal, undefined);
     assert.equal(task.slicesDone, undefined);
     assert.equal(L.setSlices, undefined);
@@ -54,7 +54,7 @@ describe('создание и инбокс', () => {
   });
 });
 
-describe('прояснение (clarify)', () => {
+describe('правка полей (clarify)', () => {
   it('раскладывает инбокс по статусам', () => {
     const t = L.blankTasks();
     mk(t, 'Дело', 1000, { id: 'a' });
@@ -150,7 +150,7 @@ describe('готово / вернуть / удалить', () => {
   });
 });
 
-describe('выпиленное: лягушка и слоны', () => {
+describe('выпиленное: фокус и нарезка', () => {
   it('нарезка выпилена: setSlices/completeSlice отсутствуют в API', () => {
     assert.equal(L.setSlices, undefined);
     assert.equal(L.completeSlice, undefined);
@@ -160,7 +160,7 @@ describe('выпиленное: лягушка и слоны', () => {
     assert.equal(n.slicesTotal, undefined);
     assert.equal(n.slicesDone, undefined);
   });
-  it('лягушка выпилен: setFrog отсутствует в API', () => {
+  it('поле frog выпилено: setFrog отсутствует в API (старые данные чистятся нормализацией)', () => {
     assert.equal(L.setFrog, undefined);
     assert.equal(typeof L.setFrog, 'undefined');
   });
@@ -175,7 +175,7 @@ describe('выпиленное: лягушка и слоны', () => {
     assert.equal(nx[0].id, 'a');
     assert.equal(nx[1].id, 'b');
   });
-  it('без лягушек — по времени создания', () => {
+  it('порядок следующих — по времени создания', () => {
     const t = L.blankTasks();
     mk(t, 'Второе', 2000, { id: 'b' });
     mk(t, 'Первое', 1000, { id: 'a' });
@@ -244,10 +244,10 @@ describe('списки и фокус', () => {
   it('shareText: пусто и с данными', () => {
     assert.equal(L.shareText(L.blankTasks()), '');
     const t = L.blankTasks();
-    mk(t, 'Лягушка', 1000, { id: 'f' });
+    mk(t, 'Дело', 1000, { id: 'f' });
     L.clarifyTask(t, 'f', { status: 'next' }, 2000);
     const txt = L.shareText(t);
-    assert.equal(txt, '- Лягушка');
+    assert.equal(txt, '- Дело');
   });
   it('shareText: как на экране — порядок, отступы, выполненные ниже', () => {
     const t = L.blankTasks();

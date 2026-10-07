@@ -1,8 +1,10 @@
-/* app.js — интерфейс «Внешнего мозга»: инбокс + прояснение по джедайским техникам. */
+/* app.js — интерфейс «Внешнего мозга»: список дел по аналогии с Google Keep
+ * (строки, выполнение, время) + свои фичи: поиск, заливка и многократный
+ * отступ вложенных, сворачивание/разворачивание, история, копии, инструкция. */
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v87';
+  var APP_VERSION = 'v88';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -2565,9 +2567,9 @@
     if (!s || !state) return;
     var st = L.stats(state.tasks);
     var parts = [
-      'Инбокс: ' + st.inbox,
-      'следующих: ' + st.next,
-      'синк: ' + (syncStatus || '—')
+      'Задач: ' + ((st.inbox || 0) + (st.next || 0)),
+      'выполненных: ' + (st.done || 0),
+      'синхр: ' + (syncStatus || '—')
     ];
     if (lastAction) parts.push(lastAction);
     if (bootError) parts.push(bootError);

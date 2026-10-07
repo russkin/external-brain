@@ -1,18 +1,18 @@
 /* logic.js — чистая логика «Внешнего мозга» без DOM.
  * Совместимость: ES2017 без optional chaining, работает в Node и в браузере.
- * Модель (плоский список, v76): значения 'waiting'/'someday' и поле 'project'
- *   УДАЛЕНЫ (H-07, в живых задачах не использовались); старые данные с ними
- *   нормализация молча приводит к 'inbox'/без проекта (как лягушка в v72).
+ * Модель (плоский список, как задачи в Google Keep): лишние статусы и поле
+ *   'project' УДАЛЕНЫ (H-07, в живых задачах не использовались); старые
+ *   данные с ними нормализация молча приводит к 'inbox'/без проекта.
  *   task = { id, title, status, estMin,
  *            indent, createdAt, updatedAt, doneAt, ts, deleted }
  *   status: 'inbox' (новые) | 'next' (в работе) | 'done' (готово)
  *   indent: уровень отступа 0..8 — задача с отступом входит в группу задачи
  *           без отступа (или с меньшим отступом) сверху.
  * Правила:
- *   - всё новое падает в инбокс (capture), цель — пустой инбокс;
- *   - прояснение (clarify) правит поля задачи;
- *   - нарезка (slicesTotal/slicesDone, setSlices/completeSlice) УДАЛЕНА в v77 —
- *     из UI не управлялась, в живых задачах не использовалась;
+ *   - всё новое падает в инбокс (входящие), цель — пустой инбокс;
+ *   - правка полей задачи — через clarifyTask;
+ *   - нарезка (slicesTotal/slicesDone) УДАЛЕНА в v77 — из UI не управлялась,
+ *     в живых задачах не использовалась;
  *   - удаление — tombstone (deleted=true), чтобы синк не воскрешал/не терял.
  */
 'use strict';
@@ -84,9 +84,8 @@ function createTask(tasks, title, nowMs, opts) {
   return task;
 }
 
-/* Прояснение: разложить задачу из инбокса (или любую) по полям.
- * patch: { status, title, indent, estMin }.
- * Невалидный status игнорируется. */
+/* Правка полей задачи: patch
+ * { status, title, indent, estMin }. Невалидный status игнорируется. */
 function clarifyTask(tasks, id, patch, nowMs) {
   var task = getTask(tasks, id);
   if (!task || task.deleted) return null;
