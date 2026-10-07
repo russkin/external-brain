@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v89';
+  var APP_VERSION = 'v90';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -717,8 +717,76 @@
       else localStorage.removeItem(DONE_HIDDEN_KEY);
     } catch (x) {}
   }
+  /* Полный порядок задач (живые + выполненные) для обхода предков. */
+  function fullOrdered() {
+    var a = [], i;
+    for (i = 0; i < state.tasks.length; i++) {
+      if (state.tasks[i] && state.tasks[i].id) a.push(state.tasks[i]);
+    }
+    a.sort(function (x, y) {
+      var cx = x.createdAt || 0, cy = y.createdAt || 0;
+      if (cx !== cy) return cx - cy;
+      return x.id < y.id ? -1 : (x.id > y.id ? 1 : 0);
+    });
+    return a;
+  }
+  /* Виден ли хоть один выполненный прямо сейчас: секция не скрыта
+   * тумблером и хотя бы один не спрятан сворачиванием групп. */
+  function anyDoneShown() {
+    if (!state || doneHidden) return false;
+    var dn = [];
+    try { dn = L.doneList(state.tasks); } catch (x) { dn = []; }
+    if (!dn.length) return false;
+    var full = fullOrdered();
+    function idxOf(id) {
+      for (var i = 0; i < full.length; i++) if (full[i].id === id) return i;
+      return -1;
+    }
+    for (var d = 0; d < dn.length; d++) {
+      var di = idxOf(dn[d].id);
+      if (di !== -1 && !L.isHiddenByCollapse(full, di, collapsed)) return true;
+    }
+    return false;
+  }
+  /* Развернуть предков всех выполненных (свёрнутые группы), чтобы после
+   * тапа по разделителю секция действительно стала видна. */
+  function expandDoneParents() {
+    if (!state) return false;
+    var dn = [];
+    try { dn = L.doneList(state.tasks); } catch (x) { dn = []; }
+    var full = fullOrdered();
+    var changed = false, d, i;
+    function idxOf(id) {
+      for (var k = 0; k < full.length; k++) if (full[k].id === id) return k;
+      return -1;
+    }
+    for (d = 0; d < dn.length; d++) {
+      var di = idxOf(dn[d].id);
+      if (di === -1) continue;
+      var minInd = 99999;
+      for (i = di; i >= 0; i--) {
+        var ind = lineIndent(full[i]);
+        if (ind < minInd) {
+          minInd = ind;
+          if (i !== di && collapsed[full[i].id]) {
+            delete collapsed[full[i].id];
+            changed = true;
+          }
+        }
+      }
+    }
+    if (changed) saveCollapsed();
+    return changed;
+  }
   function toggleDoneHidden() {
-    doneHidden = !doneHidden;
+    /* Тап по разделителю: видно — прячем тумблером; не видно (тумблер
+     * или свёрнутые группы) — показываем всё: тумблер off + разворот. */
+    if (anyDoneShown()) {
+      doneHidden = true;
+    } else {
+      doneHidden = false;
+      expandDoneParents();
+    }
     saveDoneHidden();
     render();
   }
@@ -2536,7 +2604,7 @@
       /* Тап — скрыть/показать все выполненные разом. Стрелка показывает
        * состояние (▸ скрыты, ▾ видны), разделитель в скрытом состоянии
        * остаётся: он же точка возврата и кламп дыры при перетаскивании. */
-      sep.textContent = 'Выполнено · ' + doneVis.length + (doneHidden ? ' ▸' : ' ▾');
+      sep.textContent = 'Выполнено · ' + done.length + (doneHidden ? ' ▸' : ' ▾');
       sep.setAttribute('title', doneHidden ? 'Показать выполненные' : 'Скрыть выполненные');
       sep.addEventListener('click', function () { toggleDoneHidden(); });
       box.appendChild(sep);

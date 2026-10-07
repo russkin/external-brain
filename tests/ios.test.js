@@ -267,6 +267,10 @@ describe('логика вызывается с state.tasks', () => {
       'нет тапа по разделителю для скрытия выполненных');
     assert.ok(appSrc.includes('loadDoneHidden') && appSrc.includes('doneHidden'),
       'состояние скрытия выполненных не сохраняется');
+    assert.ok(appSrc.includes("'Выполнено · ' + done.length"),
+      'счётчик показывает видимых, а не всех выполненных');
+    assert.ok(appSrc.includes('function expandDoneParents') && appSrc.includes('anyDoneShown'),
+      'тап по разделителю не разворачивает спрятанных в группах выполненных');
     assert.ok(appSrc.includes('is-done'), 'нет зачёркивания');
     assert.ok(html.includes('user-select'), 'свайп проигрывает выделению текста');
     assert.ok(appSrc.includes('_swOpen'), 'состояние свайпа рассинхронизировано');
