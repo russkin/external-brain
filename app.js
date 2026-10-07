@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v95';
+  var APP_VERSION = 'v96';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -2731,7 +2731,7 @@
       'Синк: ' + (syncStatus || '—') + (lastSyncAt ? ' (в ' + fmtDT(lastSyncAt) + ')' : '')
     ];
     if (lastErrMsg) lines.push('Ошибка синка: ' + fmtDT(lastErrAt) + ' — ' + lastErrMsg);
-    lines.push('Каталог: ' + (state && state.updatedAt ? fmtDT(state.updatedAt) : '—'));
+    lines.push('Данные: ' + (state && state.updatedAt ? fmtDT(state.updatedAt) + ' (изменены)' : '—'));
     lines.push('Локально: выполненные ' + (doneHidden ? 'скрыты' : 'видны') +
       ' · свёрнуто групп ' + collapsedN);
     lines.push('История: ↩ ' + undoStack.length + ' · ↪ ' + redoStack.length);
@@ -2739,12 +2739,18 @@
     lines.push('Устройство: ' + deviceLine() + ' · id ' + journalDeviceId());
     lines.push('Repo: ' + (state ? state.settings.repo : '?'));
     lines.push('Ключ: ' + (state && state.settings.token ? 'введён' : 'выключен (нет ключа)'));
+    /* При ошибке отправки дописываем, что локальный журнал цел: иначе
+     * «log-error» читается как потеря диагностики. */
+    var pubNote = pubStatus.indexOf('log-error') === 0 ? ' (локальный журнал цел)' : '';
     lines.push('Публикация журнала: ' +
-      (pubAt ? fmtDT(pubAt) + ' · ' + pubStatus : 'ещё не было'));
+      (pubAt ? fmtDT(pubAt) + ' · ' + pubStatus + pubNote : 'ещё не было'));
     lines.push('Локальная копия: ' + backupLabel());
     lines.push('Постоянная копия: ' + pinLabel());
     if (lastAction) lines.push('Последнее действие: ' + lastAction);
-    lines.push(bootError ? bootError + ' ' + bootStack : 'Ошибок: нет');
+    /* Только непойманные JS-ошибки (window.onerror); ошибки синка живут
+     * в «Ошибка синка» и журнале ниже — поэтому «Ошибок JS: нет» не спорит
+     * с журналом. */
+    lines.push(bootError ? bootError + ' ' + bootStack : 'Ошибок JS: нет');
     if (syncLog.length) {
       lines.push('Журнал:');
       var from = Math.max(0, syncLog.length - 12);

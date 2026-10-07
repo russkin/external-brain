@@ -102,7 +102,9 @@ describe('устойчивость к рассинхрону кэшей', () => 
     assert.ok(appSrc.includes("'Обновление: SW '"), 'нет строки SW/кэша');
     assert.ok(appSrc.includes('external-brain-synclog-v1'), 'нет времени последнего синка');
     assert.ok(appSrc.includes("'Ошибка синка: '"), 'нет строки ошибки синка');
-    assert.ok(appSrc.includes("'Каталог: '"), 'нет времени каталога');
+    assert.ok(appSrc.includes("'Данные: '"), 'нет времени изменения данных');
+    assert.ok(appSrc.includes("'Ошибок JS: нет'"), '«Ошибок: нет» спорит с журналом синка');
+    assert.ok(appSrc.includes('(локальный журнал цел)'), 'нет пометки о целости журнала при log-error');
     assert.ok(appSrc.includes("' · свёрнуто групп '") && appSrc.includes("'История: ↩ '"),
       'нет локальных флагов/истории');
     assert.ok(appSrc.includes("'Размер: '") && appSrc.includes("'Сеть: '") &&
