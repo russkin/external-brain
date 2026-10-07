@@ -40,6 +40,12 @@ describe('service worker: методика кэша', () => {
   it('install берёт файлы из сети (cache reload)', () => {
     assert.ok(swSrc.includes("cache: 'reload'"), 'нет cache reload в install');
   });
+  it('чужие домены мимо воркера (иначе Safari роняет синк)', () => {
+    assert.ok(swSrc.includes("indexOf(self.location.origin) !== 0"),
+      'API синка идёт через SW — в Safari 15 respondWith(undefined)');
+    assert.ok(swSrc.includes("Promise.reject(new Error('offline'))"),
+      'обрыв без кэша даёт null вместо честной ошибки сети');
+  });
   it('старые кэши чистятся, клиент захватывается', () => {
     assert.ok(swSrc.includes('skipWaiting'), 'нет skipWaiting');
     assert.ok(swSrc.includes('clients.claim'), 'нет clients.claim');

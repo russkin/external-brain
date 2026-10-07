@@ -1,4 +1,4 @@
-# Требования `specs/requirements.md` — «Внешний мозг» (external-brain), фактическое состояние **v91**
+# Требования `specs/requirements.md` — «Внешний мозг» (external-brain), фактическое состояние **v92**
 
 > Статус: **восстановлено PM по коду v79** (`HEAD = f146448`, 2026-10-06) по запросу «повтори требования». Решения хозяина H-01…H-10 (2026-10-06) сохранены; текст v78 обновлён до v79 (регрессии v78 `rowShown`/`visKids` и v79 `preDrop` теперь описаны явно, FR-84 закрыт, внутренние устаревания вычищены). Источник правды — код, `AGENTS.md` (v79, 136 тестов), `README.md`, `docs/USER_GUIDE.md`/`.html`, `tests/`. Прогон 2026-10-06: **136/136 зелёные** (`node --test tests/logic.test.js tests/ios.test.js tests/sync.test.js tests/sync-devices.test.js`), покрытие: `src/logic.js` 99.60 лин / **89.95 веток**, `sync.js` 98.48 / 91.21. Все вопросы H-01…H-17 закрыты. Файл не содержит служебных обёрток (`<task>…</task>` в v78 — артефакт, удалён).
 
@@ -207,13 +207,14 @@
 
 ### 3.14 Обновления и версия
 
-- **FR-78. Версия в двух метках:** `APP_VERSION` в `app.js:5` и `CACHE = 'extbrain-vN'` в `sw.js:1` меняются **вместе** при любом изменении кода приложения; docs-only правки версию не bump’ают. Сейчас `v91` / `extbrain-v91`.
+- **FR-78. Версия в двух метках:** `APP_VERSION` в `app.js:5` и `CACHE = 'extbrain-vN'` в `sw.js:1` меняются **вместе** при любом изменении кода приложения; docs-only правки версию не bump’ают. Сейчас `v92` / `extbrain-v92`.
   *Проверка:* `ios.test.js` «APP_VERSION и CACHE содержат одну метку», «версия видна в шапке» (`#appVerHead` + `#appVer`).
 - **FR-79. `checkUpdate`:** не чаще раза в 5 минут, при открытии и при возврате на вкладку (`app.js:557`); качает `./app.js?nocache=<ts>` **мимо кэша SW** (в `sw.js` явный bypass, ответ в кэш не кладётся), сравнивает `APP_VERSION`; нашёл новее — спрашивает `askConfirm` и сам чистит все кэши → `location.reload()`.
   *Проверка:* `ios.test.js` «проверка версии идёт мимо кэша» (`nocache=` в sw.js и app.js, `caches.delete`).
 - **FR-80. `pokeSwUpdate`:** при возврате на вкладку дёргает `reg.update()` (`app.js:580`) — иначе фоновая вкладка новый воркер не подхватывает, а `checkUpdate` смотрит в его кэш и молчит.
 - **FR-81. Service worker:** `install` кладёт файлы **строго из сети** (`cache: 'reload'` — иначе Pages с `max-age=600` кладёт старьё), `skipWaiting` + `clients.claim`, старые кэши удаляются в `activate`; `controllerchange` → перезагрузка страницы (не более одного раза за сессию, флаг `_ebReloaded`, `app.js:2941–2944`). **`ASSETS` — 11 записей** (`sw.js:2–14`, включая `./` и `docs/USER_GUIDE.html`).
-  *Проверка:* `ios.test.js` describe «service worker: методика кэша» — «install берёт файлы из сети (cache reload)», «старые кэши чистятся, клиент захватывается», «в кэш положены все части оболочки» (**перебирает все 11 записей ASSETS**, включая `'./'`, `icon.svg`, `docs/USER_GUIDE.html` — `tests/ios.test.js:52–56`), «service worker регистрируется, обновление перезагружает».
+  *Проверка:* `ios.test.js` describe «service worker: методика кэша» — «install берёт файлы из сети (cache reload)», «старые кэши чистятся, клиент захватывается», «в кэш положены все части оболочки» (**перебирает все 11 записей ASSETS**, включая `'./'`, `icon.svg`, `docs/USER_GUIDE.html` — `tests/ios.test.js:52–56`), «чужие домены мимо воркера», «service worker регистрируется, обновление перезагружает».
+- **FR-90. Чужие домены — мимо service worker (v92).** Fetch-обработчик отпускает не-свой origin без `respondWith` (иначе в Safari 15 кросс-доменный fetch внутри SW падает, а пустой кэш давал `respondWith(undefined)` — синк умирал до GitHub); обрыв сети без кэша честно реджектится (`offline`).
 
 ### 3.15 PWA и публикация
 

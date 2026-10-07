@@ -1,4 +1,4 @@
-const CACHE = 'extbrain-v91';
+const CACHE = 'extbrain-v92';
 const ASSETS = [
   './',
   './index.html',
@@ -32,6 +32,12 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+  /* Чужие домены (API синка api.github.com) — мимо воркера вообще: в
+   * Safari 15 кросс-доменный fetch внутри SW падает, а .catch(() => hit)
+   * с пустым кэшем давал respondWith(undefined) — «Returned response
+   * is null», и синк умирал до GitHub (токен/репозиторий ни при чём).
+   * Напрямую всё ходит штатно; на Chrome поведение не меняется. */
+  if (e.request.url.indexOf(self.location.origin) !== 0) return;
   /* Проверка новой версии (app.js?nocache=…): всегда строго из сети,
    * в кэш не кладём, чтобы не плодить мусорные записи. */
   if (e.request.url.indexOf('nocache=') !== -1) {
@@ -41,12 +47,12 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(
     caches.match(e.request).then((hit) => {
       const net = fetch(e.request).then((res) => {
-        if (res.ok && e.request.url.startsWith(self.location.origin)) {
+        if (res.ok) {
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put(e.request, copy));
         }
         return res;
-      }).catch(() => hit);
+      }).catch(() => hit || Promise.reject(new Error('offline')));
       return hit || net;
     })
   );
