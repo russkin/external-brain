@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v93';
+  var APP_VERSION = 'v94';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -3003,6 +3003,15 @@
     var gear = el('gearMenu');
     on('gearBtn', 'click', function () {
       if (gear) gear.classList.toggle('open');
+      if (gear && !gear.classList.contains('open')) {
+        var bm = el('backupMenu');
+        if (bm) bm.classList.remove('open');
+      }
+    });
+    /* Подменю «Резервная копия»: три пункта-копии в одном. */
+    on('backupBtn', 'click', function () {
+      var bm = el('backupMenu');
+      if (bm) bm.classList.toggle('open');
     });
     on('diagBtn', 'click', function () {
       diagText().then(function (txt) {

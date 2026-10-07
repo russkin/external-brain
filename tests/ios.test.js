@@ -697,6 +697,16 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('collapsed[lt[i].id]') || appSrc.includes('delete collapsed'),
       'переход не разворачивает свёрнутые группы');
   });
+  it('резервные копии сгруппированы в подменю', () => {
+    assert.ok(html.includes('id="backupBtn"') && html.includes('id="backupMenu"'),
+      'нет пункта и подменю «Резервная копия»');
+    assert.ok(html.includes('#backupMenu { display: none;'),
+      'подменю копий видно сразу');
+    assert.ok(appSrc.includes("on('backupBtn'"), 'подменю не открывается');
+    for (const sid of ['restoreBtn', 'pinSaveBtn', 'pinRestoreBtn']) {
+      assert.ok(html.includes('id="' + sid + '"'), 'нет ' + sid);
+    }
+  });
   it('меню не вылезает за маленький экран', () => {
     assert.ok(/#gearMenu\.open\s*\{[^}]*max-height:\s*calc\(100vh - 70px\)[^}]*overflow-y:\s*auto/.test(html),
       'меню без потолка высоты и прокрутки');
