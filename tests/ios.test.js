@@ -723,6 +723,13 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(/\.tinput\s*\{[^}]*-webkit-user-select:\s*text/.test(html),
       'поле с запретом выделения — на iOS клавиатура есть, а печати нет');
   });
+  it('у инструкции есть кнопка закрытия (iPhone)', () => {
+    const guide = fs.readFileSync(path.join(__dirname, '..', 'docs/USER_GUIDE.html'), 'utf8');
+    assert.ok(guide.includes('id="guideClose"'), 'нет кнопки закрытия инструкции');
+    assert.ok(guide.includes('window.close()') && guide.includes('window.history.back()') &&
+      guide.includes("window.location.href = '../'"),
+      'закрытие без цепочки закрыть/назад/на главную');
+  });
   it('инструкция — нативная ссылка в новой вкладке (без двойного открытия)', () => {
     assert.ok(html.includes('id="guideBtn"'), 'нет пункта инструкции в меню');
     assert.ok(html.includes('target="_blank"'), 'инструкция не в новой вкладке');
