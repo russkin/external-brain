@@ -246,6 +246,10 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('lineIndent'), 'нет чтения уровня отступа');
     assert.ok(appSrc.includes('indentBounds'), 'нет потолка «сосед сверху +1»');
     assert.ok(appSrc.includes('{ indent:'), 'новая строка не наследует отступ');
+    assert.ok(/startIndent\(\)[\s\S]{0,1200}lineIndent\(kt\) > lv0/.test(appSrc),
+      'сдвиг не собирает ветку — внучки отрываются');
+    assert.ok(appSrc.includes('lineIndent(kt) + delta'),
+      'сдвиг двигает одну строку вместо ветки');
   });
   it('уровни цветом, collapse, шапка с тремя кнопками', () => {
     assert.ok(html.includes('.tline[data-indent="1"]'), 'нет заливки уровней');

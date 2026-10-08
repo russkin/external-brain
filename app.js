@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v102';
+  var APP_VERSION = 'v103';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1979,6 +1979,25 @@
       indentCur = b.cur;
       indentMax = b.max;
       mode = 'indent';
+      /* Ветка едет целиком (как при вертикальной посадке): собираем
+       * вложенных ниже по DOM-порядку — иначе сдвиг родителя отрывал
+       * бы детей (внучки оставались на старом отступе). */
+      kids = [];
+      var mine = myTask();
+      var box = el('lines');
+      if (mine && box) {
+        var lv0 = lineIndent(mine);
+        var rows = rowsOf(box);
+        var started = false;
+        for (var k = 0; k < rows.length; k++) {
+          if (rows[k] === div) { started = true; continue; }
+          if (!started) continue;
+          var kidId = rows[k].getAttribute ? rows[k].getAttribute('data-id') : null;
+          var kt = kidId ? L.getTask(state.tasks, kidId) : null;
+          if (kt && lineIndent(kt) > lv0) kids.push(rows[k]);
+          else break;
+        }
+      }
     }
     function startVertical(e) {
       var box = el('lines');
@@ -2166,12 +2185,17 @@
       if (!box) return;
       if (mode === 'indent') {
         lastDx = dx;
-        /* Живой предпросмотр: строка едет за пальцем в пределах уровней. */
+        /* Живой предпросмотр: за пальцем едет вся ветка в пределах уровней. */
         var lo = -indentCur * INDENT_STEP;
         var hi = (indentMax - indentCur) * INDENT_STEP;
         var cx = dx < lo ? lo : (dx > hi ? hi : dx);
         div.style.transition = 'none';
         div.style.transform = 'translateX(' + cx + 'px)';
+        for (var ki = 0; ki < kids.length; ki++) {
+          if (!kids[ki] || !kids[ki].style) continue;
+          kids[ki].style.transition = 'none';
+          kids[ki].style.transform = 'translateX(' + cx + 'px)';
+        }
         if (e.cancelable) e.preventDefault();
         return;
       }
@@ -2248,6 +2272,11 @@
         mode = null;
         div.style.transition = '';
         div.style.transform = '';
+        for (var kc = 0; kc < kids.length; kc++) {
+          if (!kids[kc] || !kids[kc].style) continue;
+          kids[kc].style.transition = '';
+          kids[kc].style.transform = '';
+        }
         var bou = indentBounds();
         var lvl = bou.cur + Math.round(lastDx / INDENT_STEP);
         if (lvl < 0) lvl = 0;
@@ -2272,10 +2301,21 @@
           return;
         }
         if (lvl !== bou.cur) {
-          (function (id, l) {
-            mutate(function () { L.setIndent(state.tasks, id, l); });
-          })(task.id, lvl);
+          /* Сдвиг везёт всю ветку на ту же дельту (кламп 0..8 — внутри
+           * setIndent): одна точка истории, внучки не отрываются. */
+          (function (id, l, delta) {
+            mutate(function () {
+              L.setIndent(state.tasks, id, l);
+              for (var k = 0; k < kids.length; k++) {
+                var kidRow = kids[k];
+                var kidId = kidRow && kidRow.getAttribute ? kidRow.getAttribute('data-id') : null;
+                var kt = kidId ? L.getTask(state.tasks, kidId) : null;
+                if (kt) L.setIndent(state.tasks, kidId, lineIndent(kt) + delta);
+              }
+            });
+          })(task.id, lvl, lvl - bou.cur);
         }
+        kids = [];
         render();
         return;
       }
