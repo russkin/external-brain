@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v99';
+  var APP_VERSION = 'v100';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -689,6 +689,9 @@
     saveCollapsed();
     render();
   }
+  /* Свернуть/развернуть всё касается и секции выполненных — тоже флагом,
+   * без обходов предков (обходы по createdAt-порядку для выполненных
+   * бессмысленны: метки старые). Разделитель при этом работает как раньше. */
   function setAllCollapsed(all) {
     collapsed = {};
     if (all && state) {
@@ -698,6 +701,8 @@
       }
     }
     saveCollapsed();
+    doneHidden = !!all;
+    saveDoneHidden();
     render();
   }
 
