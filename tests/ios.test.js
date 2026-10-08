@@ -723,6 +723,18 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(/\.tinput\s*\{[^}]*-webkit-user-select:\s*text/.test(html),
       'поле с запретом выделения — на iOS клавиатура есть, а печати нет');
   });
+  it('совместимость с Safari 15: без нового синтаксиса и API', () => {
+    const logic = fs.readFileSync(path.join(root, 'src/logic.js'), 'utf8');
+    for (const [name, src] of [['app.js', appSrc], ['store.js', storeSrc], ['sync.js', syncSrc], ['logic.js', logic]]) {
+      assert.ok(!/\?\./.test(src) && !/\?\?/.test(src), 'опциональная цепочка в ' + name);
+      assert.ok(!/async\s+function/.test(src), 'async/await в ' + name);
+      assert.ok(!/replaceAll|matchAll|allSettled|structuredClone|randomUUID/.test(src),
+        'слишком новые API в ' + name);
+    }
+    assert.ok(!/\(\?<=|\(\?<!/.test(appSrc), 'lookbehind в регэкспах (Safari <16.4)');
+    assert.ok(html.includes('viewport-fit=cover'), 'нет viewport-fit для чёлки iPhone');
+    assert.ok(html.includes('-webkit-sticky'), 'нет фолбэка липкой шапки для Safari');
+  });
   it('у инструкции есть кнопка закрытия (iPhone)', () => {
     const guide = fs.readFileSync(path.join(__dirname, '..', 'docs/USER_GUIDE.html'), 'utf8');
     assert.ok(guide.includes('id="guideClose"'), 'нет кнопки закрытия инструкции');

@@ -8,7 +8,7 @@
 body { font-family: system-ui, -apple-system, sans-serif; max-width: 720px; margin: 0 auto; padding: 12px 16px 40px; color: #222; }
 h1 { font-size: 22px; } h2 { font-size: 18px; margin-top: 24px; }
 li { margin-bottom: 6px; }
-#guideBar { position: sticky; top: 0; background: #fff; padding: 8px 0;
+#guideBar { position: -webkit-sticky; position: sticky; top: 0; background: #fff; padding: 8px 0;
   border-bottom: 1px solid #eee; z-index: 5; }
 #guideClose { font-size: 16px; padding: 8px 16px; cursor: pointer; }
 </style>
@@ -35,8 +35,9 @@ document.getElementById('guideClose').addEventListener('click', function () {
 свайпом. Работает офлайн, устанавливается без Play Market.</p>
 <h2>Установка</h2>
 <ol>
-<li>На телефоне откройте https://russkin.github.io/external-brain/ (проверяется только на Android; планшет и iPhone — «как получится», без гарантий).</li>
-<li>Android Chrome → меню ⋮ → «Добавить на главный экран» / «Установить приложение».</li>
+<li>На телефоне откройте https://russkin.github.io/external-brain/ (проверяется на Android и iPhone; планшет — «как получится», без гарантий).</li>
+<li>Android Chrome → меню ⋮ → «Добавить на главный экран» / «Установить приложение».
+iPhone Safari → кнопка «Поделиться» → «На экран “Домой”».</li>
 <li>Держите приложение открытым — после разблокировки список виден сразу, интернет не нужен.</li>
 </ol>
 <h2>Главный экран</h2>
