@@ -280,10 +280,10 @@ describe('логика вызывается с state.tasks', () => {
       'состояние скрытия выполненных не сохраняется');
     assert.ok(appSrc.includes("'Выполнено · ' + done.length"),
       'счётчик показывает видимых, а не всех выполненных');
-    assert.ok(appSrc.includes('function expandDoneParents') && appSrc.includes('anyDoneShown'),
-      'тап по разделителю не разворачивает спрятанных в группах выполненных');
+    assert.ok(!appSrc.includes('expandDoneParents') && !appSrc.includes('anyDoneShown'),
+      'тап по разделителю трогает сворачивание живых веток');
     assert.ok(!appSrc.includes('fullOrdered'),
-      'обход предков по своему порядку: tombstone сдвигают индексы, разворачиваются чужие ветки');
+      'обход предков по своему порядку: tombstone сдвигают индексы');
     assert.ok(appSrc.includes('is-done'), 'нет зачёркивания');
     assert.ok(html.includes('user-select'), 'свайп проигрывает выделению текста');
     assert.ok(appSrc.includes('_swOpen'), 'состояние свайпа рассинхронизировано');
@@ -363,10 +363,10 @@ describe('логика вызывается с state.tasks', () => {
       'свернуть все смотрит только на живых детей');
     var iD = appSrc.indexOf('Выполненные — под полем добавления');
     var dBody = appSrc.slice(iD, appSrc.indexOf('function focusTrailing'));
-    assert.ok(dBody.includes('isHiddenByCollapse(full, di, collapsed)'),
-      'выполненные дети не прячутся под свёрнутым родителем');
-    assert.ok(dBody.includes('if (!dHide) doneVis.push(done[d])'),
-      'счётчик выполненных не считает скрытые');
+    assert.ok(!dBody.includes('isHiddenByCollapse(full, di, collapsed)'),
+      'секция выполненных зависит от сворачивания живых групп');
+    assert.ok(dBody.includes('var doneVis = done.slice();'),
+      'секция показывает не всех выполненных');
   });
   it('Захват точек у черновика: задача создаётся, фокус уходит, жест идёт по строке', () => {
     var iG = appSrc.indexOf('var draftRowG');

@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v98';
+  var APP_VERSION = 'v99';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -718,66 +718,10 @@
     } catch (x) {}
   }
   /* Полный порядок задач (живые + выполненные) для обхода предков. */
-  /* Виден ли хоть один выполненный прямо сейчас: секция не скрыта
-   * тумблером и хотя бы один не спрятан сворачиванием групп. */
-  function anyDoneShown() {
-    if (!state || doneHidden) return false;
-    var dn = [];
-    try { dn = L.doneList(state.tasks); } catch (x) { dn = []; }
-    if (!dn.length) return false;
-    /* Тот же массив, что у renderLines: удалённые tombstone сдвигали
-     * индексы в собственном порядке — обход находил чужих «предков»:
-     * разворачивались живые ветки, а выполненные оставались скрыты. */
-    var full = fullList();
-    function idxOf(id) {
-      for (var i = 0; i < full.length; i++) if (full[i].id === id) return i;
-      return -1;
-    }
-    for (var d = 0; d < dn.length; d++) {
-      var di = idxOf(dn[d].id);
-      if (di !== -1 && !L.isHiddenByCollapse(full, di, collapsed)) return true;
-    }
-    return false;
-  }
-  /* Развернуть предков всех выполненных (свёрнутые группы), чтобы после
-   * тапа по разделителю секция действительно стала видна. */
-  function expandDoneParents() {
-    if (!state) return false;
-    var dn = [];
-    try { dn = L.doneList(state.tasks); } catch (x) { dn = []; }
-    var full = fullList();
-    var changed = false, d, i;
-    function idxOf(id) {
-      for (var k = 0; k < full.length; k++) if (full[k].id === id) return k;
-      return -1;
-    }
-    for (d = 0; d < dn.length; d++) {
-      var di = idxOf(dn[d].id);
-      if (di === -1) continue;
-      var minInd = 99999;
-      for (i = di; i >= 0; i--) {
-        var ind = lineIndent(full[i]);
-        if (ind < minInd) {
-          minInd = ind;
-          if (i !== di && collapsed[full[i].id]) {
-            delete collapsed[full[i].id];
-            changed = true;
-          }
-        }
-      }
-    }
-    if (changed) saveCollapsed();
-    return changed;
-  }
+  /* Тап по разделителю — обычный тумблер секции. Сворачивание групп
+   * живых на секцию не влияет (см. выше): живые ветки тап не трогает. */
   function toggleDoneHidden() {
-    /* Тап по разделителю: видно — прячем тумблером; не видно (тумблер
-     * или свёрнутые группы) — показываем всё: тумблер off + разворот. */
-    if (anyDoneShown()) {
-      doneHidden = true;
-    } else {
-      doneHidden = false;
-      expandDoneParents();
-    }
+    doneHidden = !doneHidden;
     saveDoneHidden();
     render();
   }
@@ -2288,7 +2232,9 @@
       /* Тап по многоточию родителя (без движения): свернуть/развернуть детей. */
       if (mode === null && e && e.type === 'pointerup') {
         var tapped = myTask();
-        if (tapped && hasKidsFull(tapped.id)) {
+        /* Выполненные не сворачиваем: их записи в карте всё равно никто
+         * не читает, а мусор копился бы и путал обходы. */
+        if (tapped && tapped.status !== 'done' && hasKidsFull(tapped.id)) {
           toggleCollapse(tapped.id);
           return;
         }
@@ -2577,18 +2523,13 @@
     if (showDraft && anchorIdx === -1 && trailingAfterId !== 'TOP') {
       box.appendChild(makeLine(null, trailingText, true, tailIndent));
     }
-    /* Выполненные — под полем добавления, новые выше старых. Строка под
-     * свёрнутым родителем прячется вместе с живыми детьми (иначе
-     * последняя дочерняя висит под свёрнутой группой). Сепаратор — пока
-     * есть хоть один выполненный, даже если все спрятаны в свёрнутых
-     * группах (счётчик показывает видимых). */
+    /* Выполненные — под полем добавления, новые выше старых. Сворачивание
+     * групп секцию НЕ прячет: видимость — только тумблером разделителя.
+     * (Прятали обходом предков по createdAt-порядку, но у выполненных метки
+     * старые — позиции бессмысленны: тап разворачивал чужие живые ветки,
+     * а выполненные оставались скрыты.) */
     var done = L.doneList(state.tasks);
-    var doneVis = [];
-    for (var d = 0; d < done.length; d++) {
-      var di = fullIdx[done[d].id];
-      var dHide = (di != null) ? L.isHiddenByCollapse(full, di, collapsed) : false;
-      if (!dHide) doneVis.push(done[d]);
-    }
+    var doneVis = done.slice();
     if (done.length) {
       var sep = document.createElement('div');
       sep.className = 'done-sep';
