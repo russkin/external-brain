@@ -7,6 +7,7 @@ const ASSETS = [
   './sync.js',
   './src/logic.js',
   './src/search.js',
+  './src/diag.js',
   './manifest.webmanifest',
   './icon.svg',
   './icon-192.png',

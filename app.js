@@ -16,85 +16,11 @@
   var bootError = '';
   var bootStack = '';
 
-  /* Диагностика синка: время последнего успеха/ошибки переживает
-   * перезагрузку (иначе после F5 «когда был синк» не ответить). */
-  var SYNCLOG_KEY = 'external-brain-synclog-v1';
+  /* Время последнего успеха/ошибки синка (движок; переживает перезагрузку
+   * через журнал модуля). Сам журнал и публикация — src/diag.js (этап 2). */
   var lastSyncAt = 0;
   var lastErrAt = 0;
   var lastErrMsg = '';
-  /* Кольцо последних синк-событий для «Журнал:» в диагностике —
-   * как в purchases (там journal.js): успехи и ошибки, последние 50. */
-  var syncLog = [];
-  function syncLogPush(text) {
-    syncLog.push({ t: Date.now(), text: String(text).slice(0, 300) });
-    if (syncLog.length > 50) syncLog.shift();
-  }
-  function syncLogLoad() {
-    try {
-      var r = JSON.parse(localStorage.getItem(SYNCLOG_KEY));
-      if (r && typeof r === 'object') {
-        lastSyncAt = +r.at || 0;
-        lastErrAt = +r.errAt || 0;
-        lastErrMsg = String(r.err || '').slice(0, 120);
-        syncLog = Array.isArray(r.log) ? r.log.slice(-50) : [];
-        pubAt = +r.pubAt || 0;
-        pubStatus = String(r.pub || '').slice(0, 120);
-      }
-    } catch (x) {}
-  }
-  function syncLogSave() {
-    try {
-      localStorage.setItem(SYNCLOG_KEY, JSON.stringify({
-        at: lastSyncAt, errAt: lastErrAt, err: lastErrMsg, log: syncLog.slice(-50),
-        pubAt: pubAt, pub: pubStatus
-      }));
-    } catch (x) {}
-  }
-
-  /* Публикация журнала в logs/ при ошибке синка — как в purchases:
-   * не чаще раза в 15 минут (иначе спам коммитами), имя в сутки
-   * logs/sync-ГГГГ-ММ-ДД-<device>.json, обрывы сети (без github-) не публикуем. */
-  var lastJournalPublish = 0;
-  var pubAt = 0, pubStatus = '';
-  var DEVICE_KEY = 'external-brain-device-v1';
-  function journalDeviceId() {
-    try {
-      var id = localStorage.getItem(DEVICE_KEY);
-      if (!id) {
-        id = Math.random().toString(16).slice(2, 10);
-        localStorage.setItem(DEVICE_KEY, id);
-      }
-      return id;
-    } catch (x) { return 'nodev'; }
-  }
-  function logFileName() {
-    var d = new Date();
-    function p(n) { return (n < 10 ? '0' : '') + n; }
-    return 'logs/sync-' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' +
-      p(d.getDate()) + '-' + journalDeviceId() + '.json';
-  }
-  function maybePublishJournal() {
-    try {
-      var st = state && state.settings;
-      if (!st || !st.repo || !st.token) return;
-      var now = Date.now();
-      if (now - lastJournalPublish < 15 * 60 * 1000) return;
-      lastJournalPublish = now;
-      var body = {
-        device: journalDeviceId(),
-        version: APP_VERSION,
-        at: new Date(now).toISOString(),
-        journal: syncLog.slice(-50)
-      };
-      window.EBSync.publishFile(st.repo, st.token, logFileName(), body).then(function (res) {
-        pubAt = Date.now();
-        pubStatus = String(res || '');
-        syncLogPush('публикация журнала: ' + pubStatus);
-        syncLogSave();
-        renderStatus();
-      });
-    } catch (x) {}
-  }
 
   function el(id) { return document.getElementById(id); }
 
@@ -471,8 +397,8 @@
       if (res.status === 'error') {
         lastErrAt = Date.now();
         lastErrMsg = String(res.error || 'ошибка').slice(0, 120);
-        syncLogPush('ошибка синка: ' + lastErrMsg);
-        syncLogSave();
+        window.EBDiag.push('ошибка синка: ' + lastErrMsg);
+        window.EBDiag.save({ at: lastSyncAt, errAt: lastErrAt, err: lastErrMsg });
         setLight('red', false);
         syncFails += 1;
         if (syncFails <= 5) {
@@ -480,14 +406,14 @@
         }
         /* Обрыв сети (без github-) публиковать бессмысленно — сети нет
          * и для самой публикации (как в purchases). */
-        if (/github-/.test(lastErrMsg)) maybePublishJournal();
+        if (/github-/.test(lastErrMsg)) window.EBDiag.maybePublishJournal();
       } else {
         syncFails = 0;
         lastSyncAt = Date.now();
         lastErrMsg = '';
         lastErrAt = 0;
-        syncLogPush('синк: ' + res.status);
-        syncLogSave();
+        window.EBDiag.push('синк: ' + res.status);
+        window.EBDiag.save({ at: lastSyncAt, errAt: lastErrAt, err: lastErrMsg });
         setLight(res.status === 'in-sync' ? 'green' : 'green', false);
         if (res.status === 'pulled' || res.status === 'merged') {
           state.updatedAt = Date.now();
@@ -504,10 +430,10 @@
       syncStatus = 'error: ' + String(e && e.message || e).slice(0, 120);
       lastErrAt = Date.now();
       lastErrMsg = String(e && e.message || e).slice(0, 120);
-      syncLogPush('ошибка синка: ' + lastErrMsg);
-      syncLogSave();
+      window.EBDiag.push('ошибка синка: ' + lastErrMsg);
+      window.EBDiag.save({ at: lastSyncAt, errAt: lastErrAt, err: lastErrMsg });
       setLight('red', false);
-      if (/github-/.test(lastErrMsg)) maybePublishJournal();
+      if (/github-/.test(lastErrMsg)) window.EBDiag.maybePublishJournal();
       renderStatus();
       return 'error';
     });
@@ -2629,121 +2555,9 @@
   function fmtWhen(ms) {
     try { return new Date(ms).toLocaleString('ru-RU'); } catch (x) { return 'есть'; }
   }
-  function backupLabel() {
-    var b = window.EBStore && window.EBStore.backupInfo ? window.EBStore.backupInfo() : null;
-    if (!b) return 'нет';
-    return fmtWhen(b.savedAt);
-  }
-  function pinLabel() {
-    var p = window.EBStore && window.EBStore.pinInfo ? window.EBStore.pinInfo() : null;
-    if (!p) return 'нет';
-    var src = (p.by === 'auto' && p.version) ? 'перед ' + p.version : 'вручную';
-    return fmtWhen(p.savedAt) + ' (' + src + ')';
-  }
-
-  function fmtDT(ms) {
-    try {
-      var d = new Date(ms);
-      var p = function (n) { return (n < 10 ? '0' : '') + n; };
-      return p(d.getDate()) + '.' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
-    } catch (x) { return '—'; }
-  }
-  function connLine() {
-    try {
-      var c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-      if (!c) return 'н/д';
-      var parts = [];
-      if (c.effectiveType) parts.push(c.effectiveType);
-      if (typeof c.downlink === 'number') parts.push(c.downlink + ' Мбит/с');
-      return parts.length ? parts.join(' · ') : 'н/д';
-    } catch (x) { return 'н/д'; }
-  }
-  function deviceLine() {
-    try {
-      var ua = navigator.userAgent || '';
-      var os = 'Другое';
-      if (/Android/i.test(ua)) os = 'Android';
-      else if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
-      else if (/Windows/i.test(ua)) os = 'Windows';
-      else if (/Mac OS X/i.test(ua)) os = 'macOS';
-      else if (/Linux/i.test(ua)) os = 'Linux';
-      var br = '';
-      var m = ua.match(/(?:Chrome|Chromium|Edg)\/([\d.]+)/);
-      if (m) br = 'Chrome ' + m[1].split('.')[0];
-      else if ((m = ua.match(/Firefox\/([\d.]+)/))) br = 'Firefox ' + m[1].split('.')[0];
-      else if ((m = ua.match(/Version\/([\d.]+).*Safari/))) br = 'Safari ' + m[1].split('.')[0];
-      return os + (br ? ' · ' + br : '');
-    } catch (x) { return 'н/д'; }
-  }
-  /* SW и версия кэша — асинхронно (caches.keys), поэтому diagText — промис. */
-  function diagSwInfo() {
-    try {
-      if (!('serviceWorker' in navigator)) return Promise.resolve('нет поддержки');
-      var act = navigator.serviceWorker.controller ? 'активен' : 'не активен';
-      if (typeof caches === 'undefined' || !caches || !caches.keys) {
-        return Promise.resolve(act + ', кэш н/д');
-      }
-      return caches.keys().then(function (ks) {
-        var hit = '';
-        for (var i = 0; i < ks.length; i++) {
-          if (String(ks[i]).indexOf('extbrain-') === 0) hit = String(ks[i]);
-        }
-        return act + (hit ? ', ' + hit : ', кэш пуст');
-      }).catch(function () { return act; });
-    } catch (x) { return Promise.resolve('н/д'); }
-  }
-
-  function diagText() {
-    var st = state ? L.stats(state.tasks)
-      : { inbox: 0, next: 0, done: 0 };
-    var alive = (st.inbox || 0) + (st.next || 0);
-    var recs = 0, bytes = 0;
-    try {
-      recs = state ? state.tasks.length : 0;
-      bytes = JSON.stringify(state ? state.tasks : []).length;
-    } catch (x) {}
-    var collapsedN = 0;
-    for (var id in collapsed) if (collapsed[id]) collapsedN++;
-    var lines = [
-      'Внешний мозг ' + APP_VERSION,
-      'Задач: ' + alive + ' · готово ' + (st.done || 0),
-      'Размер: ' + recs + ' записей · ' +
-        (bytes < 1024 ? bytes + ' Б' : (bytes / 1024).toFixed(1) + ' КБ'),
-      'Синк: ' + (syncStatus || '—') + (lastSyncAt ? ' (в ' + fmtDT(lastSyncAt) + ')' : '')
-    ];
-    if (lastErrMsg) lines.push('Ошибка синка: ' + fmtDT(lastErrAt) + ' — ' + lastErrMsg);
-    lines.push('Данные: ' + (state && state.updatedAt ? fmtDT(state.updatedAt) + ' (изменены)' : '—'));
-    lines.push('Локально: выполненные ' + (doneHidden ? 'скрыты' : 'видны') +
-      ' · свёрнуто групп ' + collapsedN);
-    lines.push('История: ↩ ' + undoStack.length + ' · ↪ ' + redoStack.length);
-    lines.push('Сеть: ' + connLine());
-    lines.push('Устройство: ' + deviceLine() + ' · id ' + journalDeviceId());
-    lines.push('Repo: ' + (state ? state.settings.repo : '?'));
-    lines.push('Ключ: ' + (state && state.settings.token ? 'введён' : 'выключен (нет ключа)'));
-    /* При ошибке отправки дописываем, что локальный журнал цел: иначе
-     * «log-error» читается как потеря диагностики. */
-    var pubNote = pubStatus.indexOf('log-error') === 0 ? ' (локальный журнал цел)' : '';
-    lines.push('Публикация журнала: ' +
-      (pubAt ? fmtDT(pubAt) + ' · ' + pubStatus + pubNote : 'ещё не было'));
-    lines.push('Локальная копия: ' + backupLabel());
-    lines.push('Постоянная копия: ' + pinLabel());
-    if (lastAction) lines.push('Последнее действие: ' + lastAction);
-    /* Только непойманные JS-ошибки (window.onerror); ошибки синка живут
-     * в «Ошибка синка» и журнале ниже — поэтому «Ошибок JS: нет» не спорит
-     * с журналом. */
-    lines.push(bootError ? bootError + ' ' + bootStack : 'Ошибок JS: нет');
-    if (syncLog.length) {
-      lines.push('Журнал:');
-      var from = Math.max(0, syncLog.length - 12);
-      for (var k = from; k < syncLog.length; k++) {
-        lines.push('  ' + fmtDT(syncLog[k].t) + ' [sync] ' + syncLog[k].text);
-      }
-    }
-    return diagSwInfo().then(function (sw) {
-      lines.splice(1, 0, 'Обновление: SW ' + sw);
-      return lines.join('\n');
-    });
-  }
+  /* Текст диагностики и журнал — модуль src/diag.js (этап 2).
+   * Здесь остаются только общая модалка (showInfo/shareDiag) и fmtWhen
+   * (нужен ещё диалогам пинов). */
 
   /* Окно диагностики как в purchases (showInfo): OK + Поделиться,
    * поле ввода и «Отмена» скрыты. Закрытие возвращает дефолты кнопок,
@@ -2830,10 +2644,18 @@
       var bm = el('backupMenu');
       if (bm) bm.classList.toggle('open');
     });
-    on('diagBtn', 'click', function () {
-      diagText().then(function (txt) {
-        showInfo('Диагностика', txt, txt);
-      });
+    /* Диагностика — модуль src/diag.js (этап 2): кнопка и текст там,
+     * сюда отдаём только контекст. */
+    if (window.EBDiag) window.EBDiag.init({
+      on: on, L: L, showInfo: showInfo, renderStatus: renderStatus, fmtWhen: fmtWhen,
+      getState: function () { return state; },
+      getVersion: function () { return APP_VERSION; },
+      getSync: function () { return { status: syncStatus, at: lastSyncAt, errAt: lastErrAt, err: lastErrMsg }; },
+      getLastAction: function () { return lastAction; },
+      getBoot: function () { return { error: bootError, stack: bootStack }; },
+      getHistoryCounts: function () { return { u: undoStack.length, r: redoStack.length }; },
+      getCollapsed: function () { return collapsed; },
+      isDoneHidden: function () { return doneHidden; }
     });
     /* Репозиторий и токен — только для администратора: сначала предупреждение,
      * затем модальное окно по центру с двумя полями и кнопками
@@ -3037,7 +2859,11 @@
     });
     loadCollapsed();
     loadDoneHidden();
-    syncLogLoad();
+    /* Журнал — модуль (этап 2); метки движка забираем из него же. */
+    try {
+      var jt = window.EBDiag.load();
+      lastSyncAt = jt.at; lastErrAt = jt.errAt; lastErrMsg = jt.err;
+    } catch (x) {}
     window.EBStore.load().then(function (s) {
       state = s;
       /* Первая загрузка новой версии: авто-пин «перед обновлением». */

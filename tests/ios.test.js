@@ -11,6 +11,7 @@ const syncSrc = fs.readFileSync(path.join(root, 'sync.js'), 'utf8');
 const storeSrc = fs.readFileSync(path.join(root, 'store.js'), 'utf8');
 const swSrc = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const diagSrc = fs.readFileSync(path.join(root, 'src/diag.js'), 'utf8');
 const searchSrc = fs.readFileSync(path.join(root, 'src/search.js'), 'utf8');
 
 function appVersion() {
@@ -57,7 +58,7 @@ describe('service worker: методика кэша', () => {
     assert.ok(appSrc.includes('caches.delete'), 'нет чистки кэша при обновлении');
   });
   it('в кэш положены все части оболочки', () => {
-    for (const u of ["'./'", 'index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'src/search.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'docs/USER_GUIDE.html']) {
+    for (const u of ["'./'", 'index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'src/search.js', 'src/diag.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'docs/USER_GUIDE.html']) {
       assert.ok(swSrc.includes(u), 'нет ' + u + ' в ASSETS');
     }
   });
@@ -87,7 +88,7 @@ describe('устойчивость к рассинхрону кэшей', () => 
     assert.ok(appSrc.includes("addEventListener('error'"), 'нет onerror');
     assert.ok(appSrc.includes('bootStack'), 'нет bootStack');
     assert.ok(appSrc.includes('lastAction'), 'нет lastAction');
-    assert.ok(appSrc.includes('diagBtn'), 'нет diagBtn');
+    assert.ok(html.includes('id="diagBtn"'), 'нет diagBtn');
     assert.ok(storeSrc.includes('external-brain-backup-v1') &&
       storeSrc.includes('backupWrite(lastPersisted)'),
       'нет локальной копии state перед каждым сохранением');
@@ -95,31 +96,31 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'восстановление перетирает собственную копию');
     assert.ok(html.includes('id="restoreBtn"') && appSrc.includes('on(\'restoreBtn\''),
       'нет кнопки восстановления копии');
-    assert.ok(appSrc.includes('Локальная копия: ') && appSrc.includes('backupInfo'),
+    assert.ok(diagSrc.includes('Локальная копия: ') && diagSrc.includes('backupInfo'),
       'копия не видна в диагностике');
     /* Диагностика v72: сжатая статистика + синк/размер/сеть/устройство/SW. */
-    assert.ok(appSrc.includes("'Задач: ' + alive + ' · готово '"), 'нет строки «Задач: N · готово M»');
-    assert.ok(!appSrc.includes('Лягушка: '), 'строка диагностики про удалённое поле не удалена');
-    assert.ok(appSrc.includes("'Обновление: SW '"), 'нет строки SW/кэша');
-    assert.ok(appSrc.includes('external-brain-synclog-v1'), 'нет времени последнего синка');
-    assert.ok(appSrc.includes("'Ошибка синка: '"), 'нет строки ошибки синка');
-    assert.ok(appSrc.includes("'Данные: '"), 'нет времени изменения данных');
-    assert.ok(appSrc.includes("'Ошибок JS: нет'"), '«Ошибок: нет» спорит с журналом синка');
-    assert.ok(appSrc.includes('(локальный журнал цел)'), 'нет пометки о целости журнала при log-error');
-    assert.ok(appSrc.includes("' · свёрнуто групп '") && appSrc.includes("'История: ↩ '"),
+    assert.ok(diagSrc.includes("'Задач: ' + alive + ' · готово '"), 'нет строки «Задач: N · готово M»');
+    assert.ok(!diagSrc.includes('Лягушка: '), 'строка диагностики про удалённое поле не удалена');
+    assert.ok(diagSrc.includes("'Обновление: SW '"), 'нет строки SW/кэша');
+    assert.ok(diagSrc.includes('external-brain-synclog-v1'), 'нет времени последнего синка');
+    assert.ok(diagSrc.includes("'Ошибка синка: '"), 'нет строки ошибки синка');
+    assert.ok(diagSrc.includes("'Данные: '"), 'нет времени изменения данных');
+    assert.ok(diagSrc.includes("'Ошибок JS: нет'"), '«Ошибок: нет» спорит с журналом синка');
+    assert.ok(diagSrc.includes('(локальный журнал цел)'), 'нет пометки о целости журнала при log-error');
+    assert.ok(diagSrc.includes("' · свёрнуто групп '") && diagSrc.includes("'История: ↩ '"),
       'нет локальных флагов/истории');
-    assert.ok(appSrc.includes("'Размер: '") && appSrc.includes("'Сеть: '") &&
-      appSrc.includes("'Устройство: '") && appSrc.includes("'Последнее действие: '"),
+    assert.ok(diagSrc.includes("'Размер: '") && diagSrc.includes("'Сеть: '") &&
+      diagSrc.includes("'Устройство: '") && diagSrc.includes("'Последнее действие: '"),
       'нет размера/сети/устройства/последнего действия');
-    assert.ok(appSrc.includes('function diagSwInfo()') && appSrc.includes('diagText().then'),
+    assert.ok(diagSrc.includes('function diagSwInfo()') && diagSrc.includes('diagText().then'),
       'diagText не асинхронный/без SW-инфо');
     /* Окно диагностики как в purchases: OK + Поделиться, журнал синка внизу. */
-    assert.ok(appSrc.includes("showInfo('Диагностика', txt, txt)"),
+    assert.ok(diagSrc.includes("showInfo('Диагностика', txt, txt)"),
       'диагностика не открывается через showInfo');
     assert.ok(appSrc.includes("clear.textContent = 'Поделиться'") &&
       appSrc.includes("cancel.style.display = 'none'"),
       'нет кнопок OK+Поделиться / скрытой Отмены');
-    assert.ok(appSrc.includes("lines.push('Журнал:')") && appSrc.includes("syncLogPush('ошибка синка: "),
+    assert.ok(diagSrc.includes("lines.push('Журнал:')") && appSrc.includes("EBDiag.push('ошибка синка: "),
       'нет журнала синк-ошибок в диагностике');
     /* Постоянная («вечная») копия: кнопка + автокопия при обновлении версии. */
     assert.ok(storeSrc.includes('external-brain-pin-v1') && storeSrc.includes('external-brain-pin-ver-v1'),
@@ -129,7 +130,7 @@ describe('устойчивость к рассинхрону кэшей', () => 
     assert.ok(html.includes('id="pinSaveBtn"') && appSrc.includes('on(\'pinSaveBtn\'') &&
       html.includes('id="pinRestoreBtn"') && appSrc.includes('on(\'pinRestoreBtn\''),
       'нет кнопок постоянной копии');
-    assert.ok(appSrc.includes('pinOnVersion(APP_VERSION)') && appSrc.includes('Постоянная копия: '),
+    assert.ok(appSrc.includes('pinOnVersion(APP_VERSION)') && diagSrc.includes('Постоянная копия: '),
       'нет авто-пина/диагностики постоянной копии');
     /* v66: в пине только задачи (без настроек/токена) + история ↩ в localStorage. */
     assert.ok(/function pinWrite[\s\S]{0,400}state: \{ tasks:/.test(storeSrc) &&
@@ -198,15 +199,18 @@ describe('устойчивость к рассинхрону кэшей', () => 
     assert.ok(html.includes('id="netStatus"') && html.includes('id="netType"'),
       'нет элементов сети в шапке');
     /* v75: журнал синка уходит на сервер при github-ошибке (как в purchases). */
-    assert.ok(appSrc.includes('function maybePublishJournal()') &&
-      appSrc.includes("if (/github-/.test(lastErrMsg)) maybePublishJournal();") &&
-      appSrc.includes("'logs/sync-'"),
+    assert.ok(diagSrc.includes('function maybePublishJournal()') &&
+      appSrc.includes("if (/github-/.test(lastErrMsg)) window.EBDiag.maybePublishJournal();") &&
+      diagSrc.includes("'logs/sync-'"),
       'нет публикации журнала в logs/');
-    assert.ok(appSrc.includes("now - lastJournalPublish < 15 * 60 * 1000"),
+    assert.ok(diagSrc.includes("now - lastJournalPublish < 15 * 60 * 1000"),
       'нет лимита 15 минут на публикацию журнала');
-    assert.ok(appSrc.includes('external-brain-device-v1') &&
-      appSrc.includes("'Публикация журнала: '") && appSrc.includes("' · id '"),
+    assert.ok(diagSrc.includes('external-brain-device-v1') &&
+      diagSrc.includes("'Публикация журнала: '") && diagSrc.includes("' · id '"),
       'нет deviceId/строк публикации в диагностике');
+    assert.ok(appSrc.includes('window.EBDiag.push(') && appSrc.includes('window.EBDiag.save(') &&
+      appSrc.includes('window.EBDiag.load()'),
+      'движок синка не пишет в журнал модуля');
   });
 });
 
@@ -813,7 +817,7 @@ describe('PWA-оболочка', () => {
     assert.ok(fs.existsSync(path.join(root, 'icon-512.png')), 'нет icon-512.png');
   });
   it('все скрипты подключены', () => {
-    for (const s of ['src/logic.js', 'src/search.js', 'store.js', 'sync.js', 'app.js']) {
+    for (const s of ['src/logic.js', 'src/search.js', 'src/diag.js', 'store.js', 'sync.js', 'app.js']) {
       assert.ok(html.includes(s), 'нет ' + s + ' в index.html');
     }
   });
