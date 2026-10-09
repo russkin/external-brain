@@ -33,6 +33,23 @@ function searchLift() {
     }
   } catch (x) { off = 0; }
   bar.style.bottom = off ? off + 'px' : '';
+  syncSearchSpace();
+}
+/* Низ страницы — на уровне верха окна поиска: иначе нижние задачи
+ * уходят под панель (особенно когда клавиатура спряталась и панель
+ * снова внизу). Отступ = высота панели, снимается при закрытии. */
+function syncSearchSpace() {
+  var main = null;
+  try { main = document.querySelector('main'); } catch (x) { main = null; }
+  if (!main) return;
+  var bar = el('searchBar');
+  if (bar && bar.classList.contains('open')) {
+    var h = 0;
+    try { h = bar.getBoundingClientRect().height; } catch (x) { h = 0; }
+    if (h > 0) main.style.paddingBottom = (h + 12) + 'px';
+  } else {
+    main.style.paddingBottom = '';
+  }
 }
 
 function searchUnlift() {
@@ -85,6 +102,7 @@ function closeSearch(restore) {
   searchUnlift();
   var bar = el('searchBar');
   if (bar) bar.classList.remove('open');
+  syncSearchSpace();
   var inp = el('searchInput');
   if (inp) { try { inp.blur(); } catch (x) {} }
   searchIds = [];

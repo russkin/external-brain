@@ -711,6 +711,8 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(searchSrc.includes('getState()') && searchSrc.includes('getCollapsed()') &&
       searchSrc.includes('isDoneHidden()'),
       'модуль читает общее состояние напрямую, а не через контекст');
+    assert.ok(searchSrc.includes('syncSearchSpace') && searchSrc.includes('paddingBottom'),
+      'низ страницы уходит под панель поиска');
     assert.ok(appSrc.includes('EBSearch.init({') && appSrc.includes('window.EBSearch.currentId()'),
       'app.js не отдаёт контекст модулю и не дотягивает подсветку');
     assert.ok(html.includes('src/search.js') && swSrc.includes('src/search.js'),
