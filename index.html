@@ -39,6 +39,9 @@
     #syncLight.alert { background: #f44336; }
     button { font-size: 16px; padding: 8px 12px; cursor: pointer; }
     main { padding: 12px 14px 60px; max-width: 720px; margin: 0 auto; }
+    /* Плашка тестовой версии на время рефакторинга (убрать по окончании). */
+    #testBanner { background: #fff8e1; border: 1px solid #ffcc02; border-radius: 8px;
+      padding: 6px 12px; margin-bottom: 8px; font-size: 13px; color: #5d4037; text-align: center; }
     #lines { display: flex; flex-direction: column; gap: 8px; }
     .tline { position: relative; touch-action: pan-y; }
     .tbody { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;
@@ -191,6 +194,7 @@
   </div>
 
   <main>
+    <div id="testBanner">⚠ Тестовая версия — идёт рефакторинг, возможны шероховатости</div>
     <div id="lines"></div>
   </main>
 

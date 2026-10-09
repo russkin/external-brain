@@ -728,6 +728,10 @@ describe('логика вызывается с state.tasks', () => {
       assert.ok(html.includes('id="' + sid + '"'), 'нет ' + sid);
     }
   });
+  it('плашка тестовой версии видна (рефакторинг)', () => {
+    assert.ok(html.includes('id="testBanner"'), 'нет плашки тестовой версии');
+    assert.ok(html.includes('Тестовая версия'), 'нет текста про тестовую версию');
+  });
   it('меню не вылезает за маленький экран', () => {
     assert.ok(/#gearMenu\.open\s*\{[^}]*max-height:\s*calc\(100vh - 70px\)[^}]*overflow-y:\s*auto/.test(html),
       'меню без потолка высоты и прокрутки');
