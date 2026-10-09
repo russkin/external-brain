@@ -605,8 +605,12 @@
     renderStatus();
     updateHistoryButtons();
     /* Подсветка поиска переживает перерисовки (фоновый синк): строка
-     * та же (по id), скролл не трогаем — только класс. */
-    if (searchIdx >= 0 && searchIdx < searchIds.length) applySearchHit(searchIds[searchIdx]);
+     * та же (по id), скролл не трогаем — только класс. Состояние живёт
+     * в модуле поиска (этап 1), модуля может не быть — гард. */
+    if (window.EBSearch) {
+      var sid = window.EBSearch.currentId();
+      if (sid) window.EBSearch.applySearchHit(sid);
+    }
     try {
       var curY = window.pageYOffset || 0;
       if (curY !== keepY) window.scrollTo(0, keepY);
@@ -2808,179 +2812,9 @@
     });
   }
 
-  /* Поиск по задачам: кнопка 🔍 в шапке открывает нижний оверлей
-   * (поле + Поиск/Отмена/Вверх/Вниз + счётчики). Ищем везде: живые,
-   * свёрнутые, выполненные. Поиск — только по кнопке (не живой), при
-   * нажатии клавиатура прячется и прыгаем к первому совпадению.
-   * Переход разворачивает предков и секцию выполненных. Зелёной рамки
-   * нет — текущее совпадение видно по центру экрана и счётчику i/N. */
-  var searchIds = [], searchIdx = -1, searchScrollY = 0, searchLanded = false;
-  /* Оверлей над клавиатурой: сама клавиатура (и её полоса с картой/
-   * ключом/геопозицией) — системная, кнопки оверлея она перекрывает.
-   * Поднимаем оверлей на высоту клавиатуры через visualViewport. */
-  function searchLift() {
-    var bar = el('searchBar');
-    if (!bar || !bar.classList.contains('open')) return;
-    var off = 0;
-    try {
-      if (window.visualViewport) {
-        off = (window.innerHeight || 0) - window.visualViewport.height -
-          (window.visualViewport.offsetTop || 0);
-        if (!(off > 0)) off = 0;
-      }
-    } catch (x) { off = 0; }
-    bar.style.bottom = off ? off + 'px' : '';
-  }
-  function searchUnlift() {
-    try {
-      if (window.visualViewport) window.visualViewport.removeEventListener('resize', searchLift);
-    } catch (x) {}
-    var bar = el('searchBar');
-    if (bar) bar.style.bottom = '';
-  }
-  function searchSetDisabled(id, v) {
-    var b = el(id);
-    if (b) b.disabled = !!v;
-  }
-  function updateSearchUI() {
-    var inp = el('searchInput');
-    var has = !!(inp && String(inp.value).trim());
-    var n = searchIds.length;
-    searchSetDisabled('searchGo', !has);
-    searchSetDisabled('searchUp', !has || searchIdx <= 0);
-    searchSetDisabled('searchDown', !has || searchIdx < 0 || searchIdx >= n - 1);
-    var tot = el('searchTotal'), pos = el('searchPos');
-    if (tot) tot.textContent = 'Совпадений: ' + n;
-    if (pos) pos.textContent = n ? (searchIdx + 1) + '/' + n : '0/0';
-  }
-  function openSearch() {
-    if (!state) return;
-    try { searchScrollY = window.pageYOffset; } catch (x) { searchScrollY = 0; }
-    searchIds = [];
-    searchIdx = -1;
-    searchLanded = false;
-    var bar = el('searchBar');
-    if (bar) bar.classList.add('open');
-    var gm = el('gearMenu');
-    if (gm) gm.classList.remove('open');
-    try {
-      if (window.visualViewport) window.visualViewport.addEventListener('resize', searchLift);
-    } catch (x) {}
-    searchLift();
-    var inp = el('searchInput');
-    if (inp) { inp.value = ''; try { inp.focus(); } catch (x) {} }
-    updateSearchUI();
-  }
-  function closeSearch(restore) {
-    applySearchHit(null);
-    searchUnlift();
-    var bar = el('searchBar');
-    if (bar) bar.classList.remove('open');
-    var inp = el('searchInput');
-    if (inp) { try { inp.blur(); } catch (x) {} }
-    searchIds = [];
-    searchIdx = -1;
-    /* Отмена: ничего не искали — вернуть страницу на место открытия;
-     * поиск останавливался на задаче — оставить как есть. */
-    if (restore && !searchLanded) { try { window.scrollTo(0, searchScrollY); } catch (x) {} }
-    searchLanded = false;
-  }
-  /* Цель видна: разворачиваем предков (свёрнутые группы) и секцию
-   * выполненных, если совпадение там. */
-  function ensureSearchVisible(id) {
-    if (!state) return;
-    var t = L.getTask(state.tasks, id);
-    if (!t) return;
-    if (t.status === 'done') {
-      if (doneHidden) toggleDoneHidden();
-    } else {
-      var lt = [];
-      try { lt = lineTasks(); } catch (x) { lt = []; }
-      var idx = -1, i;
-      for (i = 0; i < lt.length; i++) {
-        if (lt[i].id === id) { idx = i; break; }
-      }
-      if (idx !== -1) {
-        var minInd = 999, changed = false;
-        for (i = idx; i >= 0; i--) {
-          var ind = lineIndent(lt[i]);
-          if (ind < minInd) {
-            minInd = ind;
-            if (i !== idx && collapsed[lt[i].id]) {
-              delete collapsed[lt[i].id];
-              changed = true;
-            }
-          }
-        }
-        if (changed) saveCollapsed();
-      }
-    }
-    render();
-  }
-  /* Строка — в середину между шапкой и верхом окна поиска. */
-  function scrollToSearchRow(id) {
-    var box = el('lines');
-    if (!box || !box.querySelectorAll) return;
-    var rows = box.querySelectorAll('.tline[data-id]');
-    var row = null, i;
-    for (i = 0; i < rows.length; i++) {
-      if (rows[i].getAttribute('data-id') === id) { row = rows[i]; break; }
-    }
-    if (!row) return;
-    var headB = 0, barTop = 0, rh = 0;
-    try {
-      var hd = document.querySelector('header');
-      headB = hd ? hd.getBoundingClientRect().bottom : 0;
-      var bar = el('searchBar');
-      barTop = bar ? bar.getBoundingClientRect().top : (window.innerHeight || 800);
-      rh = row.getBoundingClientRect().height;
-    } catch (x) {}
-    var want = headB + (barTop - headB) / 2 - rh / 2;
-    var y = 0;
-    try { y = window.pageYOffset + row.getBoundingClientRect().top - want; } catch (x) { y = 0; }
-    if (y < 0) y = 0;
-    try { window.scrollTo(0, y); } catch (x) {}
-  }
-  /* Подсветка текущего совпадения: снять со старой, поставить на новую.
-   * Только классы — вёрстка не едет. Вызывать после каждого render(),
-   * иначе фоновый синк снесут подсветку вместе со строками. */
-  function applySearchHit(id) {
-    var box = el('lines');
-    if (!box || !box.querySelectorAll) return;
-    var marked = box.querySelectorAll('.tline.search-hit');
-    var i;
-    for (i = 0; i < marked.length; i++) marked[i].classList.remove('search-hit');
-    if (!id) return;
-    var rows = box.querySelectorAll('.tline[data-id]');
-    for (i = 0; i < rows.length; i++) {
-      if (rows[i].getAttribute('data-id') === id) { rows[i].classList.add('search-hit'); break; }
-    }
-  }
-  function gotoSearch(i) {
-    if (!searchIds.length) return;
-    if (i < 0) i = 0;
-    if (i > searchIds.length - 1) i = searchIds.length - 1;
-    searchIdx = i;
-    searchLanded = true;
-    ensureSearchVisible(searchIds[i]);
-    scrollToSearchRow(searchIds[i]);
-    applySearchHit(searchIds[i]);
-    updateSearchUI();
-  }
-  function doSearch() {
-    if (!state) return;
-    var inp = el('searchInput');
-    var q = inp ? inp.value : '';
-    /* Скрываем клавиатуру — дальше прыжок к первому совпадению. */
-    if (inp) { try { inp.blur(); } catch (x) {} }
-    var live = [], dn = [];
-    try { live = lineTasks(); } catch (x) { live = []; }
-    try { dn = L.doneList(state.tasks); } catch (x) { dn = []; }
-    searchIds = L.searchTasks(live.concat(dn), q);
-    searchIdx = searchIds.length ? 0 : -1;
-    if (searchIds.length) gotoSearch(0);
-    else { applySearchHit(null); updateSearchUI(); }
-  }
+  /* Поиск — отдельным модулем src/search.js (рефакторинг, этап 1):
+   * состояние внутри модуля, общее — только через контекст в init.
+   * Подсветка дотягивается из render() через EBSearch.currentId(). */
 
   function wire() {
     var gear = el('gearMenu');
@@ -3065,25 +2899,16 @@
       else if (navigator.clipboard) navigator.clipboard.writeText(url).then(function () { lastAction = 'скопировано'; renderStatus(); });
       else askText(url, '', false).then(function () {});
     });
-    on('searchBtn', 'click', function () { openSearch(); });
-    on('searchGo', 'click', function () { doSearch(); });
-    on('searchCancel', 'click', function () { closeSearch(true); });
-    on('searchUp', 'click', function () { if (searchIdx > 0) gotoSearch(searchIdx - 1); });
-    on('searchDown', 'click', function () { if (searchIdx >= 0 && searchIdx < searchIds.length - 1) gotoSearch(searchIdx + 1); });
-    on('searchInput', 'input', function () {
-      /* Запрос поменялся — старые совпадения недействительны. */
-      searchIds = [];
-      searchIdx = -1;
-      updateSearchUI();
-    });
-    on('searchInput', 'keydown', function (e) {
-      if (e && e.key === 'Enter') {
-        var inp = el('searchInput');
-        if (inp && String(inp.value).trim()) {
-          if (e.cancelable) e.preventDefault();
-          doSearch();
-        }
-      }
+    /* Поиск — модуль src/search.js (этап 1): подписки внутри init,
+     * сюда отдаём только контекст (всё изменяемое — через геттеры). */
+    if (window.EBSearch) window.EBSearch.init({
+      on: on, L: L, render: render,
+      getState: function () { return state; },
+      lineTasks: lineTasks, lineIndent: lineIndent,
+      getCollapsed: function () { return collapsed; },
+      saveCollapsed: saveCollapsed,
+      isDoneHidden: function () { return doneHidden; },
+      toggleDoneHidden: toggleDoneHidden
     });
     on('clearDone', 'click', function () { askClearDone(); });
     on('deleteDoneBtn', 'click', function () { askClearDone(); });

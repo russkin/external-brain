@@ -11,6 +11,7 @@ const syncSrc = fs.readFileSync(path.join(root, 'sync.js'), 'utf8');
 const storeSrc = fs.readFileSync(path.join(root, 'store.js'), 'utf8');
 const swSrc = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const searchSrc = fs.readFileSync(path.join(root, 'src/search.js'), 'utf8');
 
 function appVersion() {
   const m = appSrc.match(/APP_VERSION\s*=\s*'([^']+)'/);
@@ -56,7 +57,7 @@ describe('service worker: методика кэша', () => {
     assert.ok(appSrc.includes('caches.delete'), 'нет чистки кэша при обновлении');
   });
   it('в кэш положены все части оболочки', () => {
-    for (const u of ["'./'", 'index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'docs/USER_GUIDE.html']) {
+    for (const u of ["'./'", 'index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'src/search.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'docs/USER_GUIDE.html']) {
       assert.ok(swSrc.includes(u), 'нет ' + u + ' в ASSETS');
     }
   });
@@ -685,27 +686,35 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('function dropMargins') && appSrc.includes('dropMargins(div, kids)'),
       'посадка не ставит итоговый отступ в том же кадре (прыжок до render)');
   });
-  it('поиск: кнопка, оверлей, проводка', () => {
+  it('поиск: кнопка, оверлей, проводка (модуль src/search.js)', () => {
     assert.ok(html.includes('id="searchBtn"'), 'нет кнопки поиска в шапке');
     for (const sid of ['searchBar', 'searchInput', 'searchTotal', 'searchPos', 'searchGo', 'searchCancel', 'searchUp', 'searchDown']) {
       assert.ok(html.includes('id="' + sid + '"'), 'нет ' + sid + ' в оверлее поиска');
     }
     for (const fn of ['openSearch', 'closeSearch', 'doSearch', 'gotoSearch', 'updateSearchUI', 'ensureSearchVisible', 'scrollToSearchRow']) {
-      assert.ok(appSrc.includes('function ' + fn), 'нет ' + fn);
+      assert.ok(searchSrc.includes('function ' + fn), 'нет ' + fn + ' в src/search.js');
+      assert.ok(!appSrc.includes('function ' + fn), fn + ' остался в app.js (вынос нечистый)');
     }
-    assert.ok(appSrc.includes("on('searchBtn'") && appSrc.includes("on('searchGo'") &&
-      appSrc.includes("on('searchCancel'") && appSrc.includes("on('searchUp'") &&
-      appSrc.includes("on('searchDown'"), 'кнопки поиска не подписаны');
-    assert.ok(appSrc.includes('searchScrollY'), 'Отмена не возвращает скролл');
-    assert.ok(html.includes('search-hit') && appSrc.includes('applySearchHit'),
+    assert.ok(searchSrc.includes("on('searchBtn'") && searchSrc.includes("on('searchGo'") &&
+      searchSrc.includes("on('searchCancel'") && searchSrc.includes("on('searchUp'") &&
+      searchSrc.includes("on('searchDown'"), 'кнопки поиска не подписаны');
+    assert.ok(searchSrc.includes('searchScrollY'), 'Отмена не возвращает скролл');
+    assert.ok(html.includes('search-hit') && searchSrc.includes('applySearchHit'),
       'нет подсветки текущего совпадения');
     assert.ok(html.includes('type="search"'), 'поле поиска не type=search (полоса автозаполнения)');
-    assert.ok(appSrc.includes('visualViewport') && appSrc.includes('searchLift'),
+    assert.ok(searchSrc.includes('visualViewport') && searchSrc.includes('searchLift'),
       'оверлей не поднимается над клавиатурой — кнопки перекрыты');
-    assert.ok(appSrc.includes('searchLanded'),
+    assert.ok(searchSrc.includes('searchLanded'),
       'Отмена всегда возвращает скролл, даже если поиск останавливался');
-    assert.ok(appSrc.includes('collapsed[lt[i].id]') || appSrc.includes('delete collapsed'),
+    assert.ok(searchSrc.includes('collapsed[lt[i].id]') || searchSrc.includes('delete collapsed'),
       'переход не разворачивает свёрнутые группы');
+    assert.ok(searchSrc.includes('getState()') && searchSrc.includes('getCollapsed()') &&
+      searchSrc.includes('isDoneHidden()'),
+      'модуль читает общее состояние напрямую, а не через контекст');
+    assert.ok(appSrc.includes('EBSearch.init({') && appSrc.includes('window.EBSearch.currentId()'),
+      'app.js не отдаёт контекст модулю и не дотягивает подсветку');
+    assert.ok(html.includes('src/search.js') && swSrc.includes('src/search.js'),
+      'модуль не подключён (index.html / sw.js)');
   });
   it('резервные копии сгруппированы в подменю', () => {
     assert.ok(html.includes('id="backupBtn"') && html.includes('id="backupMenu"'),
@@ -798,7 +807,7 @@ describe('PWA-оболочка', () => {
     assert.ok(fs.existsSync(path.join(root, 'icon-512.png')), 'нет icon-512.png');
   });
   it('все скрипты подключены', () => {
-    for (const s of ['src/logic.js', 'store.js', 'sync.js', 'app.js']) {
+    for (const s of ['src/logic.js', 'src/search.js', 'store.js', 'sync.js', 'app.js']) {
       assert.ok(html.includes(s), 'нет ' + s + ' в index.html');
     }
   });
