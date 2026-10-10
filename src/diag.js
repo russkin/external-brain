@@ -206,6 +206,15 @@ function diagText() {
     ' · свёрнуто групп ' + collapsedN);
   var h = C.getHistoryCounts();
   lines.push('История: ↩ ' + h.u + ' · ↪ ' + h.r);
+  /* ВРЕМЕННОЕ (диагностика странной отмены): верх стека — что вернёт
+   * следующая ↩. Убрать после выяснения. */
+  try {
+    var pk = C.getHistoryPeek ? C.getHistoryPeek() : [];
+    for (var pi = 0; pi < pk.length; pi++) {
+      lines.push('Стек ↩' + (pi + 1) + ': живые [' + pk[pi].alive.join(',') +
+        '] мёртвые [' + pk[pi].dead.join(',') + '] черновик ' + pk[pi].draft);
+    }
+  } catch (x) {}
   lines.push('Сеть: ' + connLine());
   lines.push('Устройство: ' + deviceLine() + ' · id ' + journalDeviceId());
   lines.push('Repo: ' + (state ? state.settings.repo : '?'));

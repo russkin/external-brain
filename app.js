@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v118';
+  var APP_VERSION = 'v119';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -2671,6 +2671,7 @@
       getLastAction: function () { return lastAction; },
       getBoot: function () { return { error: bootError, stack: bootStack }; },
       getHistoryCounts: function () { return window.EBHistory.counts(); },
+      getHistoryPeek: function () { return window.EBHistory.peek(3); },
       getCollapsed: function () { return collapsed; },
       isDoneHidden: function () { return doneHidden; }
     });
