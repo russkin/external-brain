@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v114';
+  var APP_VERSION = 'v115';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1556,6 +1556,7 @@
         }
         trailingAfterId = newAnchor;
         trailingIndent = newIndent;
+        expandForAnchor(newAnchor, newIndent);
       }
       render();
       focusTrailing();
@@ -1836,6 +1837,33 @@
       if (self === -1 || !(finalLvl > 0)) return;
       var minInd = finalLvl, changed = false;
       for (i = self - 1; i >= 0; i--) {
+        var pid = rows[i].getAttribute ? rows[i].getAttribute('data-id') : null;
+        var pt = pid ? L.getTask(state.tasks, pid) : null;
+        if (!pt) continue;
+        var ind = lineIndent(pt);
+        if (ind < minInd) {
+          minInd = ind;
+          if (collapsed[pt.id]) { delete collapsed[pt.id]; changed = true; }
+        }
+      }
+      if (changed) saveCollapsed();
+    }
+    /* То же для Enter-создания: новое поле встаёт за якорем на вычисленном
+     * уровне — если там свёрнуто, поле видно (черновик всегда рисуется),
+     * а родившаяся задача спрячется. Разворачиваем сразу. */
+    function expandForAnchor(anchorId, indent) {
+      if (!anchorId || anchorId === 'TOP' || !(indent > 0)) return;
+      var box = el('lines');
+      if (!box) return;
+      var rows = rowsOf(box);
+      var ai = -1, i;
+      for (i = 0; i < rows.length; i++) {
+        var aid = rows[i].getAttribute ? rows[i].getAttribute('data-id') : null;
+        if (aid === anchorId) { ai = i; break; }
+      }
+      if (ai === -1) return;
+      var minInd = indent, changed = false;
+      for (i = ai; i >= 0; i--) {
         var pid = rows[i].getAttribute ? rows[i].getAttribute('data-id') : null;
         var pt = pid ? L.getTask(state.tasks, pid) : null;
         if (!pt) continue;
@@ -2174,6 +2202,10 @@
           }
           return;
         }
+        /* Разворот — всегда, а не только при смене уровня: строка могла
+         * родиться под свёрнутым уже на своём уровне (черновик виден,
+         * задача — нет), и сдвиг вхолостую её бы не показал. */
+        expandParentAbove(lvl);
         if (lvl !== bou.cur) {
           /* Сдвиг везёт всю ветку на ту же дельту (кламп 0..8 — внутри
            * setIndent): одна точка истории, внучки не отрываются. */
@@ -2188,8 +2220,8 @@
               }
             });
           })(task.id, lvl, lvl - bou.cur);
-          expandParentAbove(lvl);
         }
+        expandParentAbove(lvl);
         kids = [];
         render();
         return;
