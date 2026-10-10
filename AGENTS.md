@@ -13,7 +13,7 @@
 не в russkin/external-brain. Код по умолчанию смотрит в
 russkin/external-brain — дефолты в коде не менять. Репозиторий переключается
 настройкой repo в приложении.
-Текущая версия: v111 (октябрь 2026). Тестов: 150 (`logic` + `ios` + `sync` + `sync-devices`).
+Текущая версия: v112 (октябрь 2026). Тестов: 150 (`logic` + `ios` + `sync` + `sync-devices`).
 Тестовые платформы: смартфон Honor 400 Pro, Android 16 + iPhone, Safari 15
 (хозяин репозитория тестирует на iPhone). Планшет НЕ используется.
 
@@ -35,16 +35,19 @@ purchases, но проекты РАЗОШЛИСЬ и независимы: ра�
 ## Регламент публикации (обязательный после КАЖДОГО коммита)
 
 1. `node --test tests/logic.test.js tests/ios.test.js tests/sync.test.js tests/sync-devices.test.js` — всё зелёное.
-2. Покрытие: `node --test --experimental-test-coverage ...` — logic.js/sync.js ≥90% строк и ≥89% веток (UMD-хвост `else if (typeof window…)` в Node не покрыть — H-11).
-3. `git commit`, затем push. Прямой push без токена не взлетит (origin — SSH):
+2. Документы в ногу с версией (обязательно при каждом бампе, не откладывать):
+   `AGENTS.md` (шапка: версия, счётчик тестов) и `specs/requirements.md`
+   (заголовок, FR-78) — иначе документы снова начнут врать.
+3. Покрытие: `node --test --experimental-test-coverage ...` — logic.js/sync.js ≥90% строк и ≥89% веток (UMD-хвост `else if (typeof window…)` в Node не покрыть — H-11).
+4. `git commit`, затем push. Прямой push без токена не взлетит (origin — SSH):
    `git push "https://x-access-token:${GITHUB_TOKEN}@github.com/russkin/external-brain.git" main:main`
    Токен брать из локального `.env` (`GITHUB_TOKEN`), в выводе затирать через
    `sed -E 's/x-access-token:[^@]+@/x-access-token:REDACTED@/g'`.
    При `rejected` — `fetch + rebase origin/main + push`, повторы до успеха.
-4. Дождаться workflow «Deploy PWA to GitHub Pages» (`completed/success`) через Actions API.
+5. Дождаться workflow «Deploy PWA to GitHub Pages» (`completed/success`) через Actions API.
    Учти `concurrency.cancel-in-progress`: первый запуск может быть `cancelled`, жди следующий.
-5. Проверить прод curl'ом (200 + маркеры новой версии в `app.js`/`sw.js`).
-6. Сообщить пользователю: опубликованную версию (`APP_VERSION`) и адрес https://russkin.github.io/external-brain/
+6. Проверить прод curl'ом (200 + маркеры новой версии в `app.js`/`sw.js`).
+7. Сообщить пользователю: опубликованную версию (`APP_VERSION`) и адрес https://russkin.github.io/external-brain/
 
 ## Версии
 
@@ -389,3 +392,5 @@ Docs-only правки версию НЕ bump'ят. Есть регресс-те
 31. Тап по точкам — тоже шаг истории (v111): без него ↩ после разворота
     одной группы откатывал 📁 целиком (разворачивал всё), а должен вернуть
     только эту группу. Шаг несёт вид до тапа; данные те же.
+32. Тап по разделителю — тоже шаг истории (v112): иначе ↩ после показа
+    секции возвращал более раннее действие, а не скрытие.

@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v111';
+  var APP_VERSION = 'v112';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -2430,7 +2430,19 @@
        * остаётся: он же точка возврата и кламп дыры при перетаскивании. */
       sep.textContent = 'Выполнено · ' + done.length + (doneHidden ? ' ▸' : ' ▾');
       sep.setAttribute('title', doneHidden ? 'Показать выполненные' : 'Скрыть выполненные');
-      sep.addEventListener('click', function () { toggleDoneHidden(); });
+      /* Тап — тоже шаг истории (как 📁/точки): иначе ↩ после показа
+       * секции вернул бы более раннее действие, а не скрытие. */
+      sep.addEventListener('click', function () {
+        var bvCollapsed = {}, bvId;
+        for (bvId in collapsed) if (collapsed[bvId]) bvCollapsed[bvId] = true;
+        var bvHidden = !!doneHidden;
+        toggleDoneHidden();
+        var e = snapFull();
+        e.collapsed = bvCollapsed;
+        e.doneHidden = bvHidden;
+        pushUndo(e);
+        updateHistoryButtons();
+      });
       box.appendChild(sep);
       if (!doneHidden) {
         for (var dv = 0; dv < doneVis.length; dv++) {

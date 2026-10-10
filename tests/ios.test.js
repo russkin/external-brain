@@ -304,6 +304,8 @@ describe('логика вызывается с state.tasks', () => {
       'состояние скрытия выполненных не сохраняется');
     assert.ok(appSrc.includes("'Выполнено · ' + done.length"),
       'счётчик показывает видимых, а не всех выполненных');
+    assert.ok(/sep\.addEventListener\('click'[\s\S]{0,600}e\.collapsed = bvCollapsed/.test(appSrc),
+      'тап по разделителю не пишет шаг истории');
     assert.ok(!appSrc.includes('expandDoneParents') && !appSrc.includes('anyDoneShown'),
       'тап по разделителю трогает сворачивание живых веток');
     assert.ok(!appSrc.includes('fullOrdered'),
