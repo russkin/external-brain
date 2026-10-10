@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v112';
+  var APP_VERSION = 'v113';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -2632,7 +2632,8 @@
           var restored = window.EBStore.restoreBackup ? window.EBStore.restoreBackup() : null;
           if (!restored) return;
           mutate(function () {
-            state.tasks = L.normalizeTasks(restored.tasks);
+            /* Пропавшие хоронятся tombstone'ом, иначе синк воскресит их. */
+            state.tasks = L.restoreWithTombstones(state.tasks, restored.tasks, Date.now());
             state.updatedAt = Date.now();
           });
           lastAction = 'копия восстановлена';
@@ -2665,7 +2666,8 @@
           var restored = window.EBStore.restorePin ? window.EBStore.restorePin() : null;
           if (!restored) return;
           mutate(function () {
-            state.tasks = L.normalizeTasks(restored.tasks);
+            /* Пропавшие хоронятся tombstone'ом, иначе синк воскресит их. */
+            state.tasks = L.restoreWithTombstones(state.tasks, restored.tasks, Date.now());
             state.updatedAt = Date.now();
           });
           lastAction = 'постоянная копия восстановлена';

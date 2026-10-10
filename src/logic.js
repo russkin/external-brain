@@ -397,6 +397,31 @@ function normalizeTask(t) {
   };
 }
 
+/* Восстановление из копии: пропавшие живые задачи хоронятся tombstone'ом
+ * со свежей меткой — иначе следующий синк воскресит их с сервера
+ * (union-семантика слияния: нет локально + есть удалённо = добавить).
+ * Присутствующие едут как есть (нормализованные). */
+function restoreWithTombstones(currentTasks, incomingTasks, nowMs) {
+  var now = toInt(nowMs, Date.now());
+  var out = normalizeTasks(incomingTasks);
+  var have = {}, i;
+  for (i = 0; i < out.length; i++) have[out[i].id] = true;
+  var cur = Array.isArray(currentTasks) ? currentTasks : [];
+  for (i = 0; i < cur.length; i++) {
+    var t = cur[i];
+    if (!t || !t.id || have[t.id]) continue;
+    /* Уже похороненные — несём могилу дальше, иначе стирается память
+     * об удалении и чужое старое живое их воскресит. */
+    if (t.deleted) { out.push(t); continue; }
+    out.push({
+      id: String(t.id).slice(0, 64),
+      title: '', status: 'inbox', estMin: 0, indent: 0,
+      createdAt: 0, updatedAt: now, doneAt: 0, ts: now, deleted: true
+    });
+  }
+  return out;
+}
+
 /* Любой вход -> массив нормализованных задач с id. Без id — отбрасывается. */
 function normalizeTasks(tasks) {
   if (!Array.isArray(tasks)) return [];
@@ -508,6 +533,7 @@ var api = {
   fmtDur: fmtDur,
   normalizeTask: normalizeTask,
   normalizeTasks: normalizeTasks,
+  restoreWithTombstones: restoreWithTombstones,
   mergeTask: mergeTask,
   mergeTasks: mergeTasks,
   tasksEqual: tasksEqual,

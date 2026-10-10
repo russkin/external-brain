@@ -299,6 +299,31 @@ describe('поиск', () => {
   });
 });
 
+describe('восстановление с tombstone', () => {
+  function task(id, title, ts) {
+    return { id: id, title: title, status: 'inbox', indent: 0, createdAt: ts, updatedAt: ts, ts: ts, deleted: false };
+  }
+  it('пропавшие хоронятся со свежей меткой', () => {
+    const cur = [task('a', 'A', 100), task('b', 'B', 200)];
+    const out = L.restoreWithTombstones(cur, [task('a', 'A', 100)], 9000);
+    assert.equal(out.length, 2);
+    const tomb = out.filter((t) => t.id === 'b')[0];
+    assert.equal(tomb.deleted, true);
+    assert.equal(tomb.ts, 9000);
+  });
+  it('присутствующие едут как есть, удалённые не дублируются', () => {
+    const cur = [task('a', 'A', 100), { id: 'z', title: '', status: 'inbox', indent: 0, createdAt: 50, updatedAt: 50, ts: 50, deleted: true }];
+    const out = L.restoreWithTombstones(cur, [task('a', 'A!', 300)], 9000);
+    assert.equal(out.length, 2);
+    assert.equal(out.filter((t) => t.id === 'a')[0].title, 'A!');
+  });
+  it('пустая копия хоронит всех живых', () => {
+    const out = L.restoreWithTombstones([task('a', 'A', 100)], [], 9000);
+    assert.equal(out.length, 1);
+    assert.equal(out[0].deleted, true);
+  });
+});
+
 describe('нормализация', () => {
   it('normalizeTask отбрасывает мусор', () => {
     assert.equal(L.normalizeTask(null), null);

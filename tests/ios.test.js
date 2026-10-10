@@ -739,6 +739,10 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(html.includes('src/search.js') && swSrc.includes('src/search.js'),
       'модуль не подключён (index.html / sw.js)');
   });
+  it('восстановление хоронит пропавших (синк не воскрешает)', () => {
+    assert.ok(appSrc.includes('L.restoreWithTombstones(state.tasks, restored.tasks'),
+      'восстановление без tombstone — синк вернёт удалённое');
+  });
   it('резервные копии сгруппированы в подменю', () => {
     assert.ok(html.includes('id="backupBtn"') && html.includes('id="backupMenu"'),
       'нет пункта и подменю «Резервная копия»');
