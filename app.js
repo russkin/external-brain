@@ -11,16 +11,9 @@
   var DONE_HIDDEN_KEY = 'external-brain-done-hidden-v1';
   var L = window.EBLogic;
   var state = null;
-  var syncStatus = '';
   var lastAction = '';
   var bootError = '';
   var bootStack = '';
-
-  /* Время последнего успеха/ошибки синка (движок; переживает перезагрузку
-   * через журнал модуля). Сам журнал и публикация — src/diag.js (этап 2). */
-  var lastSyncAt = 0;
-  var lastErrAt = 0;
-  var lastErrMsg = '';
 
   function el(id) { return document.getElementById(id); }
 
@@ -246,149 +239,14 @@
     if (s && s.focusId) focusTaskEnd(s.focusId);
   }
 
-  /* --- single-flight синк: летит один, повтор ждёт очереди --- */
-  var syncFlying = false;
-  var syncQueued = false;
-  var syncFails = 0;
-  var syncTimer = null;
-
-  function scheduleSync() {
-    if (syncTimer) clearTimeout(syncTimer);
-    syncTimer = setTimeout(function () { doSync(); }, 2000);
-  }
-
-  function doSync(force) {
-    if (!state || !state.settings.token) {
-      syncStatus = 'выключен (нет ключа)';
-      renderStatus();
-      return Promise.resolve('no-token');
-    }
-    if (syncFlying) { syncQueued = true; return Promise.resolve('queued'); }
-    syncFlying = true;
-    setLight('yellow', true);
-    return window.EBSync.syncNow(state).then(function (res) {
-      syncFlying = false;
-      syncStatus = res.status;
-      if (res.status === 'error') {
-        lastErrAt = Date.now();
-        lastErrMsg = String(res.error || 'ошибка').slice(0, 120);
-        window.EBDiag.push('ошибка синка: ' + lastErrMsg);
-        window.EBDiag.save({ at: lastSyncAt, errAt: lastErrAt, err: lastErrMsg });
-        setLight('red', false);
-        syncFails += 1;
-        if (syncFails <= 5) {
-          setTimeout(function () { doSync(); }, 2000);
-        }
-        /* Обрыв сети (без github-) публиковать бессмысленно — сети нет
-         * и для самой публикации (как в purchases). */
-        if (/github-/.test(lastErrMsg)) window.EBDiag.maybePublishJournal();
-      } else {
-        syncFails = 0;
-        lastSyncAt = Date.now();
-        lastErrMsg = '';
-        lastErrAt = 0;
-        window.EBDiag.push('синк: ' + res.status);
-        window.EBDiag.save({ at: lastSyncAt, errAt: lastErrAt, err: lastErrMsg });
-        setLight(res.status === 'in-sync' ? 'green' : 'green', false);
-        if (res.status === 'pulled' || res.status === 'merged') {
-          state.updatedAt = Date.now();
-          window.EBStore.save(state);
-          render();
-        }
-      }
-      if (syncQueued) { syncQueued = false; doSync(); }
-      else if (!force) { /* ждём следующий триггер */ }
-      renderStatus();
-      return res.status;
-    }).catch(function (e) {
-      syncFlying = false;
-      syncStatus = 'error: ' + String(e && e.message || e).slice(0, 120);
-      lastErrAt = Date.now();
-      lastErrMsg = String(e && e.message || e).slice(0, 120);
-      window.EBDiag.push('ошибка синка: ' + lastErrMsg);
-      window.EBDiag.save({ at: lastSyncAt, errAt: lastErrAt, err: lastErrMsg });
-      setLight('red', false);
-      if (/github-/.test(lastErrMsg)) window.EBDiag.maybePublishJournal();
-      renderStatus();
-      return 'error';
-    });
-  }
-
-  function setLight(color, blink) {
-    var n = el('syncLight');
-    if (!n) return;
-    var map = { green: '#4caf50', yellow: '#ffc107', red: '#f44336', gray: '#bbb' };
-    n.style.background = map[color] || map.gray;
-    if (blink) n.classList.add('blink');
-    else n.classList.remove('blink');
-    /* Конфликт записи (409/422) — красный «!» (как в purchases); тап — синк. */
-    var err = (syncStatus || '') + ' ' + (lastErrMsg || '');
-    var alert = color === 'red' && /github-put (409|422)/.test(err);
-    n.classList.toggle('alert', alert);
-    n.textContent = alert ? '!' : '';
-    if (color === 'yellow') n.title = 'Идёт синхронизация…';
-    else if (alert) n.title = 'Конфликт записи (409/422). Нажми — принудительный синк.';
-    else if (color === 'red') n.title = (syncStatus || 'Ошибка синка') + '. Нажми — попробовать снова.';
-    else if (color === 'green') n.title = 'Синк: ' + (syncStatus || 'выполнено') + '. Нажми — синхронизировать.';
-    else n.title = state && state.settings.token
-      ? 'Синк ещё не запускался. Нажми — синхронизировать.'
-      : 'Синк выключен (нет ключа).';
-  }
-
-  /* Шапка ⇅: цвет — online/offline, подпись — скорость (downlink → МБ/с,
-   * отдаёт не каждый браузер, на iPhone пусто). */
-  function renderNet() {
-    var net = el('netStatus');
-    if (net) {
-      net.textContent = '⇅';
-      net.style.color = navigator.onLine ? '#2e9e44' : '#bbb';
-      net.title = navigator.onLine ? 'Есть сеть' : 'Нет сети';
-    }
-    var speed = '';
-    try {
-      var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-      if (conn && conn.downlink > 0) {
-        speed = String(Math.round(conn.downlink / 8 * 100) / 100).replace('.', ',') + ' МБ/с';
-      }
-    } catch (e) { speed = ''; }
-    var nt = el('netType');
-    if (nt) nt.textContent = (navigator.onLine && speed) ? speed : '';
-  }
-
-  /* --- Проверка новой версии: качает app.js мимо кэша SW --- */
-  var lastCheck = 0;
-  function checkUpdate() {
-    var now = Date.now();
-    if (now - lastCheck < 5 * 60 * 1000) return;
-    lastCheck = now;
-    fetch('./app.js?nocache=' + now).then(function (r) {
-      if (!r.ok) return null;
-      return r.text();
-    }).then(function (txt) {
-      if (!txt) return;
-      var m = txt.match(/APP_VERSION\s*=\s*'([^']+)'/);
-      if (m && m[1] !== APP_VERSION) {
-        askConfirm('Вышла новая версия (' + m[1] + ') — обновить?').then(function (ok) {
-          if (!ok) return;
-          if ('caches' in window) {
-            caches.keys().then(function (keys) {
-              return Promise.all(keys.map(function (k) { return caches.delete(k); }));
-            }).then(function () { location.reload(); });
-          } else location.reload();
-        });
-      }
-    }).catch(function () {});
-  }
-
-  function pokeSwUpdate() {
-    try {
-      if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistration) {
-        navigator.serviceWorker.getRegistration().then(function (reg) {
-          if (reg && reg.update) reg.update();
-        }).catch(function () {});
-      }
-    } catch (e) {}
-  }
+  /* Синк и его триггеры — модуль src/triggers.js (этап 5): single-flight,
+   * debounce 2 сек, фоновый опрос, возврат на вкладку, сеть, светофор,
+   * проверка версии. Здесь тонкие алиасы, чтобы вызовы в save/renderStatus
+   * и контексте настроек не трогать; своё состояние (флаги/статус/метки) — там. */
+  function doSync(force) { return window.EBTriggers.doSync(force); }
+  function scheduleSync() { return window.EBTriggers.scheduleSync(); }
+  function renderNet() { window.EBTriggers.renderNet(); }
+  function getSyncInfo() { return window.EBTriggers.getSync(); }
 
   /* --- Рендер --- */
 
@@ -2565,7 +2423,7 @@
     var parts = [
       'Задач: ' + ((st.inbox || 0) + (st.next || 0)),
       'выполненных: ' + (st.done || 0),
-      'синхр: ' + (syncStatus || '—')
+      'синхр: ' + (getSyncInfo().status || '—')
     ];
     if (lastAction) parts.push(lastAction);
     if (bootError) parts.push(bootError);
@@ -2667,7 +2525,7 @@
       on: on, L: L, showInfo: showInfo, renderStatus: renderStatus, fmtWhen: fmtWhen,
       getState: function () { return state; },
       getVersion: function () { return APP_VERSION; },
-      getSync: function () { return { status: syncStatus, at: lastSyncAt, errAt: lastErrAt, err: lastErrMsg }; },
+      getSync: getSyncInfo,
       getLastAction: function () { return lastAction; },
       getBoot: function () { return { error: bootError, stack: bootStack }; },
       getHistoryCounts: function () { return window.EBHistory.counts(); },
@@ -2676,9 +2534,17 @@
       isDoneHidden: function () { return doneHidden; }
     });
 
-    on('syncNowBtn', 'click', function () { doSync(true); });
-    /* Тап по светофору — принудительный синк (как в purchases). */
-    on('syncLight', 'click', function () { doSync(true); });
+    /* Триггеры синка — модуль src/triggers.js (этап 5): кнопки синка,
+     * светофор, возврат на вкладку, сеть. Сюда отдаём только контекст. */
+    if (window.EBTriggers) window.EBTriggers.init({
+      on: on,
+      getState: function () { return state; },
+      render: render,
+      renderStatus: renderStatus,
+      askConfirm: askConfirm,
+      getVersion: function () { return APP_VERSION; }
+    });
+
     on('installBtn', 'click', function () {
       if (window._deferredPrompt) {
         window._deferredPrompt.prompt();
@@ -2791,39 +2657,12 @@
     on('durMp', 'click', function () { durTot = Math.min(durTot + 5, 59999); durRender(); });
     on('durMm', 'click', function () { durTot = Math.max(durTot - 5, 0); durRender(); });
 
-    var sl = el('syncLight');
-    if (sl) sl.addEventListener('click', function () { doSync(true); });
     window.addEventListener('beforeinstallprompt', function (e) {
       e.preventDefault();
       window._deferredPrompt = e;
     });
-    /* Возврат на вкладку: три события (visibilitychange + focus + pageshow),
-     * иначе bfcache/focus без visibility оставляет старое. */
-    var lastFg = 0;
-    function onForeground() {
-      var now = Date.now();
-      if (now - lastFg < 15000) return;
-      lastFg = now;
-      pokeSwUpdate();
-      checkUpdate();
-      doSync();
-    }
-    document.addEventListener('visibilitychange', function () {
-      if (!document.hidden) onForeground();
-    });
-    window.addEventListener('focus', onForeground);
-    window.addEventListener('pageshow', onForeground);
-    window.addEventListener('online', function () { renderNet(); doSync(true); });
-    window.addEventListener('offline', renderNet);
-    if (navigator.connection && navigator.connection.addEventListener) {
-      navigator.connection.addEventListener('change', renderNet);
-    }
-  }
-
-  function setupPolling() {
-    setInterval(function () {
-      if (!document.hidden && navigator.onLine && state && state.settings.token) doSync();
-    }, 60000);
+    /* Возврат на вкладку/сеть — подписки модуля triggers (этап 5):
+     * три события возврата (в т.ч. bfcache), online/offline/connection. */
   }
 
   function boot() {
@@ -2840,11 +2679,8 @@
     });
     loadCollapsed();
     loadDoneHidden();
-    /* Журнал — модуль (этап 2); метки движка забираем из него же. */
-    try {
-      var jt = window.EBDiag.load();
-      lastSyncAt = jt.at; lastErrAt = jt.errAt; lastErrMsg = jt.err;
-    } catch (x) {}
+    /* Журнал — модуль (этап 2); метки движка забирает модуль триггеров. */
+    try { window.EBTriggers.restoreLog(window.EBDiag.load()); } catch (x) {}
     window.EBStore.load().then(function (s) {
       state = s;
       /* Первая загрузка новой версии: авто-пин «перед обновлением». */
@@ -2852,12 +2688,10 @@
         if (window.EBStore.pinOnVersion) window.EBStore.pinOnVersion(APP_VERSION);
       } catch (e) {}
       render();
-      setLight(state.settings.token ? 'gray' : 'gray', false);
-      syncStatus = state.settings.token ? '' : 'выключен (нет ключа)';
+      /* Светофор/статус/первый синк/проверка версии/опрос — модуль
+       * триггеров (этап 5); статус строки рисуем после. */
+      if (window.EBTriggers) window.EBTriggers.onReady();
       renderStatus();
-      doSync();
-      checkUpdate();
-      setupPolling();
     }).catch(function (e) {
       bootError = 'ОШИБКА загрузки: ' + String(e && e.message || e);
       var s = el('status');

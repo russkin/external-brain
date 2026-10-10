@@ -10,6 +10,7 @@ const ASSETS = [
   './src/diag.js',
   './src/settings.js',
   './src/history.js',
+  './src/triggers.js',
   './manifest.webmanifest',
   './icon.svg',
   './icon-192.png',

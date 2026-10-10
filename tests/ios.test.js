@@ -15,6 +15,7 @@ const diagSrc = fs.readFileSync(path.join(root, 'src/diag.js'), 'utf8');
 const historySrc = fs.readFileSync(path.join(root, 'src/history.js'), 'utf8');
 const settingsSrc = fs.readFileSync(path.join(root, 'src/settings.js'), 'utf8');
 const searchSrc = fs.readFileSync(path.join(root, 'src/search.js'), 'utf8');
+const trigSrc = fs.readFileSync(path.join(root, 'src/triggers.js'), 'utf8');
 
 function appVersion() {
   const m = appSrc.match(/APP_VERSION\s*=\s*'([^']+)'/);
@@ -56,11 +57,11 @@ describe('service worker: методика кэша', () => {
   });
   it('проверка версии идёт мимо кэша', () => {
     assert.ok(swSrc.includes('nocache='), 'нет bypass nocache в sw.js');
-    assert.ok(appSrc.includes('?nocache='), 'нет проверки версии в app.js');
-    assert.ok(appSrc.includes('caches.delete'), 'нет чистки кэша при обновлении');
+    assert.ok(trigSrc.includes('?nocache='), 'нет проверки версии в src/triggers.js');
+    assert.ok(trigSrc.includes('caches.delete'), 'нет чистки кэша при обновлении');
   });
   it('в кэш положены все части оболочки', () => {
-    for (const u of ["'./'", 'index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'docs/USER_GUIDE.html']) {
+    for (const u of ["'./'", 'index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'src/triggers.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'docs/USER_GUIDE.html']) {
       assert.ok(swSrc.includes(u), 'нет ' + u + ' в ASSETS');
     }
   });
@@ -122,7 +123,7 @@ describe('устойчивость к рассинхрону кэшей', () => 
     assert.ok(appSrc.includes("clear.textContent = 'Поделиться'") &&
       appSrc.includes("cancel.style.display = 'none'"),
       'нет кнопок OK+Поделиться / скрытой Отмены');
-    assert.ok(diagSrc.includes("lines.push('Журнал:')") && appSrc.includes("EBDiag.push('ошибка синка: "),
+    assert.ok(diagSrc.includes("lines.push('Журнал:')") && trigSrc.includes("EBDiag.push('ошибка синка: "),
       'нет журнала синк-ошибок в диагностике');
     /* Постоянная («вечная») копия: кнопка + автокопия при обновлении версии. */
     assert.ok(storeSrc.includes('external-brain-pin-v1') && storeSrc.includes('external-brain-pin-ver-v1'),
@@ -194,20 +195,21 @@ describe('устойчивость к рассинхрону кэшей', () => 
       html.includes('id="repoCancelBtn"'),
       'в окне настроек нет двух полей и кнопок Сохранить/Отмена');
     assert.ok(settingsSrc.includes('только для администратора'), 'нет предупреждения для администратора');
-    /* v74: светофор «!» при 409/422 + тап по нему — принудительный синк; сеть ⇅ в шапке. */
-    assert.ok(appSrc.includes("color === 'red' && /github-put (409|422)/.test(err)") &&
-      appSrc.includes("n.textContent = alert ? '!' : ''"),
+    /* v74: светофор «!» при 409/422 + тап по нему — принудительный синк; сеть ⇅ в шапке.
+     * Движок и триггеры — модуль src/triggers.js (этап 5). */
+    assert.ok(trigSrc.includes("color === 'red' && /github-put (409|422)/.test(err)") &&
+      trigSrc.includes("n.textContent = alert ? '!' : ''"),
       'нет красного «!» на светофоре при 409/422');
-    assert.ok(appSrc.includes("on('syncLight', 'click', function () { doSync(true); })"),
+    assert.ok(trigSrc.includes("on('syncLight', 'click', function () { doSync(true); })"),
       'нет тапа по светофору — принудительного синка');
-    assert.ok(appSrc.includes('function renderNet()') && appSrc.includes("net.textContent = '⇅'") &&
-      appSrc.includes("' МБ/с'") && appSrc.includes("addEventListener('offline', renderNet)"),
+    assert.ok(trigSrc.includes('function renderNet()') && trigSrc.includes("net.textContent = '⇅'") &&
+      trigSrc.includes("' МБ/с'") && trigSrc.includes("addEventListener('offline', renderNet)"),
       'нет индикатора сети (цвет/МБ/с) в шапке');
     assert.ok(html.includes('id="netStatus"') && html.includes('id="netType"'),
       'нет элементов сети в шапке');
     /* v75: журнал синка уходит на сервер при github-ошибке (как в purchases). */
     assert.ok(diagSrc.includes('function maybePublishJournal()') &&
-      appSrc.includes("if (/github-/.test(lastErrMsg)) window.EBDiag.maybePublishJournal();") &&
+      trigSrc.includes("if (/github-/.test(lastErrMsg)) window.EBDiag.maybePublishJournal();") &&
       diagSrc.includes("'logs/sync-'"),
       'нет публикации журнала в logs/');
     assert.ok(diagSrc.includes("now - lastJournalPublish < 15 * 60 * 1000"),
@@ -215,9 +217,11 @@ describe('устойчивость к рассинхрону кэшей', () => 
     assert.ok(diagSrc.includes('external-brain-device-v1') &&
       diagSrc.includes("'Публикация журнала: '") && diagSrc.includes("' · id '"),
       'нет deviceId/строк публикации в диагностике');
-    assert.ok(appSrc.includes('window.EBDiag.push(') && appSrc.includes('window.EBDiag.save(') &&
+    assert.ok(trigSrc.includes('window.EBDiag.push(') && trigSrc.includes('window.EBDiag.save(') &&
       appSrc.includes('window.EBDiag.load()'),
-      'движок синка не пишет в журнал модуля');
+      'движок синка не пишет в журнал модуля / метки не восстанавливаются');
+    assert.ok(appSrc.includes('window.EBTriggers.restoreLog(window.EBDiag.load())'),
+      'boot не отдаёт журнал модулю триггеров');
   });
 });
 
@@ -790,7 +794,7 @@ describe('логика вызывается с state.tasks', () => {
   });
   it('совместимость с Safari 15: без нового синтаксиса и API', () => {
     const logic = fs.readFileSync(path.join(root, 'src/logic.js'), 'utf8');
-    for (const [name, src] of [['app.js', appSrc], ['store.js', storeSrc], ['sync.js', syncSrc], ['logic.js', logic]]) {
+    for (const [name, src] of [['app.js', appSrc], ['store.js', storeSrc], ['sync.js', syncSrc], ['logic.js', logic], ['triggers.js', trigSrc]]) {
       assert.ok(!/\?\./.test(src) && !/\?\?/.test(src), 'опциональная цепочка в ' + name);
       assert.ok(!/async\s+function/.test(src), 'async/await в ' + name);
       assert.ok(!/replaceAll|matchAll|allSettled|structuredClone|randomUUID/.test(src),
@@ -822,18 +826,43 @@ describe('логика вызывается с state.tasks', () => {
 });
 
 describe('синк: триггеры и протокол', () => {
-  it('возврат на вкладку слушается тремя событиями', () => {
-    assert.ok(appSrc.includes('visibilitychange'), 'нет visibilitychange');
-    assert.ok(appSrc.includes("addEventListener('focus'"), 'нет focus');
-    assert.ok(appSrc.includes('pageshow'), 'нет pageshow');
+  it('возврат на вкладку слушается тремя событиями (модуль src/triggers.js)', () => {
+    assert.ok(trigSrc.includes('visibilitychange'), 'нет visibilitychange');
+    assert.ok(trigSrc.includes("addEventListener('focus'"), 'нет focus');
+    assert.ok(trigSrc.includes('pageshow'), 'нет pageshow');
+    assert.ok(!appSrc.includes('visibilitychange') && !appSrc.includes('pageshow'),
+      'триггеры возврата остались в app.js (вынос нечистый)');
   });
   it('фоновый опрос раз в 60 сек, debounce 2 сек', () => {
-    assert.ok(appSrc.includes('60000'), 'нет опроса 60 сек');
-    assert.ok(/2000/.test(appSrc), 'нет debounce 2 сек');
+    assert.ok(trigSrc.includes('60000'), 'нет опроса 60 сек');
+    assert.ok(/2000/.test(trigSrc), 'нет debounce 2 сек');
+    assert.ok(!appSrc.includes('60000'), 'фоновый опрос остался в app.js');
   });
   it('single-flight: летит один, повтор в очереди', () => {
-    assert.ok(appSrc.includes('syncFlying'), 'нет флага syncFlying');
-    assert.ok(appSrc.includes('syncQueued'), 'нет очереди syncQueued');
+    assert.ok(trigSrc.includes('syncFlying'), 'нет флага syncFlying');
+    assert.ok(trigSrc.includes('syncQueued'), 'нет очереди syncQueued');
+    assert.ok(!appSrc.includes('syncFlying'), 'флаги single-flight остались в app.js');
+  });
+  it('движок и триггеры — модуль src/triggers.js (этап 5)', () => {
+    for (const fn of ['scheduleSync', 'doSync', 'setLight', 'renderNet', 'checkUpdate',
+      'pokeSwUpdate', 'setupPolling', 'onReady', 'getSync', 'restoreLog', 'init']) {
+      assert.ok(trigSrc.includes('function ' + fn), 'нет ' + fn + ' в src/triggers.js');
+    }
+    assert.ok(appSrc.includes('function doSync(force) { return window.EBTriggers.doSync(force); }') &&
+      appSrc.includes('function scheduleSync() { return window.EBTriggers.scheduleSync(); }') &&
+      appSrc.includes('function renderNet() { window.EBTriggers.renderNet(); }') &&
+      appSrc.includes('function getSyncInfo() { return window.EBTriggers.getSync(); }'),
+      'app.js не ходит в синк через тонкие алиасы (вынос нечистый)');
+    assert.ok(!appSrc.includes('function setLight') && !appSrc.includes('function checkUpdate') &&
+      !appSrc.includes('function pokeSwUpdate') && !appSrc.includes('function setupPolling'),
+      'функции триггеров остались в app.js (вынос нечистый)');
+    assert.ok(appSrc.includes('EBTriggers.init({') && appSrc.includes('EBTriggers.onReady()'),
+      'app.js не отдаёт контекст модулю триггеров / не запускает первый синк');
+    assert.ok(trigSrc.includes('getState()') && trigSrc.includes('renderStatus') &&
+      trigSrc.includes('getVersion()'),
+      'модуль читает общее состояние напрямую, а не через контекст');
+    assert.ok(html.includes('src/triggers.js') && swSrc.includes('src/triggers.js'),
+      'модуль не подключён (index.html / sw.js)');
   });
   it('sync.js: LWW по задачам, no-store, ретраи 409/422', () => {
     assert.ok(syncSrc.includes('mergeTasks'), 'нет mergeTasks в sync');
@@ -859,7 +888,7 @@ describe('PWA-оболочка', () => {
     assert.ok(fs.existsSync(path.join(root, 'icon-512.png')), 'нет icon-512.png');
   });
   it('все скрипты подключены', () => {
-    for (const s of ['src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'store.js', 'sync.js', 'app.js']) {
+    for (const s of ['src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'src/triggers.js', 'store.js', 'sync.js', 'app.js']) {
       assert.ok(html.includes(s), 'нет ' + s + ' в index.html');
     }
   });
