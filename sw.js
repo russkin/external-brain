@@ -11,6 +11,7 @@ const ASSETS = [
   './src/settings.js',
   './src/history.js',
   './src/triggers.js',
+  './src/gestures.js',
   './manifest.webmanifest',
   './icon.svg',
   './icon-192.png',

@@ -40,6 +40,7 @@ jobs:
           cp src/settings.js _site/src/settings.js
           cp src/history.js _site/src/history.js
           cp src/triggers.js _site/src/triggers.js
+          cp src/gestures.js _site/src/gestures.js
           cp docs/USER_GUIDE.html _site/docs/USER_GUIDE.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

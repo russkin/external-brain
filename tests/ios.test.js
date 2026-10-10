@@ -16,6 +16,7 @@ const historySrc = fs.readFileSync(path.join(root, 'src/history.js'), 'utf8');
 const settingsSrc = fs.readFileSync(path.join(root, 'src/settings.js'), 'utf8');
 const searchSrc = fs.readFileSync(path.join(root, 'src/search.js'), 'utf8');
 const trigSrc = fs.readFileSync(path.join(root, 'src/triggers.js'), 'utf8');
+const gestSrc = fs.readFileSync(path.join(root, 'src/gestures.js'), 'utf8');
 
 function appVersion() {
   const m = appSrc.match(/APP_VERSION\s*=\s*'([^']+)'/);
@@ -61,7 +62,7 @@ describe('service worker: методика кэша', () => {
     assert.ok(trigSrc.includes('caches.delete'), 'нет чистки кэша при обновлении');
   });
   it('в кэш положены все части оболочки', () => {
-    for (const u of ["'./'", 'index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'src/triggers.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'docs/USER_GUIDE.html']) {
+    for (const u of ["'./'", 'index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'src/triggers.js', 'src/gestures.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'docs/USER_GUIDE.html']) {
       assert.ok(swSrc.includes(u), 'нет ' + u + ' в ASSETS');
     }
   });
@@ -158,8 +159,8 @@ describe('устойчивость к рассинхрону кэшей', () => 
     assert.ok(appSrc.includes("isTrailing ? 'Новая задача…' : '…'"),
       'пустая задача не отличается плейсхолдером от черновика');
     /* v69: grabDy — при захвате, иначе дыра недобирает вверх. */
-    assert.ok(appSrc.includes('grabDy = e.clientY - div.getBoundingClientRect().top') &&
-      appSrc.includes('if (grabDy == null)'),
+    assert.ok(gestSrc.includes('grabDy = e.clientY - div.getBoundingClientRect().top') &&
+      gestSrc.includes('if (grabDy == null)'),
       'grabDy меряется в pointerdown, а не при старте режима');
     /* v70: тап мимо с пустым черновиком создаёт пустую задачу —
      * но только по свежему pointerdown (программный blur не плодит пустые). */
@@ -174,16 +175,16 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'atStart считает пустую строку вставкой сверху');
     /* v70: после драга ЧЕРЕЗ черновик якорь поля пересчитывается по DOM —
      * иначе data-id-порядок не меняется и render возвращает всё назад. */
-    assert.ok(appSrc.includes('var reordered = persistLineOrder(preDrop)') &&
-      appSrc.includes('trailingAfterId = newAfterB'),
+    assert.ok(gestSrc.includes('var reordered = persistLineOrder(preDrop)') &&
+      gestSrc.includes('dR.afterId = newAfterB'),
       'нет пересчёта якоря черновика после драга');
     /* Отмена возвращает и отступ: слепок истории — до applyDropIndent,
      * иначе ↩ возвращал порядок, но не уровень (родитель не уходил с 1 на 0). */
-    assert.ok(appSrc.includes('var preDrop = (di !== -1 && di !== oldPos) ? snapFull() : null'),
+    assert.ok(gestSrc.includes('var preDrop = (di !== -1 && di !== oldPos) ? C.snapFull() : null'),
       'нет досдвигового слепка перед applyDropIndent');
-    assert.ok(appSrc.includes('function persistLineOrder(beforeOverride)'),
+    assert.ok(gestSrc.includes('function persistLineOrder(beforeOverride)'),
       'persistLineOrder не принимает досдвиговый слепок');
-    assert.ok(appSrc.includes('if (!reordered && preDrop && snapTasks() !== preDrop.tasks)'),
+    assert.ok(gestSrc.includes('if (!reordered && preDrop && C.snapTasks() !== preDrop.tasks)'),
       'чистое изменение отступа без сдвига порядка не пишется в историю');
     assert.ok(html.includes('id="repoBtn"') && settingsSrc.includes('on(\'repoBtn\''),
       'нет пункта «Репозиторий и токен»');
@@ -240,6 +241,7 @@ describe('логика вызывается с state.tasks', () => {
     const fns = ['createTask', 'clarifyTask', 'completeTask', 'reopenBranch', 'removeTask', 'setIndent'];
     for (const fn of fns) {
       assert.ok(!new RegExp('L\\.' + fn + '\\(state[^.]').test(appSrc), 'найден вызов ' + fn + '(state, …)');
+      assert.ok(!new RegExp('L\\.' + fn + '\\(state[^.]').test(gestSrc), 'найден вызов ' + fn + '(state, …) в жестах');
     }
     for (const fn of ['createTask', 'clarifyTask', 'removeTask', 'getTask', 'setIndent', 'reopenBranch']) {
       assert.ok(appSrc.includes('L.' + fn + '(state.tasks,'), 'нет вызова ' + fn + '(state.tasks, …)');
@@ -262,21 +264,21 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('Enter'), 'нет Enter для новой строки');
   });
   it('отступ по месту отпускания: родители→0, внутри→от соседа', () => {
-    assert.ok(appSrc.includes('applyDropIndent'), 'нет пересчёта отступа при drop');
-    assert.ok(appSrc.includes('prevInd'), 'не смотрим соседа сверху');
-    assert.ok(appSrc.includes('nextInd'), 'не смотрим соседа снизу');
+    assert.ok(gestSrc.includes('applyDropIndent'), 'нет пересчёта отступа при drop');
+    assert.ok(gestSrc.includes('prevInd'), 'не смотрим соседа сверху');
+    assert.ok(gestSrc.includes('nextInd'), 'не смотрим соседа снизу');
   });
   it('группы отступом: сдвиг за grip, наследование, потолок +1', () => {
     assert.ok(appSrc.includes('INDENT_STEP'), 'нет шага отступа');
     assert.ok(appSrc.includes('marginLeft'), 'отступ не применяется к строке');
     assert.ok(appSrc.includes('lineIndent'), 'нет чтения уровня отступа');
-    assert.ok(appSrc.includes('indentBounds'), 'нет потолка «сосед сверху +1»');
+    assert.ok(gestSrc.includes('indentBounds'), 'нет потолка «сосед сверху +1»');
     assert.ok(appSrc.includes('{ indent:'), 'новая строка не наследует отступ');
-    assert.ok(/startIndent\(\)[\s\S]{0,1200}lineIndent\(kt\) > lv0/.test(appSrc),
+    assert.ok(/startIndent\(\)[\s\S]{0,1200}C\.lineIndent\(kt\) > lv0/.test(gestSrc),
       'сдвиг не собирает ветку — внучки отрываются');
-    assert.ok(appSrc.includes('lineIndent(kt) + delta'),
+    assert.ok(gestSrc.includes('C.lineIndent(kt) + delta'),
       'сдвиг двигает одну строку вместо ветки');
-    assert.ok(appSrc.includes('expandParentAbove(lvl)'),
+    assert.ok(gestSrc.includes('expandParentAbove(lvl)'),
       'сдвиг под свёрнутого прячет строку (родитель не разворачивается)');
     assert.ok(appSrc.includes('function expandForAnchor(anchorId, indent)'),
       'создание под свёрнутым прячет задачу с рождения');
@@ -312,7 +314,7 @@ describe('логика вызывается с state.tasks', () => {
   });
   it('свайп-выполнено и секция под полем ввода', () => {
     assert.ok(html.includes('doneflag') || appSrc.includes('doneflag'), 'нет флага выполнено');
-    assert.ok(appSrc.includes('swiped'), 'нет раскрытия свайпом');
+    assert.ok(gestSrc.includes('swiped'), 'нет раскрытия свайпом');
     assert.ok(appSrc.includes('toggleDoneSlide'), 'нет завершения со слайдом');
     assert.ok(appSrc.includes('L.doneList(state.tasks)'), 'нет секции выполненных');
     assert.ok(appSrc.includes('done-sep'), 'нет разделителя выполненных');
@@ -332,7 +334,7 @@ describe('логика вызывается с state.tasks', () => {
       'обход предков по своему порядку: tombstone сдвигают индексы');
     assert.ok(appSrc.includes('is-done'), 'нет зачёркивания');
     assert.ok(html.includes('user-select'), 'свайп проигрывает выделению текста');
-    assert.ok(appSrc.includes('_swOpen'), 'состояние свайпа рассинхронизировано');
+    assert.ok(gestSrc.includes('_swOpen'), 'состояние свайпа рассинхронизировано');
     assert.ok(html.includes('translateX(-108px)'), 'флаг наезжает на поле задачи');
     assert.ok(appSrc.includes('activeElement'), 'курсор остаётся в поле после выполнения');
   });
@@ -357,7 +359,7 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('trailingIndent'), 'у черновика нет своего отступа');
     assert.ok(appSrc.includes('Backspace'), 'нет сброса пустого поля');
     assert.ok(appSrc.includes('placeTaskTop'), 'нет создания в начало');
-    assert.ok(appSrc.includes('не таскаем'), 'нет запрета drag выполненных');
+    assert.ok(gestSrc.includes('не таскаем'), 'нет запрета drag выполненных');
   });
   it('Backspace: сцепка с предыдущей, черновик создаётся и курсор уезжает вверх', () => {
     assert.ok(appSrc.includes('function mergeTaskIntoPrev'), 'нет сцепки строк по Backspace');
@@ -401,8 +403,8 @@ describe('логика вызывается с state.tasks', () => {
   it('Сворачивание: выполненные дети прячутся, точки и 📁 смотрят в полном порядке', () => {
     assert.ok(appSrc.includes('function hasKidsFull'), 'нет проверки детей в полном порядке');
     assert.ok(appSrc.includes('function fullList'), 'нет полного списка задач');
-    var iF = appSrc.indexOf('function finish(e)');
-    var fBody = appSrc.slice(iF, iF + 2600);
+    var iF = gestSrc.indexOf('function finish(e)');
+    var fBody = gestSrc.slice(iF, iF + 2600);
     assert.ok(fBody.includes('hasKidsFull(tapped.id)'),
       'тап по точкам смотрит только на живых детей');
     var iS = appSrc.indexOf('function setAllCollapsed');
@@ -417,18 +419,19 @@ describe('логика вызывается с state.tasks', () => {
       'секция показывает не всех выполненных');
   });
   it('Захват точек у черновика: задача создаётся, фокус уходит, жест идёт по строке', () => {
-    var iG = appSrc.indexOf('var draftRowG');
+    var iG = gestSrc.indexOf('var draftRowG');
     assert.ok(iG !== -1, 'нет коммита черновика при захвате grip');
-    var gBody = appSrc.slice(iG, appSrc.indexOf('var aeNow = document.activeElement', iG));
-    assert.ok(gBody.includes('insertTaskAfter(anchorG, commitTxt, indG'),
+    var gBody = gestSrc.slice(iG, gestSrc.indexOf('var aeNow = document.activeElement', iG));
+    assert.ok(gBody.includes('C.insertTaskAfter(anchorG, commitTxt, indG'),
       'черновик не создаётся задачей на своём месте');
     assert.ok(gBody.includes('div.setAttribute(\'data-id\', madeG.id)'),
       'узел жеста не становится задачей');
     assert.ok(gBody.includes('div.removeAttribute(\'data-trailing\')'),
       'узел жеста остаётся черновиком');
-    assert.ok(gBody.includes('trailingText = \'\''), 'текст черновика не очищен');
-    assert.ok(gBody.includes('effTrailingIndent()'), 'отступ черновика не взят');
-    assert.ok(appSrc.indexOf('var draftRowG') < appSrc.indexOf('var focusInDraft'),
+    assert.ok(gBody.includes('C.setDraft({ afterId: null, text: \'\', indent: null })'),
+      'текст черновика не очищен');
+    assert.ok(gBody.includes('C.effTrailingIndent()'), 'отступ черновика не взят');
+    assert.ok(gestSrc.indexOf('var draftRowG') < gestSrc.indexOf('var focusInDraft'),
       'коммит черновика идёт после вычисления возврата курсора');
   });
   it('Enter в середине: хвост уходит в задачу ниже, курсор в её начало', () => {
@@ -501,13 +504,13 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('snapChainLive'), 'курсор путает концевое поле с вызванным');
   });
   it('перетаскивание пустого поля пишется в историю', () => {
-    assert.ok(appSrc.includes('dragUiBefore'), 'старт drag не запоминает поле');
-    assert.ok(appSrc.includes('dragUiBefore.afterId'), 'возврат поля не знает старое место');
+    assert.ok(gestSrc.includes('dragUiBefore'), 'старт drag не запоминает поле');
+    assert.ok(gestSrc.includes('dragUiBefore.afterId'), 'возврат поля не знает старое место');
   });
   it('перенос черновика берёт отступ соседа сверху', () => {
-    assert.ok(appSrc.includes('var wantInd'), 'нет расчёта отступа при посадке поля');
-    assert.ok(appSrc.includes('trailingIndent = wantInd'), 'перенос поля не ставит отступ по месту');
-    assert.ok(appSrc.includes('wantInd !== oldInd'), 'смена только отступа не пишется в историю');
+    assert.ok(gestSrc.includes('var wantInd'), 'нет расчёта отступа при посадке поля');
+    assert.ok(gestSrc.includes('dL.indent = wantInd'), 'перенос поля не ставит отступ по месту');
+    assert.ok(gestSrc.includes('wantInd !== oldInd'), 'смена только отступа не пишется в историю');
   });
   it('показ стека ↩ в диагностике убран (v121)', () => {
     assert.ok(!diagSrc.includes('Стек ↩') && !diagSrc.includes('getHistoryPeek'),
@@ -571,11 +574,11 @@ describe('логика вызывается с state.tasks', () => {
       'поле сверху игнорирует отступ из состояния');
   });
   it('захват grip не гасит клавиатуру, pin держит страницу, коммит не рендерит', () => {
-    assert.ok(appSrc.includes('var dragActive = false'), 'нет флага жеста');
-    assert.ok(appSrc.includes('if (!dragActive) render()'), 'mutate рендерит во время жеста');
-    var iP = appSrc.indexOf("grip.addEventListener('pointerdown'");
+    assert.ok(gestSrc.includes('var dragActive = false'), 'нет флага жеста');
+    assert.ok(appSrc.includes('if (!isDragActive()) render()'), 'mutate рендерит во время жеста');
+    var iP = gestSrc.indexOf("grip.addEventListener('pointerdown'");
     assert.ok(iP !== -1, 'нет обработчика захвата grip');
-    var block = appSrc.slice(iP, iP + 3400);
+    var block = gestSrc.slice(iP, iP + 3400);
     assert.ok(block.includes('dragActive = true'), 'флаг не поднимается на захвате');
     assert.ok(!block.includes('.blur()'),
       'клавиатуру гасят на захвате — прыжок вьюпорта посреди touch роняет жест');
@@ -585,43 +588,43 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(block.includes('refocusDraft'), 'черновик не запоминается для возврата курсора');
     assert.ok(block.includes("div.getAttribute('data-trailing')"),
       'возврат курсора не привязан к переносу самого поля (чужой жест возвращает фокус)');
-    var iF = appSrc.indexOf('function finish(e)');
-    assert.ok(iF !== -1 && appSrc.slice(iF, iF + 700).includes('dragActive = false'),
+    var iF = gestSrc.indexOf('function finish(e)');
+    assert.ok(iF !== -1 && gestSrc.slice(iF, iF + 700).includes('dragActive = false'),
       'флаг не снимается на финише жеста');
-    var fin = appSrc.slice(iF, iF + 2200);
+    var fin = gestSrc.slice(iF, iF + 2200);
     assert.ok(fin.includes('.blur()'), 'фокус не снимается на финише жеста');
-    assert.ok(fin.includes('lastPDts = Date.now()'),
+    assert.ok(fin.includes('C.touchLastPD(grip)'),
       'гард blur-создания чужого черновика не оживлён перед отложенным blur');
-    assert.ok(fin.includes('focusTrailing()'), 'поле не возвращает курсор после переноса');
+    assert.ok(fin.includes('C.focusTrailing()'), 'поле не возвращает курсор после переноса');
   });
   it('жест держит прокрутку, порог вертикали симметричен, захват перехватывается', () => {
-    assert.ok(appSrc.includes('function pinScroll'), 'нет pinScroll');
-    assert.ok(appSrc.includes("window.addEventListener('scroll', onPinScroll)"),
+    assert.ok(gestSrc.includes('function pinScroll'), 'нет pinScroll');
+    assert.ok(gestSrc.includes("window.addEventListener('scroll', onPinScroll)"),
       'скролл не слушается на время пина');
-    assert.ok(appSrc.includes('window.scrollTo(0, pinY)'), 'пин не возвращает страницу на место');
-    assert.ok(appSrc.includes('unpinScroll(500)'),
+    assert.ok(gestSrc.includes('window.scrollTo(0, pinY)'), 'пин не возвращает страницу на место');
+    assert.ok(gestSrc.includes('unpinScroll(500)'),
       'закрытие клавиатуры после жеста не подстраховано пином');
-    assert.ok(appSrc.includes('Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx) * 2'),
+    assert.ok(gestSrc.includes('Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx) * 2'),
       'порог вертикали не симметричен горизонтали — дрожь пальца лочит не тот режим');
-    var iA = appSrc.indexOf('function edgeTick');
-    assert.ok(iA !== -1 && appSrc.slice(iA, iA + 800).includes('pinY'),
+    var iA = gestSrc.indexOf('function edgeTick');
+    assert.ok(iA !== -1 && gestSrc.slice(iA, iA + 800).includes('pinY'),
       'автопрокрутка не двигает пин — страница дёрнется обратно');
-    var iL = appSrc.indexOf("grip.addEventListener('lostpointercapture'");
-    assert.ok(iL !== -1 && appSrc.slice(iL, iL + 400).includes('setPointerCapture'),
+    var iL = gestSrc.indexOf("grip.addEventListener('lostpointercapture'");
+    assert.ok(iL !== -1 && gestSrc.slice(iL, iL + 400).includes('setPointerCapture'),
       'упавший захват не перехватывается заново');
   });
   it('свайп и отметка выполненной снимают фокус, поле уходит с веткой', () => {
-    var iS = appSrc.indexOf('function wireLineSwipe');
-    var swBlock = appSrc.slice(iS, appSrc.indexOf('function commitTrailingIntoBranch'));
-    assert.ok(swBlock.includes('draftTapBusy = true'), 'свайп не гасит blur-создание черновика');
+    var iS = gestSrc.indexOf('function wireLineSwipe');
+    var swBlock = gestSrc.slice(iS, gestSrc.indexOf('function commitTrailingIntoBranch'));
+    assert.ok(swBlock.includes('C.setDraftTapBusy(true)'), 'свайп не гасит blur-создание черновика');
     assert.ok(swBlock.includes('.blur()'), 'свайп не снимает фокус с полей');
     assert.ok(swBlock.includes('dragActive = true'), 'render во время свайпа не подавлен');
     assert.ok(swBlock.includes('dragActive = false'), 'подавление render не снимается на конце свайпа');
     assert.ok(swBlock.includes('setPointerCapture'), 'отпускание мимо строки оставляет флаг жеста');
-    assert.ok(appSrc.includes('function commitTrailingIntoBranch'), 'нет доводки поля при завершении ветки');
-    assert.ok(appSrc.includes('fi <= base'), 'отступ поля не углубляется под родителем ветки');
-    var iT = appSrc.indexOf('function toggleDoneSlide');
-    var tBlock = appSrc.slice(iT, appSrc.indexOf('function hasLiveParent'));
+    assert.ok(gestSrc.includes('function commitTrailingIntoBranch'), 'нет доводки поля при завершении ветки');
+    assert.ok(gestSrc.includes('fi <= base'), 'отступ поля не углубляется под родителем ветки');
+    var iT = gestSrc.indexOf('function toggleDoneSlide');
+    var tBlock = gestSrc.slice(iT, gestSrc.indexOf('function persistLineOrder'));
     assert.ok(tBlock.includes('commitTrailingIntoBranch(taskId)'), 'поле не до-создаётся при отметке');
     assert.ok(tBlock.includes("tagName === 'TEXTAREA'"), 'отметка не снимает фокус с полей');
   });
@@ -641,10 +644,10 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(mkBlock.includes('durchip'), 'строка не рисует метку времени');
     assert.ok(mkBlock.includes('L.fmtDur(opts.estMin)'), 'метка без формата из логики');
     assert.ok(mkBlock.includes('openDuration(id)'), 'тап по метке не открывает модалку');
-    var iW = appSrc.indexOf('function wireLineSwipe');
-    var swBlock = appSrc.slice(iW, appSrc.indexOf('function commitTrailingIntoBranch'));
+    var iW = gestSrc.indexOf('function wireLineSwipe');
+    var swBlock = gestSrc.slice(iW, gestSrc.indexOf('function commitTrailingIntoBranch'));
     assert.ok(swBlock.includes('dx > 48'), 'нет порога свайпа вправо');
-    assert.ok(swBlock.includes('openDuration(taskId)'), 'свайп вправо не открывает время');
+    assert.ok(swBlock.includes('C.openDuration(taskId)'), 'свайп вправо не открывает время');
     assert.ok(swBlock.includes('swHadFlag = true') && swBlock.includes('!swHadFlag'),
       'возврат из-под раскрытого флага не глушит открытие времени');
     assert.ok(appSrc.includes('if (hasKidsFull(taskId)) return;'),
@@ -689,54 +692,56 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(html.includes('overflow-y'), 'нет скрытия скролла поля');
   });
   it('групповой drag: дети прячутся под родителя и едут с ним', () => {
-    assert.ok(appSrc.includes('kids'), 'дети не собираются при drag');
-    assert.ok(appSrc.includes('holeShift'), 'дыра не покрывает весь блок');
-    assert.ok(appSrc.includes("cr.classList.contains('done-sep')"),
+    assert.ok(gestSrc.includes('kids'), 'дети не собираются при drag');
+    assert.ok(gestSrc.includes('holeShift'), 'дыра не покрывает весь блок');
+    assert.ok(gestSrc.includes("cr.classList.contains('done-sep')"),
       'разделитель выполненных вне каркаса покоя (уезжает при drag)');
-    assert.ok(appSrc.includes('if (fr[phi].sep) break;'),
+    assert.ok(gestSrc.includes('if (fr[phi].sep) break;'),
       'дыра может уйти в раздел выполненных');
   });
   it('каркас drag не считает спрятанных классом: дыра не плывёт мимо свёрнутых', () => {
-    assert.ok(appSrc.includes('collapsed-kid') && appSrc.includes('rowShown'),
+    assert.ok(appSrc.includes('collapsed-kid') && gestSrc.includes('rowShown'),
       'нет проверки видимости ряда (класс collapsed-kid)');
-    assert.ok(appSrc.includes('if (!rowShown(cr)) continue'),
+    assert.ok(gestSrc.includes('if (!rowShown(cr)) continue'),
       'замороженный каркас включает спрятанные ряды (фантомные зазоры)');
-    assert.ok(appSrc.includes('visKids'),
+    assert.ok(gestSrc.includes('visKids'),
       'зазоры дыры считаются по всем детям, включая невидимых');
-    assert.ok(appSrc.includes('if (row2 === div || !row2.parentNode || !rowShown(row2)) continue'),
+    assert.ok(gestSrc.includes('if (row2 === div || !row2.parentNode || !rowShown(row2)) continue'),
       'слепок посадки включает спрятанные ряды');
   });
   it('позиция страницы не прыгает, автопрокрутка не дёргает', () => {
     assert.ok(appSrc.includes('keepY'), 'скролл не сохраняется при перерисовке');
     assert.ok(appSrc.includes('scrollTo(0, keepY)'), 'скролл не возвращается');
-    assert.ok(appSrc.includes('minHeight'), 'высота списка не фиксируется на время drag');
-    assert.ok(appSrc.includes('lastScrollTs'), 'автопрокрутка без троттлинга');
-    assert.ok(appSrc.includes('dragDist'), 'автопрокрутка без порога движения');
-    assert.ok(appSrc.includes('setInterval(edgeTick, 20)'),
+    assert.ok(gestSrc.includes('minHeight'), 'высота списка не фиксируется на время drag');
+    assert.ok(gestSrc.includes('lastScrollTs'), 'автопрокрутка без троттлинга');
+    assert.ok(gestSrc.includes('dragDist'), 'автопрокрутка без порога движения');
+    assert.ok(gestSrc.includes('setInterval(edgeTick, 20)'),
       'автопрокрутка только по движению пальца — стоящий палец не крутит');
-    assert.ok(appSrc.includes('pinY = window.pageYOffset'),
+    assert.ok(gestSrc.includes('pinY = window.pageYOffset'),
       'пин убегает дальше клампа — дёргает страницу обратно');
-    assert.ok(appSrc.includes('updateHole(lastY)'),
+    assert.ok(gestSrc.includes('updateHole(lastY)'),
       'дыра не едет за страницей на тиках автопрокрутки');
-    assert.ok(/function finish\(e\)[\s\S]{0,300}stopEdge\(\);/.test(appSrc),
+    assert.ok(/function finish\(e\)[\s\S]{0,300}stopEdge\(\);/.test(gestSrc),
       'таймер автопрокрутки не гасится на финише жеста');
   });
   it('перетаскивание: слепок на захвате, сдвиги соседей, посадка после', () => {
-    assert.ok(appSrc.includes('pointerdown'), 'нет pointerdown на grip');
-    assert.ok(appSrc.includes('pointermove'), 'нет pointermove для живого drag');
-    assert.ok(appSrc.includes('pointerup'), 'нет pointerup для завершения drag');
-    assert.ok(appSrc.includes('setPointerCapture'), 'нет захвата указателя');
-    assert.ok(!appSrc.includes('phold'), 'placeholder-раскладка вместо сдвигов');
-    assert.ok(!appSrc.includes('cloneNode'), 'призрак вместо самой строки');
-    assert.ok(appSrc.includes('holeShift'), 'нет высоты блока для дыры');
-    assert.ok(appSrc.includes('setHole'), 'дыра не открывается сдвигами');
-    assert.ok(appSrc.includes('PEN'), 'нет порога въезда ведущим краем');
-    assert.ok(appSrc.includes('divH'), 'нет высоты тянущейся для симметрии вверх/вниз');
-    assert.ok(appSrc.includes('.18s linear'), 'анимация не линейная');
-    assert.ok(appSrc.includes('drag-active'), 'нет drag-active состояния');
-    assert.ok(appSrc.includes('persistLineOrder'), 'порядок не сохраняется');
-    assert.ok(appSrc.includes('lostpointercapture'), 'нет страховки завершения drag');
-    assert.ok(appSrc.includes('function dropMargins') && appSrc.includes('dropMargins(div, kids)'),
+    assert.ok(gestSrc.includes('pointerdown'), 'нет pointerdown на grip');
+    assert.ok(gestSrc.includes('pointermove'), 'нет pointermove для живого drag');
+    assert.ok(gestSrc.includes('pointerup'), 'нет pointerup для завершения drag');
+    assert.ok(gestSrc.includes('setPointerCapture'), 'нет захвата указателя');
+    assert.ok(!appSrc.includes('phold') && !gestSrc.includes('phold'),
+      'placeholder-раскладка вместо сдвигов');
+    assert.ok(!appSrc.includes('cloneNode') && !gestSrc.includes('cloneNode'),
+      'призрак вместо самой строки');
+    assert.ok(gestSrc.includes('holeShift'), 'нет высоты блока для дыры');
+    assert.ok(gestSrc.includes('setHole'), 'дыра не открывается сдвигами');
+    assert.ok(gestSrc.includes('PEN'), 'нет порога въезда ведущим краем');
+    assert.ok(gestSrc.includes('divH'), 'нет высоты тянущейся для симметрии вверх/вниз');
+    assert.ok(gestSrc.includes('.18s linear'), 'анимация не линейная');
+    assert.ok(gestSrc.includes('drag-active'), 'нет drag-active состояния');
+    assert.ok(gestSrc.includes('persistLineOrder'), 'порядок не сохраняется');
+    assert.ok(gestSrc.includes('lostpointercapture'), 'нет страховки завершения drag');
+    assert.ok(gestSrc.includes('function dropMargins') && gestSrc.includes('dropMargins(div, kids)'),
       'посадка не ставит итоговый отступ в том же кадре (прыжок до render)');
   });
   it('поиск: кнопка, оверлей, проводка (модуль src/search.js)', () => {
@@ -804,7 +809,7 @@ describe('логика вызывается с state.tasks', () => {
   });
   it('совместимость с Safari 15: без нового синтаксиса и API', () => {
     const logic = fs.readFileSync(path.join(root, 'src/logic.js'), 'utf8');
-    for (const [name, src] of [['app.js', appSrc], ['store.js', storeSrc], ['sync.js', syncSrc], ['logic.js', logic], ['triggers.js', trigSrc]]) {
+    for (const [name, src] of [['app.js', appSrc], ['store.js', storeSrc], ['sync.js', syncSrc], ['logic.js', logic], ['triggers.js', trigSrc], ['gestures.js', gestSrc]]) {
       assert.ok(!/\?\./.test(src) && !/\?\?/.test(src), 'опциональная цепочка в ' + name);
       assert.ok(!/async\s+function/.test(src), 'async/await в ' + name);
       assert.ok(!/replaceAll|matchAll|allSettled|structuredClone|randomUUID/.test(src),
@@ -874,6 +879,33 @@ describe('синк: триггеры и протокол', () => {
     assert.ok(html.includes('src/triggers.js') && swSrc.includes('src/triggers.js'),
       'модуль не подключён (index.html / sw.js)');
   });
+  it('жесты — модуль src/gestures.js (этап 6)', () => {
+    for (const fn of ['wireLineSwipe', 'wireLineDrag', 'toggleDoneSlide', 'persistLineOrder',
+      'applyDropIndent', 'dropMargins', 'commitTrailingIntoBranch', 'pinScroll', 'init']) {
+      assert.ok(gestSrc.includes('function ' + fn), 'нет ' + fn + ' в src/gestures.js');
+    }
+    assert.ok(gestSrc.includes('isDragActive') && gestSrc.includes('window.EBGestures'),
+      'нет флага жеста / UMD-экспорта модуля');
+    assert.ok(appSrc.includes('window.EBGestures.wireLineSwipe(div, taskId)') &&
+      appSrc.includes('window.EBGestures.wireLineDrag(div, grip, inp)') &&
+      appSrc.includes('window.EBGestures.toggleDoneSlide(taskId)') &&
+      appSrc.includes('window.EBGestures.isDragActive()'),
+      'app.js не ходит в жесты через тонкие алиасы (вынос нечистый)');
+    assert.ok(!appSrc.includes('function wireLineDrag(div, grip, inp) {\n  var pid') &&
+      !appSrc.includes('function persistLineOrder') && !appSrc.includes('function dropMargins') &&
+      !appSrc.includes('function applyDropIndent') && !appSrc.includes('function commitTrailingIntoBranch') &&
+      !appSrc.includes('var dragActive = false') && !appSrc.includes('function pinScroll') &&
+      !appSrc.includes("grip.addEventListener('pointerdown'"),
+      'жесты остались в app.js (вынос нечистый)');
+    assert.ok(appSrc.includes('EBGestures.init({') && appSrc.includes('setDraftTapBusy: setDraftTapBusy') &&
+      appSrc.includes('touchLastPD: touchLastPD') && appSrc.includes('getDraft: getDraft'),
+      'app.js не отдаёт контекст модулю жестов');
+    assert.ok(gestSrc.includes('C.getDraft()') && gestSrc.includes('C.setDraft(') &&
+      gestSrc.includes('C.getState()') && gestSrc.includes('C.getCollapsed()'),
+      'модуль читает общее состояние напрямую, а не через контекст');
+    assert.ok(html.includes('src/gestures.js') && swSrc.includes('src/gestures.js'),
+      'модуль не подключён (index.html / sw.js)');
+  });
   it('sync.js: LWW по задачам, no-store, ретраи 409/422', () => {
     assert.ok(syncSrc.includes('mergeTasks'), 'нет mergeTasks в sync');
     assert.ok(syncSrc.includes('normalizeTasks'), 'нет normalizeTasks в sync');
@@ -898,7 +930,7 @@ describe('PWA-оболочка', () => {
     assert.ok(fs.existsSync(path.join(root, 'icon-512.png')), 'нет icon-512.png');
   });
   it('все скрипты подключены', () => {
-    for (const s of ['src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'src/triggers.js', 'store.js', 'sync.js', 'app.js']) {
+    for (const s of ['src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'src/triggers.js', 'src/gestures.js', 'store.js', 'sync.js', 'app.js']) {
       assert.ok(html.includes(s), 'нет ' + s + ' в index.html');
     }
   });
