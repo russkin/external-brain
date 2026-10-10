@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v115';
+  var APP_VERSION = 'v116';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -420,6 +420,33 @@
 
   /* --- Стартовый экран: строки «grip 6 точек + поле ввода» --- */
 
+  /* Разворот при создании через Enter — на уровне модуля (а не внутри
+   * wireLineDrag): вызывается из обработчика Enter, где замыкания жеста
+   * не видно (иначе ReferenceError роняет создание поля целиком). */
+  function expandForAnchor(anchorId, indent) {
+    if (!anchorId || anchorId === 'TOP' || !(indent > 0)) return;
+    var box = el('lines');
+    if (!box || !box.querySelectorAll) return;
+    var rows = Array.prototype.slice.call(box.querySelectorAll('.tline'));
+    var ai = -1, i;
+    for (i = 0; i < rows.length; i++) {
+      var aid = rows[i].getAttribute ? rows[i].getAttribute('data-id') : null;
+      if (aid === anchorId) { ai = i; break; }
+    }
+    if (ai === -1) return;
+    var minInd = indent, changed = false;
+    for (i = ai; i >= 0; i--) {
+      var pid = rows[i].getAttribute ? rows[i].getAttribute('data-id') : null;
+      var pt = pid ? L.getTask(state.tasks, pid) : null;
+      if (!pt) continue;
+      var ind = lineIndent(pt);
+      if (ind < minInd) {
+        minInd = ind;
+        if (collapsed[pt.id]) { delete collapsed[pt.id]; changed = true; }
+      }
+    }
+    if (changed) saveCollapsed();
+  }
   function lineTasks() {
     var out = [];
     for (var i = 0; i < state.tasks.length; i++) {
@@ -1851,30 +1878,6 @@
     /* То же для Enter-создания: новое поле встаёт за якорем на вычисленном
      * уровне — если там свёрнуто, поле видно (черновик всегда рисуется),
      * а родившаяся задача спрячется. Разворачиваем сразу. */
-    function expandForAnchor(anchorId, indent) {
-      if (!anchorId || anchorId === 'TOP' || !(indent > 0)) return;
-      var box = el('lines');
-      if (!box) return;
-      var rows = rowsOf(box);
-      var ai = -1, i;
-      for (i = 0; i < rows.length; i++) {
-        var aid = rows[i].getAttribute ? rows[i].getAttribute('data-id') : null;
-        if (aid === anchorId) { ai = i; break; }
-      }
-      if (ai === -1) return;
-      var minInd = indent, changed = false;
-      for (i = ai; i >= 0; i--) {
-        var pid = rows[i].getAttribute ? rows[i].getAttribute('data-id') : null;
-        var pt = pid ? L.getTask(state.tasks, pid) : null;
-        if (!pt) continue;
-        var ind = lineIndent(pt);
-        if (ind < minInd) {
-          minInd = ind;
-          if (collapsed[pt.id]) { delete collapsed[pt.id]; changed = true; }
-        }
-      }
-      if (changed) saveCollapsed();
-    }
     function startIndent() {
       var b = indentBounds();
       indentCur = b.cur;

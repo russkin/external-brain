@@ -266,6 +266,8 @@ describe('логика вызывается с state.tasks', () => {
       'сдвиг под свёрнутого прячет строку (родитель не разворачивается)');
     assert.ok(appSrc.includes('function expandForAnchor(anchorId, indent)'),
       'создание под свёрнутым прячет задачу с рождения');
+    assert.ok(appSrc.includes('\n  function expandForAnchor(anchorId, indent)'),
+      'expandForAnchor внутри замыкания drag — из Enter не видна, Enter молча умирает');
   });
   it('уровни цветом, collapse, шапка с тремя кнопками', () => {
     assert.ok(html.includes('.tline[data-indent="1"]'), 'нет заливки уровней');
