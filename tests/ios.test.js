@@ -262,6 +262,8 @@ describe('логика вызывается с state.tasks', () => {
       'сдвиг не собирает ветку — внучки отрываются');
     assert.ok(appSrc.includes('lineIndent(kt) + delta'),
       'сдвиг двигает одну строку вместо ветки');
+    assert.ok(appSrc.includes('expandParentAbove(lvl)'),
+      'сдвиг под свёрнутого прячет строку (родитель не разворачивается)');
   });
   it('уровни цветом, collapse, шапка с тремя кнопками', () => {
     assert.ok(html.includes('.tline[data-indent="1"]'), 'нет заливки уровней');

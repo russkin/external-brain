@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v113';
+  var APP_VERSION = 'v114';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1821,6 +1821,32 @@
       if (max < 0) max = 0;
       return { cur: cur, max: max };
     }
+    /* Явно положенное под свёрнутого видно сразу: разворачиваем всю
+     * цепочку предков (по DOM-порядку — он визуально честный, в отличие
+     * от createdAt). Отмена при этом сворачивание не возвращает: строка
+     * остаётся на месте и видимой, иначе ↩ прятала бы её с глаз. */
+    function expandParentAbove(finalLvl) {
+      var box = el('lines');
+      if (!box) return;
+      var rows = rowsOf(box);
+      var self = -1, i;
+      for (i = 0; i < rows.length; i++) {
+        if (rows[i] === div) { self = i; break; }
+      }
+      if (self === -1 || !(finalLvl > 0)) return;
+      var minInd = finalLvl, changed = false;
+      for (i = self - 1; i >= 0; i--) {
+        var pid = rows[i].getAttribute ? rows[i].getAttribute('data-id') : null;
+        var pt = pid ? L.getTask(state.tasks, pid) : null;
+        if (!pt) continue;
+        var ind = lineIndent(pt);
+        if (ind < minInd) {
+          minInd = ind;
+          if (collapsed[pt.id]) { delete collapsed[pt.id]; changed = true; }
+        }
+      }
+      if (changed) saveCollapsed();
+    }
     function startIndent() {
       var b = indentBounds();
       indentCur = b.cur;
@@ -2143,6 +2169,7 @@
               updateHistoryButtons();
             }
             trailingIndent = lvl;
+            expandParentAbove(lvl);
             render();
           }
           return;
@@ -2161,6 +2188,7 @@
               }
             });
           })(task.id, lvl, lvl - bou.cur);
+          expandParentAbove(lvl);
         }
         kids = [];
         render();
