@@ -12,6 +12,7 @@ const storeSrc = fs.readFileSync(path.join(root, 'store.js'), 'utf8');
 const swSrc = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const diagSrc = fs.readFileSync(path.join(root, 'src/diag.js'), 'utf8');
+const settingsSrc = fs.readFileSync(path.join(root, 'src/settings.js'), 'utf8');
 const searchSrc = fs.readFileSync(path.join(root, 'src/search.js'), 'utf8');
 
 function appVersion() {
@@ -58,7 +59,7 @@ describe('service worker: методика кэша', () => {
     assert.ok(appSrc.includes('caches.delete'), 'нет чистки кэша при обновлении');
   });
   it('в кэш положены все части оболочки', () => {
-    for (const u of ["'./'", 'index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'src/search.js', 'src/diag.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'docs/USER_GUIDE.html']) {
+    for (const u of ["'./'", 'index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'docs/USER_GUIDE.html']) {
       assert.ok(swSrc.includes(u), 'нет ' + u + ' в ASSETS');
     }
   });
@@ -179,14 +180,16 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'persistLineOrder не принимает досдвиговый слепок');
     assert.ok(appSrc.includes('if (!reordered && preDrop && snapTasks() !== preDrop.tasks)'),
       'чистое изменение отступа без сдвига порядка не пишется в историю');
-    assert.ok(html.includes('id="repoBtn"') && appSrc.includes('on(\'repoBtn\''),
+    assert.ok(html.includes('id="repoBtn"') && settingsSrc.includes('on(\'repoBtn\''),
       'нет пункта «Репозиторий и токен»');
+    assert.ok(!appSrc.includes('on(\'repoBtn\'') && !appSrc.includes('openRepoModal'),
+      'настройки остались в app.js (вынос нечистый)');
     assert.ok(html.includes('id="repoModalBack"') && html.includes('#repoModalBack { display: none;'),
       'настройки — не модальное окно по центру');
     assert.ok(html.includes('id="repoModalInput"') && html.includes('id="repoSaveBtn"') &&
       html.includes('id="repoCancelBtn"'),
       'в окне настроек нет двух полей и кнопок Сохранить/Отмена');
-    assert.ok(appSrc.includes('только для администратора'), 'нет предупреждения для администратора');
+    assert.ok(settingsSrc.includes('только для администратора'), 'нет предупреждения для администратора');
     /* v74: светофор «!» при 409/422 + тап по нему — принудительный синк; сеть ⇅ в шапке. */
     assert.ok(appSrc.includes("color === 'red' && /github-put (409|422)/.test(err)") &&
       appSrc.includes("n.textContent = alert ? '!' : ''"),
@@ -729,7 +732,10 @@ describe('логика вызывается с state.tasks', () => {
       'подменю копий видно сразу');
     assert.ok(html.includes('#backupMenu') && html.includes('rgba('),
       'у подменю нет подложки как в покупках');
-    assert.ok(appSrc.includes("on('backupBtn'"), 'подменю не открывается');
+    assert.ok(settingsSrc.includes("on('backupBtn'") && settingsSrc.includes("on('gearBtn'"),
+      'подменю/меню не открываются');
+    assert.ok(!appSrc.includes("on('backupBtn'") && !appSrc.includes("on('gearBtn'"),
+      'подписки меню остались в app.js');
     for (const sid of ['restoreBtn', 'pinSaveBtn', 'pinRestoreBtn']) {
       assert.ok(html.includes('id="' + sid + '"'), 'нет ' + sid);
     }
@@ -817,15 +823,20 @@ describe('PWA-оболочка', () => {
     assert.ok(fs.existsSync(path.join(root, 'icon-512.png')), 'нет icon-512.png');
   });
   it('все скрипты подключены', () => {
-    for (const s of ['src/logic.js', 'src/search.js', 'src/diag.js', 'store.js', 'sync.js', 'app.js']) {
+    for (const s of ['src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'store.js', 'sync.js', 'app.js']) {
       assert.ok(html.includes(s), 'нет ' + s + ' в index.html');
     }
   });
   it('токен живёт только в настройках', () => {
     assert.ok(!/type="password"/.test(html), 'постоянное поле пароля в html');
-    assert.ok(appSrc.includes('tokenInput'), 'нет tokenInput');
-    assert.ok(appSrc.includes('repoTokenBuild') && appSrc.includes('repoTokenDestroy'),
+    assert.ok(settingsSrc.includes('tokenInput'), 'нет tokenInput');
+    assert.ok(settingsSrc.includes('repoTokenBuild') && settingsSrc.includes('repoTokenDestroy'),
       'поле токена не создаётся/удаляется вместе с окном');
+    assert.ok(settingsSrc.includes('getState()') && settingsSrc.includes('ctx.mutate') &&
+      settingsSrc.includes('ctx.askConfirm') && settingsSrc.includes('ctx.doSync'),
+      'модуль читает общее состояние напрямую, а не через контекст');
+    assert.ok(appSrc.includes('EBSettings.init({'),
+      'app.js не отдаёт контекст модулю настроек');
   });
   it('хранилище scoped под проект', () => {
     assert.ok(storeSrc.includes('external-brain-v1'), 'не тот LS-ключ');

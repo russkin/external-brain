@@ -37,6 +37,7 @@ jobs:
           cp src/logic.js _site/src/logic.js
           cp src/search.js _site/src/search.js
           cp src/diag.js _site/src/diag.js
+          cp src/settings.js _site/src/settings.js
           cp docs/USER_GUIDE.html _site/docs/USER_GUIDE.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

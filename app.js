@@ -2631,18 +2631,14 @@
    * Подсветка дотягивается из render() через EBSearch.currentId(). */
 
   function wire() {
-    var gear = el('gearMenu');
-    on('gearBtn', 'click', function () {
-      if (gear) gear.classList.toggle('open');
-      if (gear && !gear.classList.contains('open')) {
-        var bm = el('backupMenu');
-        if (bm) bm.classList.remove('open');
-      }
-    });
-    /* Подменю «Резервная копия»: три пункта-копии в одном. */
-    on('backupBtn', 'click', function () {
-      var bm = el('backupMenu');
-      if (bm) bm.classList.toggle('open');
+    /* Настройки — модуль src/settings.js (этап 3): меню ⚙, подменю копий,
+     * модалка репозитория. Сюда отдаём только контекст. */
+    if (window.EBSettings) window.EBSettings.init({
+      on: on,
+      getState: function () { return state; },
+      mutate: mutate,
+      askConfirm: askConfirm,
+      doSync: doSync
     });
     /* Диагностика — модуль src/diag.js (этап 2): кнопка и текст там,
      * сюда отдаём только контекст. */
@@ -2657,47 +2653,7 @@
       getCollapsed: function () { return collapsed; },
       isDoneHidden: function () { return doneHidden; }
     });
-    /* Репозиторий и токен — только для администратора: сначала предупреждение,
-     * затем модальное окно по центру с двумя полями и кнопками
-     * Сохранить/Отмена (в маленьком экране меню не переполняется). */
-    on('repoBtn', 'click', function () {
-      askConfirm('Настройки репозитория и токена — только для администратора. ' +
-        'Неверные значения нарушат синхронизацию на этом устройстве. Открыть?').then(function (ok) {
-          if (!ok) return;
-          openRepoModal();
-        });
-    });
-    /* Поле токена живёт в DOM только пока открыто окно настроек: иначе Chrome
-     * видит пару «текст + пароль» и предлагает сохранить токен как логин. */
-    function repoTokenBuild() {
-      var wrap = el('repoTokenWrap');
-      if (!wrap) return;
-      wrap.innerHTML = '';
-      var inp = document.createElement('input');
-      inp.id = 'tokenInput';
-      inp.type = 'password';
-      inp.placeholder = 'GitHub token';
-      inp.autocomplete = 'off';
-      inp.setAttribute('aria-label', 'Токен');
-      if (state && state.settings.token) inp.value = state.settings.token;
-      wrap.appendChild(inp);
-    }
-    function repoTokenDestroy() {
-      var wrap = el('repoTokenWrap');
-      if (wrap) wrap.innerHTML = '';
-    }
-    function openRepoModal() {
-      var repo = el('repoModalInput');
-      if (repo) repo.value = (state && state.settings.repo) || '';
-      repoTokenBuild();
-      var back = el('repoModalBack');
-      if (back) back.classList.add('open');
-    }
-    function closeRepoModal() {
-      repoTokenDestroy();
-      var back = el('repoModalBack');
-      if (back) back.classList.remove('open');
-    }
+
     on('syncNowBtn', 'click', function () { doSync(true); });
     /* Тап по светофору — принудительный синк (как в purchases). */
     on('syncLight', 'click', function () { doSync(true); });
@@ -2796,20 +2752,7 @@
     on('durHm', 'click', function () { durTot = Math.max(durTot - 60, 0); durRender(); });
     on('durMp', 'click', function () { durTot = Math.min(durTot + 5, 59999); durRender(); });
     on('durMm', 'click', function () { durTot = Math.max(durTot - 5, 0); durRender(); });
-    on('repoSaveBtn', 'click', function () {
-      var repo = el('repoModalInput');
-      var tok = document.getElementById('tokenInput');
-      mutate(function () {
-        if (repo && repo.value) state.settings.repo = repo.value.trim();
-        if (tok) state.settings.token = tok.value.trim();
-      });
-      closeRepoModal();
-      if (gear) gear.classList.remove('open');
-      doSync(true);
-    });
-    on('repoCancelBtn', 'click', function () {
-      closeRepoModal();
-    });
+
     var sl = el('syncLight');
     if (sl) sl.addEventListener('click', function () { doSync(true); });
     window.addEventListener('beforeinstallprompt', function (e) {

@@ -8,6 +8,7 @@ const ASSETS = [
   './src/logic.js',
   './src/search.js',
   './src/diag.js',
+  './src/settings.js',
   './manifest.webmanifest',
   './icon.svg',
   './icon-192.png',
