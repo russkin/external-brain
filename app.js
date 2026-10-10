@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v110';
+  var APP_VERSION = 'v111';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -487,11 +487,22 @@
       localStorage.setItem(COLLAPSED_KEY, JSON.stringify(arr));
     } catch (x) {}
   }
+  /* Тап по точкам — тоже действие для истории: иначе ↩ после разворота
+   * одной группы откатывал бы 📁 целиком (разворачивал всё), а не возврат
+   * этой группы. Шаг несёт вид до тапа; данные те же. */
   function toggleCollapse(id) {
     if (!id) return;
+    var bvCollapsed = {}, k;
+    for (k in collapsed) if (collapsed[k]) bvCollapsed[k] = true;
+    var bvHidden = !!doneHidden;
     if (collapsed[id]) delete collapsed[id];
     else collapsed[id] = true;
     saveCollapsed();
+    var e = snapFull();
+    e.collapsed = bvCollapsed;
+    e.doneHidden = bvHidden;
+    pushUndo(e);
+    updateHistoryButtons();
     render();
   }
   /* Свернуть/развернуть всё касается и секции выполненных — тоже флагом,
