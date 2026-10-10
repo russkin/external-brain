@@ -495,6 +495,10 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('trailingIndent = wantInd'), 'перенос поля не ставит отступ по месту');
     assert.ok(appSrc.includes('wantInd !== oldInd'), 'смена только отступа не пишется в историю');
   });
+  it('в окне коммита черновик не рисуется (дубль на кадр)', () => {
+    assert.ok(appSrc.includes('var draftCommitting = 0;'), 'нет счётчика окна коммита');
+    assert.ok(appSrc.includes('!draftCommitting && ('), 'рендер рисует поле поверх рождающейся задачи');
+  });
   it('потеря фокуса поля создаёт задачу', () => {
     assert.ok(appSrc.includes("addEventListener('blur'"), 'нет blur-обработчика поля');
     assert.ok(appSrc.includes('createDraftOnBlur'), 'нет создания по потере фокуса');

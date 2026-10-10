@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v117';
+  var APP_VERSION = 'v118';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -613,6 +613,10 @@
   /* Защита от двойного тапа по флагу черновика: pointerup+click приходят
    * парой и без гарда создают две задачи вместо одной. */
   var draftTapBusy = false;
+  /* Окно коммита из черновика: пока задача рождается, сам черновик не
+   * рисуем — иначе кадр успевает показать и задачу, и поле (дубль
+   * на долю секунды). Счётчик (не флаг): создания вкладываются. */
+  var draftCommitting = 0;
 
   /* Последний pointerdown (захват — до смены фокуса): по нему blur черновика
    * отличает «тап по флагу/грипу/строке» (у их жестов своя логика — не мешаем)
@@ -1132,6 +1136,8 @@
    * createdAt втискиваем между соседями целым числом; тесно — сдвигаем
    * всех выше на 1 (редко, ms-метки почти всегда с зазором). */
   function insertTaskAfter(prevId, title, indent, now, allowEmpty) {
+    draftCommitting++;
+    try {
     var alive = lineTasks();
     var idx = -1;
     for (var i = 0; i < alive.length; i++) {
@@ -1161,9 +1167,12 @@
       created.updatedAt = now;
     }
     return created;
+    } finally { draftCommitting--; }
   }
 
   function insertTaskTop(title, now, allowEmpty) {
+    draftCommitting++;
+    try {
     var alive = lineTasks();
     var slot = now;
     if (alive.length) {
@@ -1184,9 +1193,12 @@
       created.updatedAt = now;
     }
     return created;
+    } finally { draftCommitting--; }
   }
 
   function placeTaskAfter(prevId, title, indent, allowEmpty) {
+    draftCommitting++;
+    try {
     var title0 = String(title == null ? '' : title).trim();
     if (!title0 && !allowEmpty) return null;
     var now = Date.now();
@@ -1195,9 +1207,12 @@
       created = insertTaskAfter(prevId, title0, indent, now, allowEmpty);
     });
     return created;
+    } finally { draftCommitting--; }
   }
 
   function placeTaskTop(title, allowEmpty) {
+    draftCommitting++;
+    try {
     var title0 = String(title == null ? '' : title).trim();
     if (!title0 && !allowEmpty) return null;
     var now = Date.now();
@@ -1206,6 +1221,7 @@
       created = insertTaskTop(title0, now, allowEmpty);
     });
     return created;
+    } finally { draftCommitting--; }
   }
 
   /* Эффективный отступ черновика: ручной сдвиг, иначе 0.
@@ -2465,8 +2481,9 @@
     }
     var tailIndent = effTrailingIndent();
     var hasDraftText = String(trailingText || '').trim() !== '';
-    var showDraft = (trailingAfterId === 'TOP') || (anchorIdx !== -1) ||
-      (tasks.length <= 1) || hasDraftText;
+    /* В окне коммита поле не рисуем даже при живом черновике. */
+    var showDraft = !draftCommitting && ((trailingAfterId === 'TOP') || (anchorIdx !== -1) ||
+      (tasks.length <= 1) || hasDraftText);
     if (!showDraft) {
       /* Поля нет на экране — сбрасываем протухший якорь/сдвиг,
        * чтобы пустое поле не воскресало в случайном месте. */
