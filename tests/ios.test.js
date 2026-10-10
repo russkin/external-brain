@@ -499,8 +499,10 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes("addEventListener('blur'"), 'нет blur-обработчика поля');
     assert.ok(appSrc.includes('createDraftOnBlur'), 'нет создания по потере фокуса');
     assert.ok(appSrc.includes('draftBlurTimer'), 'blur не отложен до смены фокуса');
-    assert.ok(appSrc.includes("closest('.grip') || lastPDTarget.closest('.doneflag')"),
-      'жесты флага/грипа не защищены от blur-создания');
+    assert.ok(appSrc.includes("lastPDTarget.closest('.doneflag')) return;"),
+      'тап по флагу ушёл в общее создание (у него своя логика)');
+    assert.ok(appSrc.includes('Тап по чужому grip: набранное не теряем'),
+      'тап по grip теряет набранный текст вместо тихого создания');
     assert.ok(appSrc.includes('document.contains(inp)'), 'создание не ждёт удалённое поле');
     var blurBody = appSrc.slice(appSrc.indexOf('function createDraftOnBlur'),
       appSrc.indexOf('function commitLine'));

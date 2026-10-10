@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v116';
+  var APP_VERSION = 'v117';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1278,7 +1278,19 @@
     if (!title && !fresh) return;
     var focusId = null;
     if (fresh && lastPDTarget && lastPDTarget.closest) {
-      if (lastPDTarget.closest('.grip') || lastPDTarget.closest('.doneflag')) return;
+      if (lastPDTarget.closest('.doneflag')) return;
+      if (lastPDTarget.closest('.grip')) {
+        /* Тап по чужому grip: набранное не теряем — тихо создаём задачу.
+         * Без render (идёт жест, DOM под пальцем святой — dragActive его
+         * подавляет в mutate); флаг — нет: у его тапа своя логика. */
+        if (title) {
+          placeTaskAfter(trailingAnchorId(), title, indent, true);
+          trailingText = '';
+          trailingAfterId = null;
+          trailingIndent = null;
+        }
+        return;
+      }
       var row = lastPDTarget.closest('.tline');
       if (row) {
         if (row.getAttribute('data-trailing')) return;
