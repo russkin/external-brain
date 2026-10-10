@@ -68,26 +68,6 @@ function pushUndo(entry) {
 function counts() {
   return { u: undoStack.length, r: redoStack.length };
 }
-/* ВРЕМЕННОЕ (диагностика странной отмены): сводка верхних шагов —
- * какие задачи живы/мёртвы и есть ли текст черновика. Убрать после выяснения. */
-function peek(n) {
-  var out = [], i, k, t, arr;
-  n = n || 3;
-  for (i = undoStack.length - 1; i >= 0 && out.length < n; i--) {
-    var e = undoStack[i], alive = [], dead = [];
-    try { arr = JSON.parse(e.tasks); } catch (x) { arr = []; }
-    if (Array.isArray(arr)) {
-      for (k = 0; k < arr.length; k++) {
-        t = arr[k];
-        if (!t || !t.id) continue;
-        if (t.deleted) dead.push(t.id);
-        else alive.push(t.id + ':' + String(t.title || '').slice(0, 12));
-      }
-    }
-    out.push({ alive: alive, dead: dead, draft: e.text ? '+' : '-' });
-  }
-  return out;
-}
 
 function snapTasks() {
   if (!C) return '[]';
@@ -220,7 +200,6 @@ var api = {
   init: init,
   load: load,
   counts: counts,
-  peek: peek,
   snapTasks: snapTasks,
   snapFull: snapFull,
   pushUndo: pushUndo,

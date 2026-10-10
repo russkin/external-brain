@@ -202,6 +202,16 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'нет красного «!» на светофоре при 409/422');
     assert.ok(trigSrc.includes("on('syncLight', 'click', function () { doSync(true); })"),
       'нет тапа по светофору — принудительного синка');
+    /* v121: яркость светофора вдвое слабее + жёлтый «!» слева от красного. */
+    assert.ok(trigSrc.includes('#265728') && trigSrc.includes('#7f6003') &&
+      trigSrc.includes('#7a211b') && trigSrc.includes('#5d5d5d'),
+      'цвета светофора не приглушены вдвое');
+    assert.ok(html.includes('id="syncAlert"') && trigSrc.includes("el('syncAlert')") &&
+      trigSrc.includes("warn.classList.toggle('on', alert)"),
+      'нет жёлтого «!» перед красным квадратиком');
+    assert.ok(html.includes('#syncAlert.on { display: inline-block; }') &&
+      html.includes('font-size: 19px'),
+      'жёлтый «!» не той высоты / не показывается');
     assert.ok(trigSrc.includes('function renderNet()') && trigSrc.includes("net.textContent = '⇅'") &&
       trigSrc.includes("' МБ/с'") && trigSrc.includes("addEventListener('offline', renderNet)"),
       'нет индикатора сети (цвет/МБ/с) в шапке');
@@ -499,11 +509,11 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('trailingIndent = wantInd'), 'перенос поля не ставит отступ по месту');
     assert.ok(appSrc.includes('wantInd !== oldInd'), 'смена только отступа не пишется в историю');
   });
-  it('стек истории виден в диагностике (временно)', () => {
-    assert.ok(diagSrc.includes('Стек ↩') && diagSrc.includes('getHistoryPeek'),
-      'нет показа верха стека');
-    assert.ok(historySrc.includes('function peek'),
-      'нет peek сводки стека');
+  it('показ стека ↩ в диагностике убран (v121)', () => {
+    assert.ok(!diagSrc.includes('Стек ↩') && !diagSrc.includes('getHistoryPeek'),
+      'строка стека осталась в диагностике');
+    assert.ok(!historySrc.includes('function peek') && !appSrc.includes('getHistoryPeek'),
+      'peek остался в истории/контексте');
   });
   it('в окне коммита черновик не рисуется (дубль на кадр)', () => {
     assert.ok(appSrc.includes('var draftCommitting = 0;'), 'нет счётчика окна коммита');

@@ -113,7 +113,8 @@ function doSync(force) {
 function setLight(color, blink) {
   var n = el('syncLight');
   if (!n) return;
-  var map = { green: '#4caf50', yellow: '#ffc107', red: '#f44336', gray: '#bbb' };
+  /* Яркость вдвое слабее обычных (каналы ÷2 — запрос v121). */
+  var map = { green: '#265728', yellow: '#7f6003', red: '#7a211b', gray: '#5d5d5d' };
   n.style.background = map[color] || map.gray;
   if (blink) n.classList.add('blink');
   else n.classList.remove('blink');
@@ -122,6 +123,9 @@ function setLight(color, blink) {
   var alert = color === 'red' && /github-put (409|422)/.test(err);
   n.classList.toggle('alert', alert);
   n.textContent = alert ? '!' : '';
+  /* Жёлтый «!» той же высоты слева от красного квадратика (запрос v121). */
+  var warn = el('syncAlert');
+  if (warn) warn.classList.toggle('on', alert);
   if (color === 'yellow') n.title = 'Идёт синхронизация…';
   else if (alert) n.title = 'Конфликт записи (409/422). Нажми — принудительный синк.';
   else if (color === 'red') n.title = (syncStatus || 'Ошибка синка') + '. Нажми — попробовать снова.';

@@ -33,10 +33,13 @@
     #netType { font-size: 9px; color: #888; min-height: 10px; }
     #syncLight.blink { animation: synblink 1s infinite; }
     @keyframes synblink { 50% { opacity: .25; } }
+    #syncAlert { display: none; color: #ffb300; font-weight: bold; font-size: 19px;
+      line-height: 14px; height: 14px; margin-right: 3px; flex: none; }
+    #syncAlert.on { display: inline-block; }
     #syncLight { display: inline-block; position: relative; width: 14px; height: 14px;
-      border-radius: 3px; background: #bbb; flex: none; cursor: pointer;
+      border-radius: 3px; background: #5d5d5d; flex: none; cursor: pointer;
       color: #fff; font-weight: bold; font-size: 11px; line-height: 14px; text-align: center; }
-    #syncLight.alert { background: #f44336; }
+    #syncLight.alert { background: #7a211b; }
     button { font-size: 16px; padding: 8px 12px; cursor: pointer; }
     main { padding: 12px 14px 60px; max-width: 720px; margin: 0 auto; }
     /* Плашка тестовой версии на время рефакторинга (убрать по окончании). */
@@ -163,7 +166,7 @@
       <h1 id="appTitle">Внешний мозг</h1>
       <span id="appVerHead" title="Версия приложения"></span>
       <span class="netwrap"><span id="netStatus" title="Сеть">⇅</span><span id="netType"></span></span>
-      <span id="syncLight" title="Синхронизация"></span>
+      <span id="syncAlert" title="Конфликт записи (409/422)">!</span><span id="syncLight" title="Синхронизация"></span>
       <button id="gearBtn" title="Меню" aria-label="Меню">⚙</button>
     </div>
     <div id="headActions">
