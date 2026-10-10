@@ -12,6 +12,7 @@ const storeSrc = fs.readFileSync(path.join(root, 'store.js'), 'utf8');
 const swSrc = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const diagSrc = fs.readFileSync(path.join(root, 'src/diag.js'), 'utf8');
+const historySrc = fs.readFileSync(path.join(root, 'src/history.js'), 'utf8');
 const settingsSrc = fs.readFileSync(path.join(root, 'src/settings.js'), 'utf8');
 const searchSrc = fs.readFileSync(path.join(root, 'src/search.js'), 'utf8');
 
@@ -59,7 +60,7 @@ describe('service worker: методика кэша', () => {
     assert.ok(appSrc.includes('caches.delete'), 'нет чистки кэша при обновлении');
   });
   it('в кэш положены все части оболочки', () => {
-    for (const u of ["'./'", 'index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'docs/USER_GUIDE.html']) {
+    for (const u of ["'./'", 'index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'docs/USER_GUIDE.html']) {
       assert.ok(swSrc.includes(u), 'нет ' + u + ' в ASSETS');
     }
   });
@@ -137,9 +138,12 @@ describe('устойчивость к рассинхрону кэшей', () => 
     assert.ok(/function pinWrite[\s\S]{0,400}state: \{ tasks:/.test(storeSrc) &&
       !/function pinWrite[\s\S]{0,400}settings/.test(storeSrc),
       'в постоянной копии хранятся настройки/токен');
-    assert.ok(appSrc.includes('external-brain-undo-v1') && appSrc.includes('external-brain-redo-v1') &&
-      appSrc.includes('pushUndo') && appSrc.includes('histLoad') && appSrc.includes('histSave'),
+    assert.ok(historySrc.includes('external-brain-undo-v1') && historySrc.includes('external-brain-redo-v1') &&
+      historySrc.includes('pushUndo') && historySrc.includes('histSave'),
       'история отмены не переживает перезагрузку');
+    assert.ok(appSrc.includes('window.EBHistory.load()') &&
+      appSrc.includes('function snapTasks() { return window.EBHistory.snapTasks(); }'),
+      'app.js не ходит в историю через мост (вынос нечистый)');
     /* v67: задачи с пустым текстом — полноценные строки, не черновики. */
     assert.ok(!appSrc.includes("if (!t || t.deleted || !String(t.title || '').trim()) continue;"),
       'lineTasks фильтрует пустые задачи');
@@ -313,10 +317,12 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('setIndent(state.tasks, taskId, 0)'), 'отступ вернувшейся не сбрасывается');
     assert.ok(html.includes('id="undoBtn"'), 'нет стрелки назад');
     assert.ok(html.includes('id="redoBtn"'), 'нет стрелки вперёд');
-    assert.ok(appSrc.includes('doUndo'), 'нет undo');
-    assert.ok(appSrc.includes('doRedo'), 'нет redo');
-    assert.ok(appSrc.includes('HISTORY_MAX'), 'история без лимита');
-    assert.ok(appSrc.includes('deleted = true'), 'отмена создания не переживёт синк');
+    assert.ok(historySrc.includes('function doUndo') && historySrc.includes('function doRedo'),
+      'нет undo/redo');
+    assert.ok(historySrc.includes('HISTORY_MAX'), 'история без лимита');
+    assert.ok(!appSrc.includes('function doUndo') && !appSrc.includes('function applySnapshot'),
+      'логика отмены осталась в app.js');
+    assert.ok(historySrc.includes('deleted = true'), 'отмена создания не переживёт синк');
   });
   it('черновик: удаление, сдвиг, перетаскивание; выполненные не таскаем', () => {
     assert.ok(appSrc.includes('dismissDraft'), 'черновик нельзя убрать');
@@ -455,9 +461,9 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('var newIndent = lineIndent(moved)'), 'Enter в строке не даёт сестру');
   });
   it('отмена Enter: сначала поле, потом задача', () => {
-    assert.ok(appSrc.includes('function snapFull'), 'нет полного слепка с полем');
+    assert.ok(historySrc.includes('function snapFull'), 'нет полного слепка с полем');
     assert.ok(appSrc.includes('afterId: oldAnchor'), 'появление поля не делится в истории');
-    assert.ok(appSrc.includes('snapTasks() !== tasksJson'), 'возврат поля дёргает метки синка');
+    assert.ok(historySrc.includes('snapTasks() !== tasksJson'), 'возврат поля дёргает метки синка');
   });
   it('отмена убирает вызванное поле и возвращает курсор', () => {
     assert.ok(appSrc.includes('focusId: taskId'), 'Enter не пишет точку с фокусом');
@@ -823,7 +829,7 @@ describe('PWA-оболочка', () => {
     assert.ok(fs.existsSync(path.join(root, 'icon-512.png')), 'нет icon-512.png');
   });
   it('все скрипты подключены', () => {
-    for (const s of ['src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'store.js', 'sync.js', 'app.js']) {
+    for (const s of ['src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'store.js', 'sync.js', 'app.js']) {
       assert.ok(html.includes(s), 'нет ' + s + ' в index.html');
     }
   });

@@ -165,143 +165,18 @@
    * В слепок входит и пустое поле (якорь/текст/сдвиг), чтобы Enter делился
    * на два шага отмены: сначала уходит новое пустое поле (задача остаётся),
    * затем — сама задача (текст возвращается в поле). */
-  var undoStack = [];
-  var redoStack = [];
-  var HISTORY_MAX = 50;
+  /* История — модуль src/history.js (этап 4): стопки, слепки, отмена там.
+   * Здесь тонкие алиасы, чтобы десятки вызовов в жестах и вводе
+   * не трогать: реализация живёт в модуле. */
+  function snapTasks() { return window.EBHistory.snapTasks(); }
+  function snapFull() { return window.EBHistory.snapFull(); }
+  function pushUndo(entry) { return window.EBHistory.pushUndo(entry); }
+  function updateHistoryButtons() { return window.EBHistory.updateHistoryButtons(); }
+  function mutateWithHistory(fn) { return window.EBHistory.mutateWithHistory(fn); }
+  try { if (window.EBHistory) window.EBHistory.load(); } catch (x) {}
 
-  /* История переживает перезагрузку и обновление приложения: обе стопки
-   * держим в localStorage (слепки — сырые JSON задач, до 50 шагов каждая).
-   * histLoad() чистит битые записи; pushUndo — ЕДИНСТВЕННАЯ точка записи
-   * нового шага (сбрасывает redo и сохраняет обе стопки). */
-  var UNDO_KEY = 'external-brain-undo-v1';
-  var REDO_KEY = 'external-brain-redo-v1';
-
-  function histSave() {
-    try {
-      localStorage.setItem(UNDO_KEY, JSON.stringify(undoStack));
-      localStorage.setItem(REDO_KEY, JSON.stringify(redoStack));
-    } catch (e) {}
-  }
-  function histClean(arr) {
-    var out = [];
-    if (!Array.isArray(arr)) return out;
-    for (var i = 0; i < arr.length; i++) {
-      var e = arr[i];
-      if (e && typeof e === 'object' && typeof e.tasks === 'string') out.push(e);
-    }
-    return out;
-  }
-  function histLoad() {
-    try {
-      var u = JSON.parse(localStorage.getItem(UNDO_KEY) || '[]');
-      var r = JSON.parse(localStorage.getItem(REDO_KEY) || '[]');
-      u = histClean(u).slice(-HISTORY_MAX);
-      r = histClean(r).slice(-HISTORY_MAX);
-      undoStack = u;
-      redoStack = r;
-    } catch (e) {}
-  }
-  function pushUndo(entry) {
-    undoStack.push(entry);
-    if (undoStack.length > HISTORY_MAX) undoStack.shift();
-    redoStack = [];
-    histSave();
-  }
-  histLoad();
-
-  function snapTasks() {
-    try { return JSON.stringify(state.tasks); } catch (x) { return '[]'; }
-  }
-
-  /* Полный слепок для истории: задачи + положение/текст/сдвиг пустого поля. */
-  function snapFull() {
-    return {
-      tasks: snapTasks(),
-      afterId: trailingAfterId,
-      text: trailingText,
-      indent: trailingIndent
-    };
-  }
-
-  function mutateWithHistory(fn) {
-    if (!state) return null;
-    var before = snapFull();
-    var r = fn();
-    if (snapTasks() !== before.tasks) {
-      pushUndo(before);
-      state.updatedAt = Date.now();
-    }
-    if (!dragActive) render();
-    save();
-    updateHistoryButtons();
-    return r;
-  }
-
-  function applySnapshot(s) {
-    var tasksJson = (s && typeof s === 'object') ? s.tasks : s;
-    var now = Date.now(), snap = [];
-    try { snap = JSON.parse(tasksJson); } catch (x) { snap = []; }
-    if (!Array.isArray(snap)) snap = [];
-    if (snapTasks() !== tasksJson) {
-      state.updatedAt = now;
-      var keep = {}, out = [], i, t, c;
-      for (i = 0; i < snap.length; i++) {
-        t = snap[i];
-        if (!t || !t.id) continue;
-        keep[t.id] = true;
-        c = L.normalizeTask(t);
-        if (!c) continue;
-        c.ts = now;
-        c.updatedAt = now;
-        out.push(c);
-      }
-      for (i = 0; i < state.tasks.length; i++) {
-        t = state.tasks[i];
-        if (!t || !t.id || keep[t.id] || t.deleted) continue;
-        c = L.normalizeTask(t);
-        if (!c) continue;
-        c.deleted = true;
-        c.ts = now;
-        c.updatedAt = now;
-        out.push(c);
-      }
-      state.tasks = out;
-      save();
-    }
-    if (s && typeof s === 'object') {
-      trailingAfterId = s.afterId || null;
-      trailingText = String(s.text || '');
-      trailingIndent = (s.indent == null) ? null : s.indent;
-    }
-    render();
-    updateHistoryButtons();
-  }
-
-  function doUndo() {
-    if (!state || !undoStack.length) return;
-    redoStack.push(snapFull());
-    if (redoStack.length > HISTORY_MAX) redoStack.shift();
-    var us = undoStack.pop();
-    histSave();
-    applySnapshot(us);
-    focusAfterHistory(us, false);
-  }
-
-  function doRedo() {
-    if (!state || !redoStack.length) return;
-    undoStack.push(snapFull());
-    if (undoStack.length > HISTORY_MAX) undoStack.shift();
-    var rs = redoStack.pop();
-    histSave();
-    applySnapshot(rs);
-    focusAfterHistory(rs, true);
-  }
-
-  function updateHistoryButtons() {
-    var u = el('undoBtn'), r = el('redoBtn');
-    if (u) u.disabled = !undoStack.length;
-    if (r) r.disabled = !redoStack.length;
-  }
+  /* doUndo/doRedo/applySnapshot — в модуле (вызываются из его init);
+   * focusAfterHistory остаётся здесь (курсор — рядом с focusTaskEnd). */
 
   /* Курсор в задачу по id: по умолчанию в конец (после отмены вызова
    * поля), с pos — на точную позицию (сцепка: стык верхней и хвоста). */
@@ -2649,7 +2524,7 @@
       getSync: function () { return { status: syncStatus, at: lastSyncAt, errAt: lastErrAt, err: lastErrMsg }; },
       getLastAction: function () { return lastAction; },
       getBoot: function () { return { error: bootError, stack: bootStack }; },
-      getHistoryCounts: function () { return { u: undoStack.length, r: redoStack.length }; },
+      getHistoryCounts: function () { return window.EBHistory.counts(); },
       getCollapsed: function () { return collapsed; },
       isDoneHidden: function () { return doneHidden; }
     });
@@ -2745,8 +2620,19 @@
     });
     on('collapseAllBtn', 'click', function () { setAllCollapsed(true); });
     on('expandAllBtn', 'click', function () { setAllCollapsed(false); });
-    on('undoBtn', 'click', function () { doUndo(); });
-    on('redoBtn', 'click', function () { doRedo(); });
+    /* История — модуль src/history.js (этап 4): кнопки и логика там,
+     * сюда отдаём только контекст. */
+    if (window.EBHistory) window.EBHistory.init({
+      on: on, L: L, save: save, render: render, focusAfterHistory: focusAfterHistory,
+      getState: function () { return state; },
+      getDraft: function () { return { afterId: trailingAfterId, text: trailingText, indent: trailingIndent }; },
+      setDraft: function (d) {
+        trailingAfterId = d.afterId;
+        trailingText = d.text;
+        trailingIndent = d.indent;
+      },
+      isDragActive: function () { return dragActive; }
+    });
     /* Стрелки модалки времени (часы ±60, минуты ±5 от общего итога). */
     on('durHp', 'click', function () { durTot = Math.min(durTot + 60, 59999); durRender(); });
     on('durHm', 'click', function () { durTot = Math.max(durTot - 60, 0); durRender(); });
