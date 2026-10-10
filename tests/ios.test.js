@@ -272,6 +272,10 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('setAllCollapsed'), 'нет свернуть/развернуть всё');
     assert.ok(/function setAllCollapsed\(all\)[\s\S]{0,600}doneHidden = !!all/.test(appSrc),
       'свернуть/развернуть всё не трогает секцию выполненных');
+    assert.ok(appSrc.includes('e.collapsed = bvCollapsed') && appSrc.includes('function setViewState'),
+      '↩ после свернуть-всё не возвращает вид (только данные)');
+    assert.ok(historySrc.includes('collapsed: vc') && historySrc.includes('setViewState'),
+      'слепок истории без вида, возврат вида невозможен');
     assert.ok(appSrc.includes('askClearDone'), 'нет удаления выполненных с подтверждением');
     assert.ok(appSrc.includes('collapsed-kid'), 'нет скрытия вложенных');
   });

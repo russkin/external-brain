@@ -12,7 +12,8 @@
  *
  * Контекст ctx: on, L, save, render, focusAfterHistory — стабильные ссылки;
  *   getState() (state переназначается), getDraft() {afterId,text,indent} /
- *   setDraft(d) (черновик переназначается), isDragActive() (флаг жеста).
+ *   setDraft(d) (черновик переназначается), isDragActive() (флаг жеста),
+ *   getCollapsed(), isDoneHidden(), setViewState(v) (вид переназначается).
  */
 (function () {
 'use strict';
@@ -74,15 +75,24 @@ function snapTasks() {
   try { return JSON.stringify(state.tasks); } catch (x) { return '[]'; }
 }
 
-/* Полный слепок для истории: задачи + положение/текст/сдвиг пустого поля. */
+/* Полный слепок для истории: задачи + положение/текст/сдвиг пустого поля
+ * + вид (карта сворачивания, флаг секции). Без вида ↩ после 📁/📂 возвращал
+ * бы данные под чужое сворачивание — строки прыгали как попало. */
 function snapFull() {
   if (!C) return { tasks: '[]', afterId: null, text: '', indent: null };
   var d = C.getDraft();
+  var vc = {};
+  try {
+    var cm = C.getCollapsed();
+    for (var id in cm) if (cm[id]) vc[id] = true;
+  } catch (x) {}
   return {
     tasks: snapTasks(),
     afterId: d.afterId,
     text: d.text,
-    indent: d.indent
+    indent: d.indent,
+    collapsed: vc,
+    doneHidden: C.isDoneHidden()
   };
 }
 
@@ -140,6 +150,11 @@ function applySnapshot(s) {
       text: String(s.text || ''),
       indent: (s.indent == null) ? null : s.indent
     });
+    /* Вид восстанавливаем только если он есть в слепке: старые записи
+     * (без collapsed/doneHidden) оставляют текущий вид как есть. */
+    if (s.collapsed || typeof s.doneHidden === 'boolean') {
+      C.setViewState({ collapsed: s.collapsed, doneHidden: s.doneHidden });
+    }
   }
   C.render();
   updateHistoryButtons();

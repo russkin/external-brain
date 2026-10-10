@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v109';
+  var APP_VERSION = 'v110';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -497,7 +497,23 @@
   /* Свернуть/развернуть всё касается и секции выполненных — тоже флагом,
    * без обходов предков (обходы по createdAt-порядку для выполненных
    * бессмысленны: метки старые). Разделитель при этом работает как раньше. */
+  /* Вид для истории: ↩ после 📁/📂 должен вернуть вид, а не только данные. */
+  function setViewState(v) {
+    if (!v || typeof v !== 'object') return;
+    if (v.collapsed && typeof v.collapsed === 'object') {
+      collapsed = {};
+      for (var id in v.collapsed) if (v.collapsed[id]) collapsed[id] = true;
+      saveCollapsed();
+    }
+    if (typeof v.doneHidden === 'boolean') {
+      doneHidden = v.doneHidden;
+      saveDoneHidden();
+    }
+  }
   function setAllCollapsed(all) {
+    var bvCollapsed = {}, bvId;
+    for (bvId in collapsed) if (collapsed[bvId]) bvCollapsed[bvId] = true;
+    var bvHidden = !!doneHidden;
     collapsed = {};
     if (all && state) {
       var tasks = lineTasks();
@@ -508,6 +524,21 @@
     saveCollapsed();
     doneHidden = !!all;
     saveDoneHidden();
+    /* Шаг истории — только если вид реально изменился, иначе повторный
+     * тап по 📁/📂 плодит пустые шаги и ↩ срабатывает вхолостую. */
+    var same = (bvHidden === doneHidden), n = 0, m = 0, k;
+    if (same) {
+      for (k in bvCollapsed) if (bvCollapsed[k]) { n++; if (!collapsed[k]) same = false; }
+      for (k in collapsed) if (collapsed[k]) m++;
+      if (n !== m) same = false;
+    }
+    if (!same) {
+      var e = snapFull();
+      e.collapsed = bvCollapsed;
+      e.doneHidden = bvHidden;
+      pushUndo(e);
+      updateHistoryButtons();
+    }
     render();
   }
 
@@ -2631,7 +2662,10 @@
         trailingText = d.text;
         trailingIndent = d.indent;
       },
-      isDragActive: function () { return dragActive; }
+      isDragActive: function () { return dragActive; },
+      getCollapsed: function () { return collapsed; },
+      isDoneHidden: function () { return doneHidden; },
+      setViewState: setViewState
     });
     /* Стрелки модалки времени (часы ±60, минуты ±5 от общего итога). */
     on('durHp', 'click', function () { durTot = Math.min(durTot + 60, 59999); durRender(); });
