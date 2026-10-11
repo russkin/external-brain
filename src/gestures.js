@@ -221,6 +221,12 @@ function toggleDoneSlide(taskId) {
   row._swOpen = false;
   setTimeout(function () {
     dragActive = false;
+    /* Тап мог сесть мимо флага в поле (или лупа долгого нажатия): каретка
+     * не должна жить анимацию ухода — гасим текстовые тоже. */
+    try {
+      var aeB = document.activeElement;
+      if (aeB && aeB.blur && (aeB.tagName === 'TEXTAREA' || aeB.tagName === 'INPUT')) aeB.blur();
+    } catch (x) {}
     C.mutate(function () { C.toggleDoneNow(taskId, toDone); });
     /* Курсор не должен остаться в поле: фокус могла увести кнопка. */
     try {

@@ -632,6 +632,10 @@ describe('логика вызывается с state.tasks', () => {
       'строка зачёркивается до переезда в секцию');
     assert.ok(tBlock.includes("classList.add('landed')"),
       'строка не проявляется на новом месте');
+    assert.ok(tBlock.includes('var aeB = document.activeElement;') &&
+      tBlock.slice(tBlock.indexOf('var aeB = document.activeElement;'))
+        .includes('C.mutate(function () { C.toggleDoneNow'),
+      'каретка переживает анимацию ухода в выполненные');
     assert.ok(html.includes('.tline.sliding-done') && html.includes('ebLand'),
       'нет затухания ухода / проявления при переезде');
   });
