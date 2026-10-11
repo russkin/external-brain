@@ -119,12 +119,16 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'нет размера/сети/устройства/последнего действия');
     assert.ok(diagSrc.includes('function diagSwInfo()') && diagSrc.includes('diagText().then'),
       'diagText не асинхронный/без SW-инфо');
-    /* Окно диагностики как в purchases: OK + Поделиться, журнал синка внизу. */
+    /* Окно диагностики: Поделиться + Закрыть (не OK), журнал синка внизу. */
     assert.ok(diagSrc.includes("showInfo('Диагностика', txt, txt)"),
       'диагностика не открывается через showInfo');
-    assert.ok(appSrc.includes("clear.textContent = 'Поделиться'") &&
+    assert.ok(appSrc.includes("ok.textContent = 'Закрыть'") &&
+      appSrc.includes("clear.textContent = 'Поделиться'") &&
       appSrc.includes("cancel.style.display = 'none'"),
-      'нет кнопок OK+Поделиться / скрытой Отмены');
+      'нет кнопок Поделиться+Закрыть / скрытой Отмены');
+    assert.ok(appSrc.includes('insertBefore(clear, ok)') &&
+      appSrc.includes('insertBefore(ok, clear)'),
+      'Закрыть не после Поделиться / порядок кнопок не возвращается');
     assert.ok(diagSrc.includes("lines.push('Журнал:')") && trigSrc.includes("EBDiag.push('ошибка синка: "),
       'нет журнала синк-ошибок в диагностике');
     /* Постоянная («вечная») копия: кнопка + автокопия при обновлении версии. */

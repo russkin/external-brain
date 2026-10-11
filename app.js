@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v123';
+  var APP_VERSION = 'v124';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1042,10 +1042,14 @@
     if (!back || !ok || !text) return Promise.resolve();
     text.textContent = title + '\n\n' + body;
     if (input) input.style.display = 'none';
-    ok.textContent = 'OK';
+    /* Диагностика: «Закрыть» вместо «OK», и оно после «Поделиться».
+     * Порядок возвращаем при закрытии — иначе askText/askConfirm
+     * покажут кнопки в переставленном виде и с чужим текстом. */
+    ok.textContent = 'Закрыть';
     if (clear) {
       clear.textContent = 'Поделиться';
       clear.style.display = shareable ? '' : 'none';
+      if (ok.parentNode) ok.parentNode.insertBefore(clear, ok);
     }
     if (cancel) cancel.style.display = 'none';
     back.classList.add('open');
@@ -1053,7 +1057,13 @@
       function done() {
         back.classList.remove('open');
         ok.onclick = null;
-        if (clear) { clear.onclick = null; clear.textContent = 'Очистить'; clear.style.display = 'none'; }
+        ok.textContent = 'OK';
+        if (clear) {
+          clear.onclick = null;
+          clear.textContent = 'Очистить';
+          clear.style.display = 'none';
+          if (ok.parentNode) ok.parentNode.insertBefore(ok, clear);
+        }
         if (cancel) { cancel.onclick = null; cancel.style.display = ''; }
         if (input) input.style.display = '';
         resolve();
