@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v128';
+  var APP_VERSION = 'v129';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -86,6 +86,7 @@
 
   /* --- Время задачи (estMin, минуты): свайп вправо / тап по метке --- */
   var durTot = 0;
+  var durSum = true;
   function durRender() {
     var h = el('durHv'), m = el('durMv');
     if (h) h.textContent = String(Math.floor(durTot / 60));
@@ -93,18 +94,27 @@
   }
 
   /* Модалка со стрелками: часы ±60, минуты ±5 (итог — общие минуты,
-   * перенос разряда автоматический). OK — минуты, «Убрать» — 0,
-   * Отмена — null. Статичные кнопки стрелок подписаны в wire() через on(). */
-  function askDuration(initialMin) {
+   * перенос разряда автоматический). OK — {минуты, флаг суммы}, «Убрать» —
+   * {0, флаг}, Отмена — null. У родителя виден флаг «Суммировать
+   * из вложенных»: снят — метка своя вручную (lineEstMin). Статичные
+   * кнопки стрелок подписаны в wire() через on(). */
+  function askDuration(initialMin, showSum, initialSum) {
     return new Promise(function (resolve) {
       var back = el('modalBack'), text = el('modalText'), input = el('modalInput');
       var ok = el('modalOk'), cancel = el('modalCancel'), clearBtn = el('modalClear');
       var ctl = el('durCtl');
+      var sumRow = el('durSumRow'), sumBox = el('durSum');
       if (!back || !ok || !cancel || !ctl) { resolve(null); return; }
       text.textContent = 'Сколько времени займёт?';
       if (input) input.style.display = 'none';
       durTot = Math.max(0, Math.min(59999, parseInt(initialMin, 10) || 0));
+      durSum = !!initialSum;
       durRender();
+      if (sumRow) sumRow.style.display = showSum ? '' : 'none';
+      if (sumBox) {
+        sumBox.checked = durSum;
+        sumBox.onchange = function () { durSum = !!sumBox.checked; };
+      }
       ctl.style.display = 'flex';
       if (clearBtn) { clearBtn.textContent = 'Убрать'; clearBtn.style.display = ''; }
       back.classList.add('open');
@@ -112,6 +122,8 @@
         back.classList.remove('open');
         ok.onclick = null; cancel.onclick = null;
         ctl.style.display = 'none';
+        if (sumRow) sumRow.style.display = 'none';
+        if (sumBox) sumBox.onchange = null;
         if (clearBtn) {
           clearBtn.onclick = null;
           clearBtn.textContent = 'Очистить';
@@ -119,8 +131,8 @@
         }
         resolve(v);
       }
-      ok.onclick = function () { done(durTot); };
-      if (clearBtn) clearBtn.onclick = function () { done(0); };
+      ok.onclick = function () { done({ min: durTot, sum: durSum }); };
+      if (clearBtn) clearBtn.onclick = function () { done({ min: 0, sum: durSum }); };
       cancel.onclick = function () { done(null); };
     });
   }
@@ -129,13 +141,17 @@
     if (!taskId || !state) return;
     var task = L.getTask(state.tasks, taskId);
     if (!task || task.deleted) return;
-    /* Родителю время ставить нельзя (свайп вправо и тап по метке ведут
-     * сюда): его метка — авто-сумма первого вложения, см. lineEstMin. */
-    if (hasKidsFull(taskId)) return;
-    var cur = task.estMin || 0;
-    askDuration(cur).then(function (min) {
-      if (min == null || min === cur) return;
-      mutate(function () { L.clarifyTask(state.tasks, taskId, { estMin: min }); });
+    /* Родитель: метка — авто-сумма, но флаг можно снять и поставить время
+     * вручную (свайп вправо и тап по метке ведут сюда). Листу флаг
+     * не показываем — суммировать нечего. */
+    var parent = hasKidsFull(taskId);
+    var sum = parent ? task.sumKids !== false : false;
+    var cur = (!parent || task.sumKids === false) ? (task.estMin || 0) : 0;
+    askDuration(cur, parent, sum).then(function (res) {
+      if (!res || (res.min === cur && res.sum === sum)) return;
+      var patch = { estMin: res.min };
+      if (parent) patch.sumKids = res.sum;
+      mutate(function () { L.clarifyTask(state.tasks, taskId, patch); });
     });
   }
 

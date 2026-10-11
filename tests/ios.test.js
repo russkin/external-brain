@@ -657,8 +657,9 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(swBlock.includes('C.openDuration(taskId)'), 'свайп вправо не открывает время');
     assert.ok(swBlock.includes('swHadFlag = true') && swBlock.includes('!swHadFlag'),
       'возврат из-под раскрытого флага не глушит открытие времени');
-    assert.ok(appSrc.includes('if (hasKidsFull(taskId)) return;'),
-      'родителю не закрыта установка времени');
+    assert.ok(appSrc.includes('var parent = hasKidsFull(taskId)') &&
+      appSrc.includes('task.sumKids === false'),
+      'родителю не открыта установка времени при снятом флаге суммы');
     assert.ok(rendSrc.includes('function lineEstMin') && rendSrc.includes('estMin: lineEstMin(t)'),
       'метка родителя не считается автоматически');
     assert.ok(rendSrc.includes('sum += lineEstMin(full[j])') && rendSrc.includes('ij === pin + 1'),
@@ -671,7 +672,18 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('function askDuration'), 'нет модалки времени');
     assert.ok(appSrc.includes('function openDuration'), 'нет точки входа модалки времени');
     assert.ok(appSrc.includes("clearBtn.textContent = 'Убрать'"), 'нет кнопки снятия метки');
-    assert.ok(appSrc.includes('{ estMin: min }'), 'время не пишется в задачу');
+    assert.ok(appSrc.includes('var patch = { estMin: res.min };') &&
+      appSrc.includes('L.clarifyTask(state.tasks, taskId, patch)'),
+      'время не пишется в задачу');
+    assert.ok(html.includes('id="durSumRow"') && html.includes('id="durSum"') &&
+      html.includes('Суммировать из вложенных'),
+      'нет флага суммы в модалке времени');
+    assert.ok(appSrc.includes('function askDuration(initialMin, showSum, initialSum)') &&
+      appSrc.includes('sumBox.checked = durSum') &&
+      appSrc.includes("if (parent) patch.sumKids = res.sum;"),
+      'флаг суммы не ходит из модалки в задачу');
+    assert.ok(rendSrc.includes('|| t.sumKids === false'),
+      'снятый флаг не возвращает родителю ручную метку');
     assert.ok(rendSrc.includes('estMin: lineEstMin(t)') &&
       rendSrc.includes('estMin: lineEstMin(doneVis[dv])'),
       'редендер не отдаёт estMin в строку');

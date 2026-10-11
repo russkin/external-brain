@@ -109,7 +109,9 @@ function makeGrip() {
  * (openDuration закрыт), данные не трогаем на случай расформировки группы:
  * без детей задача снова показывает своё время. Появление метки у родителя
  * — только если сумма > 0 (хотя бы у одной задачи первого вложения
- * задано время). */
+ * задано время).
+ * Флаг «Суммировать из вложенных» снят (sumKids === false) — родитель
+ * показывает своё estMin вручную, как лист, поддерево не считается. */
 function lineEstMin(t) {
   if (!t) return 0;
   var full = C.fullList();
@@ -117,7 +119,7 @@ function lineEstMin(t) {
   for (var i = 0; i < full.length; i++) {
     if (full[i].id === t.id) { pi = i; break; }
   }
-  if (pi === -1 || !L.hasKids(full, pi)) return t.estMin || 0;
+  if (pi === -1 || !L.hasKids(full, pi) || t.sumKids === false) return t.estMin || 0;
   var pin = C.lineIndent(full[pi]);
   var sum = 0;
   for (var j = pi + 1; j < full.length; j++) {

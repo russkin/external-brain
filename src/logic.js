@@ -3,8 +3,10 @@
  * Модель (плоский список, как задачи в Google Keep): лишние статусы и поле
  *   'project' УДАЛЕНЫ (H-07, в живых задачах не использовались); старые
  *   данные с ними нормализация молча приводит к 'inbox'/без проекта.
- *   task = { id, title, status, estMin,
+ *   task = { id, title, status, estMin, sumKids,
  *            indent, createdAt, updatedAt, doneAt, ts, deleted }
+ *   sumKids: у родителя — считать ли метку авто-суммой вложенных (по
+ *            умолчанию true; false — своё estMin вручную, как у листа).
  *   status: 'inbox' (новые) | 'next' (в работе) | 'done' (готово)
  *   indent: уровень отступа 0..8 — задача с отступом входит в группу задачи
  *           без отступа (или с меньшим отступом) сверху.
@@ -73,6 +75,7 @@ function createTask(tasks, title, nowMs, opts) {
     title: t,
     status: 'inbox',
     estMin: normEst(opts.estMin),
+    sumKids: true,
     indent: normIndent(opts.indent),
     createdAt: now,
     updatedAt: now,
@@ -85,7 +88,7 @@ function createTask(tasks, title, nowMs, opts) {
 }
 
 /* Правка полей задачи: patch
- * { status, title, indent, estMin }. Невалидный status игнорируется. */
+ * { status, title, indent, estMin, sumKids }. Невалидный status игнорируется. */
 function clarifyTask(tasks, id, patch, nowMs) {
   var task = getTask(tasks, id);
   if (!task || task.deleted) return null;
@@ -101,6 +104,7 @@ function clarifyTask(tasks, id, patch, nowMs) {
   if (patch.title != null) task.title = normTitle(patch.title);
   if (patch.indent != null) task.indent = normIndent(patch.indent);
   if (patch.estMin != null) task.estMin = normEst(patch.estMin);
+  if (patch.sumKids != null) task.sumKids = patch.sumKids !== false;
   task.updatedAt = now;
   task.ts = now;
   return task;
@@ -388,6 +392,7 @@ function normalizeTask(t) {
     title: normTitle(t.title),
     status: status,
     estMin: normEst(t.estMin),
+    sumKids: t.sumKids !== false,
     indent: indent,
     createdAt: createdAt,
     updatedAt: updatedAt,
@@ -445,7 +450,7 @@ function normalizeTasks(tasks) {
 function cloneTask(t) {
   return {
     id: t.id, title: t.title, status: t.status, indent: normIndent(t.indent),
-    estMin: normEst(t.estMin),
+    estMin: normEst(t.estMin), sumKids: t.sumKids !== false,
     createdAt: t.createdAt,
     updatedAt: t.updatedAt, doneAt: t.doneAt, ts: t.ts || 0, deleted: !!t.deleted
   };

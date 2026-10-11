@@ -113,6 +113,18 @@ describe('правка полей (clarify)', () => {
     assert.equal(L.getTask(t, 'a').estMin, 59999);
     assert.equal(L.getTask(t, 'a').ts, 4000);
   });
+  it('sumKids: ставится через patch, по умолчанию авто-сумма', () => {
+    const t = L.blankTasks();
+    mk(t, 'Дело', 1000, { id: 'a' });
+    assert.equal(L.getTask(t, 'a').sumKids, true, 'новая задача суммирует');
+    L.clarifyTask(t, 'a', { sumKids: false }, 2000);
+    assert.equal(L.getTask(t, 'a').sumKids, false);
+    assert.equal(L.getTask(t, 'a').ts, 2000);
+    L.clarifyTask(t, 'a', { sumKids: true }, 3000);
+    assert.equal(L.getTask(t, 'a').sumKids, true);
+    L.clarifyTask(t, 'a', {}, 4000);
+    assert.equal(L.getTask(t, 'a').sumKids, true, 'пустой patch флаг не трогает');
+  });
 });
 
 describe('готово / вернуть / удалить', () => {
@@ -344,6 +356,10 @@ describe('нормализация', () => {
     assert.equal(L.normalizeTask({ id: 'a', title: 'x', estMin: 'abc' }).estMin, 0);
     assert.equal(L.normalizeTask({ id: 'a', title: 'x', estMin: -3 }).estMin, 0);
     assert.equal(L.normalizeTask({ id: 'a', title: 'x', estMin: 70000 }).estMin, 59999);
+    assert.equal(L.normalizeTask({ id: 'a', title: 'x' }).sumKids, true, 'по умолчанию авто-сумма');
+    assert.equal(L.normalizeTask({ id: 'a', title: 'x', sumKids: false }).sumKids, false, 'отказ переживает нормализацию');
+    assert.equal(L.normalizeTask({ id: 'a', title: 'x', sumKids: 0 }).sumKids, true, 'только явный false отключает');
+    assert.equal(L.normalizeTask({ id: 'a', title: 'x', sumKids: 1 }).sumKids, true);
     assert.equal(mk([], 'Дело', 1000).estMin, 0);
   });
   it('fmtDur: метка в углу строки', () => {
@@ -398,6 +414,10 @@ describe('слияние LWW', () => {
       [{ id: 'y', title: 'Y', ts: 1, createdAt: 2, updatedAt: 1, estMin: 15 }]);
     assert.equal(me[0].estMin, 30, 'mergeTasks сохранил время x');
     assert.equal(me[1].estMin, 15, 'mergeTasks сохранил время y');
+    assert.equal(L.mergeTask({ id: 'a', title: 'L', ts: 2, sumKids: false },
+      { id: 'a', title: 'R', ts: 1 }).sumKids, false, 'слияние несёт отказ от суммы');
+    assert.equal(L.mergeTask({ id: 'a', title: 'L', ts: 1 },
+      { id: 'a', title: 'R', ts: 2, sumKids: false }).sumKids, false, 'победа remote с отказом');
   });
   it('mergeTasks объединяет наборы', () => {
     const a = [{ id: 'x', title: 'X', status: 'inbox', ts: 100, createdAt: 100, updatedAt: 100 }];
