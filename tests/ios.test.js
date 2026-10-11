@@ -611,7 +611,11 @@ describe('логика вызывается с state.tasks', () => {
     var iW = gestSrc.indexOf('function wireLineSwipe');
     var swBlock = gestSrc.slice(iW, gestSrc.indexOf('function toggleDoneSlide'));
     assert.ok(swBlock.includes('dx > 48'), 'нет порога свайпа вправо');
-    assert.ok(swBlock.includes('C.openDuration(taskId)'), 'свайп вправо не открывает время');
+    assert.ok(swBlock.includes('C.openDuration(taskId, swOwnFocus)'), 'свайп вправо не открывает время');
+    assert.ok(swBlock.includes('swOwnFocus') && swBlock.includes('function refocusRow'),
+      'свайп гасит клавиатуру своей пустой строки без возврата');
+    assert.ok(swBlock.includes('} else if (swOwnFocus)'),
+      'отменённый свайп не возвращает курсор');
     assert.ok(swBlock.includes('swHadFlag = true') && swBlock.includes('!swHadFlag'),
       'возврат из-под раскрытого флага не глушит открытие времени');
     assert.ok(appSrc.includes('var parent = hasKidsFull(taskId)') &&
@@ -632,6 +636,9 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('var patch = { estMin: res.min };') &&
       appSrc.includes('L.clarifyTask(state.tasks, taskId, patch)'),
       'время не пишется в задачу');
+    assert.ok(appSrc.includes('function openDuration(taskId, refocus)') &&
+      appSrc.includes('if (refocus) focusTaskEnd(taskId);'),
+      'после модалки курсор не возвращается в строку');
     assert.ok(html.includes('id="durSumRow"') && html.includes('id="durSum"') &&
       html.includes('Суммировать из вложенных'),
       'нет флага суммы в модалке времени');

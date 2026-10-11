@@ -77,6 +77,22 @@ function wireLineSwipe(div, taskId) {
   /* Флаг «✓» был открыт на старте жеста или раскрыт этим же жестом:
    * возврат пальца вправо — закрытие флага, не открытие времени. */
   var swHadFlag = false;
+  /* Своё пустое поле было в фокусе на старте свайпа вправо (набор идёт):
+   * после модалки/отмены вернём курсор в строку — клавиатура фактически
+   * не пропадает. Blur на жесте сохраняем (старые устройства). */
+  var swOwnFocus = false;
+  function refocusRow() {
+    var box = el('lines');
+    var row = null;
+    if (box && box.querySelectorAll) {
+      var rows = box.querySelectorAll('.tline[data-id]');
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].getAttribute('data-id') === taskId) { row = rows[i]; break; }
+      }
+    }
+    var inp = row && row.querySelector ? row.querySelector('.tinput') : null;
+    if (inp && inp.focus) { try { inp.focus(); } catch (x) {} }
+  }
   /* Состояние — на элементе, а не в closure: свайп делят обработчики
    * строки и старта drag'а, рассинхрон даёт залипший флаг. */
   div._swOpen = false;
@@ -126,6 +142,8 @@ function wireLineSwipe(div, taskId) {
       dragActive = true;
       try { div.setPointerCapture(e.pointerId); } catch (x) {}
       var aeR = document.activeElement;
+      swOwnFocus = !!(aeR && aeR.tagName === 'TEXTAREA' && div.contains &&
+        div.contains(aeR) && !String(aeR.value || '').trim());
       if (aeR && aeR.blur && (aeR.tagName === 'TEXTAREA' || aeR.tagName === 'INPUT')) {
         try { aeR.blur(); } catch (x) {}
       }
@@ -147,7 +165,13 @@ function wireLineSwipe(div, taskId) {
        * метке в углу — отпускание часто попадает именно в неё),
        * не должен вернуть фокус в поле или открыть вторую модалку. */
       div._swBlockUntil = Date.now() + 400;
-      C.openDuration(taskId);
+      C.openDuration(taskId, swOwnFocus);
+      swOwnFocus = false;
+    } else if (swOwnFocus) {
+      /* Жест отменён (палец вернулся): модалки нет, курсор возвращаем
+       * сразу — набор продолжается с того же места. */
+      swOwnFocus = false;
+      refocusRow();
     }
     /* Тап по самому флагу сюда не входит: у него свой обработчик. */
     if (e.target && e.target.closest && e.target.closest('.doneflag')) return;
@@ -161,6 +185,7 @@ function wireLineSwipe(div, taskId) {
     swPid = null;
     dragActive = false;
     div._swRArm = false;
+    swOwnFocus = false;
   });
   div.addEventListener('click', function (e) {
     if (div._swBlockUntil && Date.now() < div._swBlockUntil) {

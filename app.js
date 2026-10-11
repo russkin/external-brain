@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v130';
+  var APP_VERSION = 'v131';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -137,21 +137,25 @@
     });
   }
 
-  function openDuration(taskId) {
+  function openDuration(taskId, refocus) {
     if (!taskId || !state) return;
     var task = L.getTask(state.tasks, taskId);
     if (!task || task.deleted) return;
     /* Родитель: метка — авто-сумма, но флаг можно снять и поставить время
      * вручную (свайп вправо и тап по метке ведут сюда). Листу флаг
-     * не показываем — суммировать нечего. */
+     * не показываем — суммировать нечего. refocus: строка была в фокусе
+     * на старте свайпа (набор в пустой) — после модалки вернуть курсор,
+     * клавиатура фактически не пропадает. */
     var parent = hasKidsFull(taskId);
     var sum = parent ? task.sumKids !== false : false;
     var cur = (!parent || task.sumKids === false) ? (task.estMin || 0) : 0;
     askDuration(cur, parent, sum).then(function (res) {
-      if (!res || (res.min === cur && res.sum === sum)) return;
-      var patch = { estMin: res.min };
-      if (parent) patch.sumKids = res.sum;
-      mutate(function () { L.clarifyTask(state.tasks, taskId, patch); });
+      if (res && (res.min !== cur || res.sum !== sum)) {
+        var patch = { estMin: res.min };
+        if (parent) patch.sumKids = res.sum;
+        mutate(function () { L.clarifyTask(state.tasks, taskId, patch); });
+      }
+      if (refocus) focusTaskEnd(taskId);
     });
   }
 
