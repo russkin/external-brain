@@ -940,6 +940,19 @@ describe('синк: триггеры и протокол', () => {
     assert.ok(!html.includes('testBanner'),
       'плашка тестовой версии осталась после конца рефакторинга');
   });
+  it('шапка не уезжает за экран при открытой клавиатуре', () => {
+    assert.ok(rendSrc.includes('function syncHeaderLift'), 'нет дотяжки шапки');
+    assert.ok(rendSrc.includes('visualViewport') && rendSrc.includes('offsetTop') &&
+      rendSrc.includes('translateY'),
+      'шапка не едет за визуальным вьюпортом');
+    assert.ok(rendSrc.includes("querySelector('header')"), 'дотяжка не той шапки');
+    assert.ok(rendSrc.includes("tagName === 'TEXTAREA'") && rendSrc.includes('focusin') &&
+      rendSrc.includes('focusout'),
+      'шапка дотягивается не только пока идёт набор');
+    assert.ok(rendSrc.includes("addEventListener('resize', syncHeaderLift") &&
+      rendSrc.includes("addEventListener('scroll', syncHeaderLift"),
+      'панелирование клавиатуры не слушается');
+  });
   it('sync.js: LWW по задачам, no-store, ретраи 409/422', () => {
     assert.ok(syncSrc.includes('mergeTasks'), 'нет mergeTasks в sync');
     assert.ok(syncSrc.includes('normalizeTasks'), 'нет normalizeTasks в sync');

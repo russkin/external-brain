@@ -409,6 +409,31 @@ function focusTrailing() {
   }
 }
 
+/* Шапка над клавиатурой: в оверлейном режиме (iOS Safari, часть Android)
+ * браузер везёт к полю ВИЗУАЛЬНЫЙ вьюпорт (visualViewport.offsetTop > 0),
+ * а липкая шапка привязана к верху РАСКЛАДКИ — и уезжает вверх за экран,
+ * когда работаешь с задачей в нижней половине списка. Пока идёт набор
+ * (фокус в поле), дотягиваем шапку вниз на величину сдвига; без клавиатуры
+ * и вне набора — без transform. Как searchLift в src/search.js. */
+var lastHeadLift = null;
+function syncHeaderLift() {
+  var h = null;
+  try { h = document.querySelector('header'); } catch (x) { h = null; }
+  if (!h || !h.style) return;
+  var off = 0;
+  try {
+    var ae = document.activeElement;
+    if (ae && (ae.tagName === 'TEXTAREA' || ae.tagName === 'INPUT') && window.visualViewport) {
+      off = Math.round(window.visualViewport.offsetTop || 0);
+      if (!(off > 1)) off = 0;
+    }
+  } catch (x) { off = 0; }
+  var lift = off ? 'translateY(' + off + 'px)' : '';
+  if (lift === lastHeadLift) return;
+  lastHeadLift = lift;
+  h.style.transform = lift;
+}
+
 function renderStatus() {
   var state = C.getState();
   C.renderNet();
@@ -431,6 +456,16 @@ function init(ctx) {
   C = ctx;
   L = ctx.L;
   INDENT_STEP = ctx.INDENT_STEP;
+  /* Клавиатура/панелирование: везём шапку за визуальным вьюпортом,
+   * только пока идёт набор. Прямые подписки (как в жестах): id нет. */
+  try {
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', syncHeaderLift);
+      window.visualViewport.addEventListener('scroll', syncHeaderLift);
+    }
+    document.addEventListener('focusin', syncHeaderLift);
+    document.addEventListener('focusout', syncHeaderLift);
+  } catch (x) {}
 }
 
 var api = {
