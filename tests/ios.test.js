@@ -421,6 +421,15 @@ describe('логика вызывается с state.tasks', () => {
     var sBody = appSrc.slice(iS, iS + 450);
     assert.ok(sBody.includes('hasKidsFull(tasks[i].id)'),
       'свернуть все смотрит только на живых детей');
+    assert.ok(rendSrc.includes('function makeGrip(folded)') &&
+      rendSrc.includes("g.textContent = '▶'") &&
+      rendSrc.includes("g.className = 'grip'"),
+      'свёрнутая группа не показывает треугольник / grip пересобран');
+    assert.ok(rendSrc.includes('folded: !!(collapsed[t.id]') &&
+      rendSrc.includes('makeGrip(!!opts.folded)'),
+      'треугольник ставится не только свёрнутому с детьми');
+    assert.ok(html.includes('.grip.folded'),
+      'нет стиля треугольника');
     var iD = rendSrc.indexOf('Выполненные — под полем добавления');
     var dBody = rendSrc.slice(iD, iD + 2200);
     assert.ok(!dBody.includes('isHiddenByCollapse(full, di, collapsed)'),

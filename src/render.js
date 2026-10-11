@@ -86,9 +86,20 @@ function expandForAnchor(anchorId, indent) {
   if (changed) C.saveCollapsed();
 }
 
-function makeGrip() {
+function makeGrip(folded) {
   var g = document.createElement('span');
   g.className = 'grip';
+  if (folded) {
+    /* Свёрнутая группа: треугольник вместо точек — видно, что внутри
+     * что-то спрятано. Сам элемент тот же (класс grip, размер, подписки
+     * жестов висят на нём, а не на точках): таскать и тапать работает
+     * как раньше, механика не тронута. */
+    g.classList.add('folded');
+    g.title = 'Развернуть группу';
+    g.setAttribute('aria-label', 'Развернуть группу');
+    g.textContent = '▶';
+    return g;
+  }
   g.title = 'Тащить / свернуть группу';
   g.setAttribute('aria-label', 'Тащить');
   for (var i = 0; i < 6; i++) {
@@ -143,7 +154,7 @@ function makeLine(taskId, value, indent, opts) {
   var body = document.createElement('div');
   body.className = 'tbody';
   div.appendChild(body);
-  var grip = makeGrip();
+  var grip = makeGrip(!!opts.folded);
   body.appendChild(grip);
   var inp = document.createElement('textarea');
   inp.className = 'tinput';
@@ -301,6 +312,7 @@ function renderLines() {
     return makeLine(t.id, t.title, C.lineIndent(t), {
       doneShown: L.isDoneShown(full, fullIdx[t.id]),
       hidden: L.isHiddenByCollapse(tasks, i, collapsed),
+      folded: !!(collapsed[t.id] && L.hasKids(full, fullIdx[t.id])),
       estMin: lineEstMin(t)
     });
   }
