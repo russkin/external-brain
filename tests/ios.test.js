@@ -273,6 +273,11 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(gestSrc.includes('applyDropIndent'), 'нет пересчёта отступа при drop');
     assert.ok(gestSrc.includes('prevInd'), 'не смотрим соседа сверху');
     assert.ok(gestSrc.includes('nextInd'), 'не смотрим соседа снизу');
+    assert.ok(gestSrc.includes('function nbrShown(r)') &&
+      gestSrc.includes("rt.status === 'done'"),
+      'соседи посадки — скрытые и выполненные (чужой отступ при drop)');
+    assert.ok(gestSrc.includes('if (nbrShown(sibs[pi])) { prevRow = sibs[pi]; break; }'),
+      'сосед сверху берётся без проверки видимости');
   });
   it('группы отступом: сдвиг за grip, наследование, потолок +1', () => {
     assert.ok(appSrc.includes('INDENT_STEP'), 'нет шага отступа');

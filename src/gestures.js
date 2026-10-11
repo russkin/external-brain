@@ -22,6 +22,18 @@
 
 function el(id) { return document.getElementById(id); }
 
+/* Виден ли ряд в потоке: свёрнутые дети прячутся КЛАССОМ collapsed-kid
+ * (index.html), а не инлайн-стилем — проверка только style.display их
+ * не видит и считает занимающими место (дыра плывёт вверх по мере
+ * движения вниз мимо свёрнутых групп; тот же класс подводят потолок
+ * сдвига и соседи посадки — см. indentBounds/applyDropIndent). */
+function rowShown(cr) {
+  if (!cr) return false;
+  if (cr.style && cr.style.display === 'none') return false;
+  if (cr.classList && cr.classList.contains('collapsed-kid')) return false;
+  return true;
+}
+
 var C = null;
 var L = null;
 var INDENT_STEP = 0;
@@ -352,12 +364,24 @@ function applyDropIndent(box, sibs, di, kids) {
     var t = id ? L.getTask(state.tasks, id) : null;
     return t ? C.lineIndent(t) : 0;
   }
-  var prevRow = di > 0 ? sibs[di - 1] : null;
-  /* Следующий сосед — вне перетащенного блока: свои дети не считаются
-   * чужим вложением, иначе родитель втянется под соседа. */
+  /* Соседи — только видимые живые строки: скрытые свёрнутые и выполненные
+   * (вне своей секции) дают чужой отступ — тот же класс бага, что потолок
+   * в indentBounds. Свои дети не считаются чужим вложением, иначе родитель
+   * втянется под соседа. */
+  function nbrShown(r) {
+    if (!r || !r.getAttribute) return false;
+    var rid = r.getAttribute('data-id');
+    var rt = rid ? L.getTask(state.tasks, rid) : null;
+    if (!rt || rt.deleted || rt.status === 'done') return false;
+    return rowShown(r);
+  }
+  var prevRow = null;
+  for (var pi = di - 1; pi >= 0; pi--) {
+    if (nbrShown(sibs[pi])) { prevRow = sibs[pi]; break; }
+  }
   var nextRow = null;
   for (var ni = di + 1; ni < sibs.length; ni++) {
-    if (kids.indexOf(sibs[ni]) === -1) { nextRow = sibs[ni]; break; }
+    if (kids.indexOf(sibs[ni]) === -1 && nbrShown(sibs[ni])) { nextRow = sibs[ni]; break; }
   }
   var prevInd = prevRow ? indOf(prevRow) : 0;
   var nextInd = nextRow ? indOf(nextRow) : -1;
@@ -482,16 +506,6 @@ function wireLineDrag(div, grip, inp) {
   }
   function rowsOf(box) {
     return Array.prototype.slice.call(box.querySelectorAll('.tline'));
-  }
-  /* Виден ли ряд в потоке: свёрнутые дети прячутся КЛАССОМ collapsed-kid
-   * (index.html), а не инлайн-стилем — проверка только style.display их
-   * не видит и считает занимающими место (дыра плывёт вверх по мере
-   * движения вниз мимо свёрнутых групп). */
-  function rowShown(cr) {
-    if (!cr) return false;
-    if (cr.style && cr.style.display === 'none') return false;
-    if (cr.classList && cr.classList.contains('collapsed-kid')) return false;
-    return true;
   }
   function myTask() {
     var id = div.getAttribute ? div.getAttribute('data-id') : null;
