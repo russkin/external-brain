@@ -124,9 +124,11 @@ function setLight(color, blink) {
   var alert = color === 'red' && /github-put (409|422)/.test(err);
   n.classList.toggle('alert', alert);
   n.textContent = alert ? '!' : '';
-  /* Жёлтый «!» той же высоты слева от красного квадратика (запрос v121). */
+  /* Жёлтый «!» той же высоты слева от квадратика — при ЛЮБОМ красном
+   * (любая ошибка синка, не только конфликт): красный без жёлтого
+   * не читается как проблема. Белый «!» внутри — только конфликт. */
   var warn = el('syncAlert');
-  if (warn) warn.classList.toggle('on', alert);
+  if (warn) warn.classList.toggle('on', color === 'red');
   if (color === 'yellow') n.title = 'Идёт синхронизация…';
   else if (alert) n.title = 'Конфликт записи (409/422). Нажми — принудительный синк.';
   else if (color === 'red') n.title = (syncStatus || 'Ошибка синка') + '. Нажми — попробовать снова.';

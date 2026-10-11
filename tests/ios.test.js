@@ -213,7 +213,7 @@ describe('устойчивость к рассинхрону кэшей', () => 
       trigSrc.includes('#f44336') && trigSrc.includes('#bbb'),
       'цвета светофора не исходные яркие');
     assert.ok(html.includes('id="syncAlert"') && trigSrc.includes("el('syncAlert')") &&
-      trigSrc.includes("warn.classList.toggle('on', alert)"),
+      trigSrc.includes("warn.classList.toggle('on', color === 'red')"),
       'нет жёлтого «!» перед красным квадратиком');
     assert.ok(html.includes('#syncAlert.on { display: inline-block; }') &&
       html.includes('font-size: 19px'),
