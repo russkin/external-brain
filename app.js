@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v136';
+  var APP_VERSION = 'v137';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -767,10 +767,22 @@
           }
           break;
         }
+        /* Потолок drag (сосед сверху + 1) действует и на рождение: иначе
+         * строка встаёт туда, где сдвиг её сразу зажмёт вниз (второй
+         * вместо первого и наоборот — «через раз»). TOP всегда в 0. */
+        var putIndent = newIndent;
+        if (newAnchor !== 'TOP') {
+          var anchorTask = L.getTask(state.tasks, newAnchor);
+          var putCap = anchorTask ? lineIndent(anchorTask) + 1 : newIndent;
+          if (putIndent > putCap) putIndent = putCap;
+          if (putIndent < 0) putIndent = 0;
+        } else {
+          putIndent = 0;
+        }
         var madeEnter = (newAnchor === 'TOP') ?
           placeTaskTop('', true) :
-          placeTaskAfter(newAnchor, '', newIndent, true);
-        if (madeEnter) expandForAnchor(newAnchor, newIndent);
+          placeTaskAfter(newAnchor, '', putIndent, true);
+        if (madeEnter) expandForAnchor(newAnchor, putIndent);
         render();
         if (madeEnter) focusTaskEnd(madeEnter.id);
       } else {

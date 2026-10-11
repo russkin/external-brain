@@ -156,7 +156,7 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'lineTasks фильтрует пустые задачи');
     assert.ok(!appSrc.includes('return !t.deleted && t.title;'),
       'fullList фильтрует пустые задачи');
-    assert.ok(appSrc.includes("placeTaskAfter(newAnchor, '', newIndent, true)"),
+    assert.ok(appSrc.includes("placeTaskAfter(newAnchor, '', putIndent, true)"),
       'нет создания пустой задачи по Enter');
     assert.ok(!appSrc.includes("return 'removed'") &&
       appSrc.includes("clarifyTask(state.tasks, taskId, { title: '' })"),
@@ -478,17 +478,27 @@ describe('логика вызывается с state.tasks', () => {
       'сцепка не закрывает input от позднего change');
   });
   it('Enter в строке рождает пустую задачу ниже, курсор в неё', () => {
-    assert.ok(appSrc.includes("placeTaskAfter(newAnchor, '', newIndent, true)"),
+    assert.ok(appSrc.includes("placeTaskAfter(newAnchor, '', putIndent, true)"),
       'нет вставки пустой задачи по месту');
     assert.ok(appSrc.includes("placeTaskTop('', true)"), 'нет вставки сверху через TOP');
     assert.ok(appSrc.includes('focusTaskEnd(madeEnter.id)'), 'курсор не встаёт в новую строку');
     assert.ok(!appSrc.includes('focusLineAfter'), 'старый фокус дальше остался');
-    assert.ok(appSrc.includes('expandForAnchor(newAnchor, newIndent)'),
+    assert.ok(appSrc.includes('expandForAnchor(newAnchor, putIndent)'),
       'строка под свёрнутым родится невидимой');
+    assert.ok(appSrc.includes('var putCap = anchorTask ? lineIndent(anchorTask) + 1 : newIndent;') &&
+      appSrc.includes('if (putIndent > putCap) putIndent = putCap;'),
+      'рождение выше потолка сдвига (строку тут же зажмёт)');
+  });
+  it('потолок сдвига смотрит на видимого соседа сверху', () => {
+    var iB = gestSrc.indexOf('function indentBounds');
+    assert.ok(iB !== -1, 'нет indentBounds');
+    var bBody = gestSrc.slice(iB, gestSrc.indexOf('function expandParentAbove', iB));
+    assert.ok(bBody.includes('if (!rowShown(rows[i])) continue;'),
+      'скрытая строка раздувает потолок сдвига');
   });
   it('Enter продолжает уровень: дочерняя за дочерней', () => {
     assert.ok(appSrc.includes('var newIndent = lineIndent(moved)'), 'Enter в строке не даёт сестру');
-    assert.ok(appSrc.includes("placeTaskAfter(newAnchor, '', newIndent, true)"),
+    assert.ok(appSrc.includes("placeTaskAfter(newAnchor, '', putIndent, true)"),
       'цепочка не держит отступ');
   });
   it('отмена Enter: задача уходит одним шагом', () => {
@@ -525,7 +535,7 @@ describe('логика вызывается с state.tasks', () => {
   it('Enter в родителе: пустая задача на уровне первой дочерней', () => {
     var iN = appSrc.indexOf('var newIndent');
     assert.ok(iN !== -1, 'нет расчёта отступа строки под строкой');
-    var iA = appSrc.indexOf("placeTaskAfter(newAnchor, '', newIndent, true)", iN);
+    var iA = appSrc.indexOf("placeTaskAfter(newAnchor, '', putIndent, true)", iN);
     assert.ok(iA > iN, 'пустая задача не создаётся на вычисленном месте');
     var block = appSrc.slice(iN, iA);
     assert.ok(block.includes('lineIndent(nx) > newIndent'),
@@ -540,7 +550,7 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes("newAnchor = li > 0 ? lt[li - 1].id : 'TOP'"),
       'нет якоря перед текущей строкой (или TOP для первой)');
     assert.ok(appSrc.includes("placeTaskTop('', true)"), 'нет вставки сверху через TOP');
-    assert.ok(appSrc.includes("placeTaskAfter(newAnchor, '', newIndent, true)"),
+    assert.ok(appSrc.includes("placeTaskAfter(newAnchor, '', putIndent, true)"),
       'строка над текущей не создаётся на её отступе');
     assert.ok(appSrc.includes('if (madeEnter) focusTaskEnd(madeEnter.id);'),
       'курсор не встаёт в созданную строку');

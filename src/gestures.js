@@ -507,6 +507,10 @@ function wireLineDrag(div, grip, inp) {
       var rows = rowsOf(box);
       for (var i = 0; i < rows.length; i++) {
         if (rows[i] === div) break;
+        /* Спрятанные (свёрнутые) ряды места не занимают: сосед сверху —
+         * ближайший ВИДИМЫЙ, иначе невидимый глубокий ряд раздувает
+         * потолок и короткий флик даёт второй уровень вместо первого. */
+        if (!rowShown(rows[i])) continue;
         first = false;
         var id = rows[i].getAttribute ? rows[i].getAttribute('data-id') : null;
         var t = id ? L.getTask(state.tasks, id) : null;
