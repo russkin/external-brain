@@ -77,22 +77,6 @@ function wireLineSwipe(div, taskId) {
   /* Флаг «✓» был открыт на старте жеста или раскрыт этим же жестом:
    * возврат пальца вправо — закрытие флага, не открытие времени. */
   var swHadFlag = false;
-  /* Своё пустое поле было в фокусе на старте свайпа вправо (набор идёт):
-   * после модалки/отмены вернём курсор в строку — клавиатура фактически
-   * не пропадает. Blur на жесте сохраняем (старые устройства). */
-  var swOwnFocus = false;
-  function refocusRow() {
-    var box = el('lines');
-    var row = null;
-    if (box && box.querySelectorAll) {
-      var rows = box.querySelectorAll('.tline[data-id]');
-      for (var i = 0; i < rows.length; i++) {
-        if (rows[i].getAttribute('data-id') === taskId) { row = rows[i]; break; }
-      }
-    }
-    var inp = row && row.querySelector ? row.querySelector('.tinput') : null;
-    if (inp && inp.focus) { try { inp.focus(); } catch (x) {} }
-  }
   /* Состояние — на элементе, а не в closure: свайп делят обработчики
    * строки и старта drag'а, рассинхрон даёт залипший флаг. */
   div._swOpen = false;
@@ -142,8 +126,6 @@ function wireLineSwipe(div, taskId) {
       dragActive = true;
       try { div.setPointerCapture(e.pointerId); } catch (x) {}
       var aeR = document.activeElement;
-      swOwnFocus = !!(aeR && aeR.tagName === 'TEXTAREA' && div.contains &&
-        div.contains(aeR) && !String(aeR.value || '').trim());
       if (aeR && aeR.blur && (aeR.tagName === 'TEXTAREA' || aeR.tagName === 'INPUT')) {
         try { aeR.blur(); } catch (x) {}
       }
@@ -165,13 +147,7 @@ function wireLineSwipe(div, taskId) {
        * метке в углу — отпускание часто попадает именно в неё),
        * не должен вернуть фокус в поле или открыть вторую модалку. */
       div._swBlockUntil = Date.now() + 400;
-      C.openDuration(taskId, swOwnFocus);
-      swOwnFocus = false;
-    } else if (swOwnFocus) {
-      /* Жест отменён (палец вернулся): модалки нет, курсор возвращаем
-       * сразу — набор продолжается с того же места. */
-      swOwnFocus = false;
-      refocusRow();
+      C.openDuration(taskId);
     }
     /* Тап по самому флагу сюда не входит: у него свой обработчик. */
     if (e.target && e.target.closest && e.target.closest('.doneflag')) return;
@@ -185,7 +161,6 @@ function wireLineSwipe(div, taskId) {
     swPid = null;
     dragActive = false;
     div._swRArm = false;
-    swOwnFocus = false;
   });
   div.addEventListener('click', function (e) {
     if (div._swBlockUntil && Date.now() < div._swBlockUntil) {
@@ -448,6 +423,7 @@ function wireLineDrag(div, grip, inp) {
     updateHole(lastY);
   }
   var mode = null, lastDx = 0, lastScrollTs = 0, phi = 0;
+  var keepFocus = false;
   var order = null, kids = [], fr = [], frSh = [];
   var indentCur = 0, indentMax = 0;
   var PEN = 14;
@@ -684,6 +660,12 @@ function wireLineDrag(div, grip, inp) {
      * из-под пальца и жест глох («сдвиг влево ничего не делает»).
      * Клавиатура закрывается в finish. */
     dragActive = true;
+    /* Своя пустая строка была в фокусе на захвате (набор идёт): после
+     * сдвига-отступа вернём курсор в строку — клавиатура фактически
+     * не пропадает. Вертикаль/тап — как было. */
+    var ae0 = document.activeElement;
+    keepFocus = !!(ae0 && ae0.tagName === 'TEXTAREA' && div.contains &&
+      div.contains(ae0) && !String(ae0.value || '').trim());
     if (e.cancelable) e.preventDefault();
   });
   grip.addEventListener('pointermove', function (e) {
@@ -747,10 +729,14 @@ function wireLineDrag(div, grip, inp) {
     document.removeEventListener('pointercancel', finish);
     /* Фокус и клавиатура — только на финише: blur на захвате закрывал
      * клавиатуру посреди touch — вьюпорт прыгал, содержимое уезжало
-     * из-под пальца и жест глох (v51). */
+     * из-под пальца и жест глох (v51). Сдвиг-отступ своей пустой строки
+     * фокус не снимает (вернём ниже после render). */
+    var kf = keepFocus;
+    keepFocus = false;
     var aeEnd = document.activeElement;
     var didBlur = false;
-    if (aeEnd && aeEnd.blur && (aeEnd.tagName === 'TEXTAREA' || aeEnd.tagName === 'INPUT')) {
+    if (!(kf && mode === 'indent') && aeEnd && aeEnd.blur &&
+        (aeEnd.tagName === 'TEXTAREA' || aeEnd.tagName === 'INPUT')) {
       try { aeEnd.blur(); didBlur = true; } catch (x) {}
     }
     /* Закрытие клавиатуры двигает страницу уже ПОСЛЕ жеста:
@@ -803,6 +789,20 @@ function wireLineDrag(div, grip, inp) {
       expandParentAbove(lvl);
       kids = [];
       C.render();
+      if (kf) {
+        /* Курсор — в строку на новом месте (узел пересоздан render):
+         * клавиатура не успевает закрыться, набор продолжается. */
+        var brow = null;
+        var bx = el('lines');
+        if (bx && bx.querySelectorAll) {
+          var brows = bx.querySelectorAll('.tline[data-id]');
+          for (var bi = 0; bi < brows.length; bi++) {
+            if (brows[bi].getAttribute('data-id') === task.id) { brow = brows[bi]; break; }
+          }
+        }
+        var binp = brow && brow.querySelector ? brow.querySelector('.tinput') : null;
+        if (binp && binp.focus) { try { binp.focus(); } catch (x) {} }
+      }
       return;
     }
     mode = null;

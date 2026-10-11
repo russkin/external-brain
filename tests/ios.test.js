@@ -564,6 +564,16 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(fin.includes('.blur()'), 'фокус не снимается на финише жеста');
     assert.ok(fin.includes('unpinScroll(500)'),
       'закрытие клавиатуры после жеста не подстраховано пином');
+    assert.ok(fin.includes('!(kf && mode ===') && fin.includes('var kf = keepFocus;'),
+      'сдвиг-отступ своей пустой гасит клавиатуру как чужой жест');
+  });
+  it('сдвиг-отступ своей пустой строки не гасит клавиатуру', () => {
+    assert.ok(gestSrc.includes('keepFocus = !!(ae0') && gestSrc.includes("div.contains(ae0)"),
+      'захват не запоминает фокус своей строки');
+    assert.ok(gestSrc.includes("!String(ae0.value || '').trim()"),
+      'условие срабатывает не только на пустой строке');
+    assert.ok(gestSrc.includes('Курсор — в строку на новом месте'),
+      'после сдвига курсор не возвращается в строку');
   });
   it('жест держит прокрутку, порог вертикали симметричен, захват перехватывается', () => {
     assert.ok(gestSrc.includes('function pinScroll'), 'нет pinScroll');
@@ -611,11 +621,7 @@ describe('логика вызывается с state.tasks', () => {
     var iW = gestSrc.indexOf('function wireLineSwipe');
     var swBlock = gestSrc.slice(iW, gestSrc.indexOf('function toggleDoneSlide'));
     assert.ok(swBlock.includes('dx > 48'), 'нет порога свайпа вправо');
-    assert.ok(swBlock.includes('C.openDuration(taskId, swOwnFocus)'), 'свайп вправо не открывает время');
-    assert.ok(swBlock.includes('swOwnFocus') && swBlock.includes('function refocusRow'),
-      'свайп гасит клавиатуру своей пустой строки без возврата');
-    assert.ok(swBlock.includes('} else if (swOwnFocus)'),
-      'отменённый свайп не возвращает курсор');
+    assert.ok(swBlock.includes('C.openDuration(taskId)'), 'свайп вправо не открывает время');
     assert.ok(swBlock.includes('swHadFlag = true') && swBlock.includes('!swHadFlag'),
       'возврат из-под раскрытого флага не глушит открытие времени');
     assert.ok(appSrc.includes('var parent = hasKidsFull(taskId)') &&
@@ -636,9 +642,6 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('var patch = { estMin: res.min };') &&
       appSrc.includes('L.clarifyTask(state.tasks, taskId, patch)'),
       'время не пишется в задачу');
-    assert.ok(appSrc.includes('function openDuration(taskId, refocus)') &&
-      appSrc.includes('if (refocus) focusTaskEnd(taskId);'),
-      'после модалки курсор не возвращается в строку');
     assert.ok(html.includes('id="durSumRow"') && html.includes('id="durSum"') &&
       html.includes('Суммировать из вложенных'),
       'нет флага суммы в модалке времени');
