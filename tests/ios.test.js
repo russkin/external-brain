@@ -203,21 +203,21 @@ describe('устойчивость к рассинхрону кэшей', () => 
     /* v74: светофор «!» при 409/422 + тап по нему — принудительный синк; сеть ⇅ в шапке.
      * Движок и триггеры — модуль src/triggers.js (этап 5). */
     assert.ok(trigSrc.includes("color === 'red' && /github-put (409|422)/.test(err)") &&
-      trigSrc.includes("n.textContent = alert ? '!' : ''"),
-      'нет красного «!» на светофоре при 409/422');
+      trigSrc.includes("n.style.color = alert ? '#fff' : '#ffb300'"),
+      'нет «!» цветом по типу ошибки (белый — конфликт, жёлтый — обычная)');
     assert.ok(trigSrc.includes("on('syncLight', 'click', function () { doSync(true); })"),
       'нет тапа по светофору — принудительного синка');
     /* v121/v127: игры с яркостью отменены (v128) — обычные яркие цвета;
-     * жёлтый «!» слева от красного при 409/422 остаётся. */
+     * v136: оба «!» поверх квадратика (отдельного слева нет), цвет
+     * различает ошибки — белый при конфликте, жёлтый при обычной. */
     assert.ok(trigSrc.includes('#4caf50') && trigSrc.includes('#ffc107') &&
       trigSrc.includes('#f44336') && trigSrc.includes('#bbb'),
       'цвета светофора не исходные яркие');
-    assert.ok(html.includes('id="syncAlert"') && trigSrc.includes("el('syncAlert')") &&
-      trigSrc.includes("warn.classList.toggle('on', color === 'red')"),
-      'нет жёлтого «!» перед красным квадратиком');
-    assert.ok(html.includes('#syncAlert.on { display: inline-block; }') &&
-      html.includes('font-size: 19px'),
-      'жёлтый «!» не той высоты / не показывается');
+    assert.ok(!html.includes('id="syncAlert"') && !trigSrc.includes("el('syncAlert')"),
+      'отдельный знак слева от квадратика остался');
+    assert.ok(trigSrc.includes("n.textContent = '!'") &&
+      trigSrc.includes("var warn = color === 'red';"),
+      'нет «!» поверх квадратика при ошибке');
     assert.ok(trigSrc.includes('function renderNet()') && trigSrc.includes("net.textContent = '⇅'") &&
       trigSrc.includes("' МБ/с'") && trigSrc.includes("addEventListener('offline', renderNet)"),
       'нет индикатора сети (цвет/МБ/с) в шапке');

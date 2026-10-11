@@ -119,16 +119,20 @@ function setLight(color, blink) {
   n.style.background = map[color] || map.gray;
   if (blink) n.classList.add('blink');
   else n.classList.remove('blink');
-  /* Конфликт записи (409/422) — красный «!» (как в purchases); тап — синк. */
+  /* Знаки — оба поверх квадратика (отдельного слева нет): «!» внутри,
+   * цвет различает ошибки — белый при конфликте 409/422, жёлтый при
+   * любой другой ошибке синка. Тап — принудительный синк. */
   var err = (syncStatus || '') + ' ' + (lastErrMsg || '');
   var alert = color === 'red' && /github-put (409|422)/.test(err);
+  var warn = color === 'red';
   n.classList.toggle('alert', alert);
-  n.textContent = alert ? '!' : '';
-  /* Жёлтый «!» той же высоты слева от квадратика — при ЛЮБОМ красном
-   * (любая ошибка синка, не только конфликт): красный без жёлтого
-   * не читается как проблема. Белый «!» внутри — только конфликт. */
-  var warn = el('syncAlert');
-  if (warn) warn.classList.toggle('on', color === 'red');
+  if (warn) {
+    n.textContent = '!';
+    n.style.color = alert ? '#fff' : '#ffb300';
+  } else {
+    n.textContent = '';
+    n.style.color = '';
+  }
   if (color === 'yellow') n.title = 'Идёт синхронизация…';
   else if (alert) n.title = 'Конфликт записи (409/422). Нажми — принудительный синк.';
   else if (color === 'red') n.title = (syncStatus || 'Ошибка синка') + '. Нажми — попробовать снова.';
