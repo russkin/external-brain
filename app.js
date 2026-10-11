@@ -229,29 +229,9 @@
     }
   }
 
-  /* Жива ли цепочка из слепка: якорь TOP или живая задача. */
-  function snapChainLive(s) {
-    if (!s || !s.afterId) return false;
-    if (s.afterId === 'TOP') return true;
-    var a = state ? L.getTask(state.tasks, s.afterId) : null;
-    return !!(a && !a.deleted && a.status !== 'done');
-  }
-
-  /* После отмены/возврата курсор — в осмысленное поле. Отмена точки
-   * с фокусом убирает вызванное поле → курсор в конец той задачи,
-   * даже если концевое поле списка видно (оно тут ни при чём).
-   * Остальное: возврат — в видимое поле (или задачу из точки). */
+  /* После отмены/возврата курсор — в задачу из точки (если пережила).
+   * Старые слепки несут focusId вызовов поля — их тоже ведём в задачу. */
   function focusAfterHistory(s, isRedo) {
-    var box = el('lines');
-    var draft = (box && box.querySelector) ? box.querySelector('.tline[data-trailing] .tinput') : null;
-    if (!isRedo && s && s.focusId && !snapChainLive(s)) {
-      focusTaskEnd(s.focusId);
-      return;
-    }
-    if (draft && draft.focus) {
-      try { draft.focus(); } catch (x) {}
-      return;
-    }
     if (s && s.focusId) focusTaskEnd(s.focusId);
   }
 
@@ -268,8 +248,7 @@
 
   /* Отрисовка списка — модуль src/render.js (рефакторинг, этап 7):
    * здесь только тонкие алиасы, чтобы десятки вызовов во вводе, истории,
-   * жестах и boot не трогать. Проводка ввода (wireLineInput) и мутации
-   * черновика остались здесь и идут в модуль через контекст. */
+   * жестах и boot не трогать. */
   function render() {
     if (window.EBRender) window.EBRender.render();
   }
@@ -436,11 +415,6 @@
     render();
   }
 
-  /* Пустое поле ввода: одно на весь список, но живёт под той строкой,
-   * где был нажат Enter (цепочка ввода вниз). Текст переживает перерисовки. */
-  var trailingAfterId = null;
-  var trailingText = '';
-  var trailingIndent = null;
   /* Жесты списка (свайп, drag за grip, отметка со слайдом) — модуль
    * src/gestures.js (рефакторинг, этап 6): здесь только тонкие алиасы,
    * чтобы вызовы в makeLine/mutate и контексте истории не трогать.
@@ -457,17 +431,6 @@
   function isDragActive() {
     return window.EBGestures ? window.EBGestures.isDragActive() : false;
   }
-  /* Мосты черновика в контекст истории (жесты от него отвязаны):
-   * сами переменные (якорь/текст/отступ) остались здесь. */
-  function getDraft() {
-    return { afterId: trailingAfterId, text: trailingText, indent: trailingIndent };
-  }
-  function setDraft(d) {
-    trailingAfterId = d.afterId;
-    trailingText = d.text;
-    trailingIndent = d.indent;
-  }
-
   /* Отступ строки в пикселях. Задача с отступом входит в группу задачи сверху. */
   function lineIndent(t) {
     var v = parseInt(t && t.indent, 10);
@@ -1031,8 +994,6 @@
     if (window.EBHistory) window.EBHistory.init({
       on: on, L: L, save: save, render: render, focusAfterHistory: focusAfterHistory,
       getState: function () { return state; },
-      getDraft: getDraft,
-      setDraft: setDraft,
       isDragActive: isDragActive,
       getCollapsed: function () { return collapsed; },
       isDoneHidden: function () { return doneHidden; },

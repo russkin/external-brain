@@ -494,13 +494,17 @@ describe('логика вызывается с state.tasks', () => {
   it('отмена Enter: задача уходит одним шагом', () => {
     assert.ok(historySrc.includes('function snapFull'), 'нет полного слепка');
     assert.ok(!appSrc.includes('afterId: oldAnchor'), 'лишняя точка появления поля');
+    assert.ok(!historySrc.includes('C.getDraft(') && !historySrc.includes('C.setDraft(') &&
+      !historySrc.includes('getDraft: getDraft'),
+      'черновик остался в слепке истории');
     assert.ok(historySrc.includes('snapTasks() !== tasksJson'), 'возврат дёргает метки синка');
   });
   it('отмена возвращает курсор', () => {
     assert.ok(appSrc.includes('focusTaskEnd'), 'курсор не возвращается в конец задачи');
     assert.ok(appSrc.includes('setSelectionRange'), 'курсор не ставится в конец');
     assert.ok(appSrc.includes('focusAfterHistory'), 'отмена не ведёт курсор');
-    assert.ok(appSrc.includes('snapChainLive'), 'курсор путает концевое поле с вызванным');
+    assert.ok(!appSrc.includes('snapChainLive') && !appSrc.includes('data-trailing'),
+      'поиск вызванного поля остался');
   });
   it('перетаскивание пишется в историю досдвиговым слепком', () => {
     assert.ok(gestSrc.includes('var preDrop = (di !== -1 && di !== oldPos) ? C.snapFull() : null'),

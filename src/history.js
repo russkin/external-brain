@@ -2,8 +2,9 @@
  * Слепок задач до каждой меняющей мутации; отмена применяется как новое
  * изменение со свежими метками (так честно и для синка): созданное после
  * превращается в tombstone, удалённое воскресает, правки побеждают.
- * В слепок входит и пустое поле (якорь/текст/сдвиг), чтобы Enter делился
- * на два шага отмены: сначала уходит новое поле (задача остаётся).
+ * Слепок — только задачи + вид (карта сворачивания, флаг секции);
+ * черновик из слепков убран (no-draft): старые записи с afterId/text
+ * молча игнорируются.
  * Вынесено из app.js (рефакторинг, этап 4): код перенесён как есть.
  * В app.js остались тонкие алиасы (snapTasks/snapFull/pushUndo/
  * updateHistoryButtons/mutate), чтобы десятки вызовов в жестах и вводе
@@ -11,8 +12,7 @@
  * UMD: браузер (window.EBHistory) + Node (module.exports) для тестов.
  *
  * Контекст ctx: on, L, save, render, focusAfterHistory — стабильные ссылки;
- *   getState() (state переназначается), getDraft() {afterId,text,indent} /
- *   setDraft(d) (черновик переназначается), isDragActive() (флаг жеста),
+ *   getState() (state переназначается), isDragActive() (флаг жеста),
  *   getCollapsed(), isDoneHidden(), setViewState(v) (вид переназначается).
  */
 (function () {
@@ -75,12 +75,11 @@ function snapTasks() {
   try { return JSON.stringify(state.tasks); } catch (x) { return '[]'; }
 }
 
-/* Полный слепок для истории: задачи + положение/текст/сдвиг пустого поля
- * + вид (карта сворачивания, флаг секции). Без вида ↩ после 📁/📂 возвращал
- * бы данные под чужое сворачивание — строки прыгали как попало. */
+/* Полный слепок для истории: задачи + вид (карта сворачивания, флаг
+ * секции). Без вида ↩ после 📁/📂 возвращал бы данные под чужое
+ * сворачивание — строки прыгали как попало. */
 function snapFull() {
-  if (!C) return { tasks: '[]', afterId: null, text: '', indent: null };
-  var d = C.getDraft();
+  if (!C) return { tasks: '[]' };
   var vc = {};
   try {
     var cm = C.getCollapsed();
@@ -88,9 +87,6 @@ function snapFull() {
   } catch (x) {}
   return {
     tasks: snapTasks(),
-    afterId: d.afterId,
-    text: d.text,
-    indent: d.indent,
     collapsed: vc,
     doneHidden: C.isDoneHidden()
   };
@@ -145,13 +141,9 @@ function applySnapshot(s) {
     C.save();
   }
   if (s && typeof s === 'object') {
-    C.setDraft({
-      afterId: s.afterId || null,
-      text: String(s.text || ''),
-      indent: (s.indent == null) ? null : s.indent
-    });
     /* Вид восстанавливаем только если он есть в слепке: старые записи
-     * (без collapsed/doneHidden) оставляют текущий вид как есть. */
+     * (без collapsed/doneHidden) оставляют текущий вид как есть. Поля
+     * черновика в старых слепках (afterId/text/indent) игнорируются. */
     if (s.collapsed || typeof s.doneHidden === 'boolean') {
       C.setViewState({ collapsed: s.collapsed, doneHidden: s.doneHidden });
     }
