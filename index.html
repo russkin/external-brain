@@ -53,6 +53,9 @@
       max-width: 102px; overflow: hidden; text-overflow: ellipsis; z-index: 2; }
     .tline.swiped .doneflag { display: block; }
     .tline.collapsed-kid { display: none; }
+    .tline.sliding-done { transition: opacity .2s linear; opacity: 0; }
+    .tline.landed { animation: ebLand .25s linear; }
+    @keyframes ebLand { from { opacity: 0; } to { opacity: 1; } }
     .tline[data-indent="1"] .tinput { background: #f4f8ff; }
     .tline[data-indent="2"] .tinput { background: #f1faf3; }
     .tline[data-indent="3"] .tinput { background: #fffaef; }

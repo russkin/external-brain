@@ -171,10 +171,10 @@ function wireLineSwipe(div, taskId) {
 }
 
 
-/* Выполнить/вернуть с анимацией: строка возвращается на место уже
- * зачёркнутой (или расчеркнутой), затем переезжает в свою секцию —
- * выполненные под поле ввода, вернувшаяся — на своё место в списке
- * (createdAt не трогаем, persist чужие метки не переписывает). */
+/* Выполнить/вернуть с анимацией: строка сначала уходит из своей секции
+ * (затухание без смены вида), затем мутация — и появление уже в нужном
+ * виде в своей секции (выполненные внизу, вернувшаяся — на своём месте;
+ * createdAt не трогаем, persist чужие метки не переписывает). */
 function toggleDoneSlide(taskId) {
   var state = C.getState();
   var task = L.getTask(state.tasks, taskId);
@@ -202,12 +202,9 @@ function toggleDoneSlide(taskId) {
     }
     return;
   }
+  /* Сначала строка уходит из своего раздела (затухание, БЕЗ зачёркивания),
+   * затем — мутация и появление уже в нужном виде в своём разделе. */
   row.classList.add('sliding-done');
-  var inp = row.querySelector ? row.querySelector('.tinput') : null;
-  if (inp) {
-    if (toDone) inp.classList.add('is-done');
-    else inp.classList.remove('is-done');
-  }
   row.classList.remove('swiped');
   row._swOpen = false;
   setTimeout(function () {
@@ -217,6 +214,22 @@ function toggleDoneSlide(taskId) {
     try {
       var ae = document.activeElement;
       if (ae && ae.tagName === 'BUTTON' && ae.blur) ae.blur();
+    } catch (x) {}
+    /* Встречаем строку на новом месте коротким проявлением. */
+    try {
+      var box2 = el('lines');
+      var rows2 = box2 && box2.querySelectorAll ? box2.querySelectorAll('.tline[data-id]') : [];
+      for (var k = 0; k < rows2.length; k++) {
+        if (rows2[k].getAttribute && rows2[k].getAttribute('data-id') === taskId) {
+          rows2[k].classList.add('landed');
+          (function (rr) {
+            setTimeout(function () {
+              try { rr.classList.remove('landed'); } catch (x) {}
+            }, 300);
+          })(rows2[k]);
+          break;
+        }
+      }
     } catch (x) {}
   }, 260);
 }

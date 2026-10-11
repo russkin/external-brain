@@ -601,6 +601,15 @@ describe('логика вызывается с state.tasks', () => {
     var iT = gestSrc.indexOf('function toggleDoneSlide');
     var tBlock = gestSrc.slice(iT, gestSrc.indexOf('function persistLineOrder'));
     assert.ok(tBlock.includes("tagName === 'TEXTAREA'"), 'отметка не снимает фокус с полей');
+    assert.ok(tBlock.includes("row.classList.add('sliding-done')") &&
+      !tBlock.includes("inp.classList.add('is-done')") &&
+      tBlock.slice(tBlock.indexOf("row.classList.add('sliding-done')"))
+        .includes('C.mutate(function () { C.toggleDoneNow'),
+      'строка зачёркивается до переезда в секцию');
+    assert.ok(tBlock.includes("classList.add('landed')"),
+      'строка не проявляется на новом месте');
+    assert.ok(html.includes('.tline.sliding-done') && html.includes('ebLand'),
+      'нет затухания ухода / проявления при переезде');
   });
   it('Время задачи: метка в углу, свайп вправо, модалка со стрелками', () => {
     assert.ok(html.includes('id="durCtl"'), 'нет блока часов в модалке');
