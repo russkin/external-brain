@@ -185,10 +185,15 @@ function diagText() {
   var st = state ? C.L.stats(state.tasks)
     : { inbox: 0, next: 0, done: 0 };
   var alive = (st.inbox || 0) + (st.next || 0);
-  var recs = 0, bytes = 0;
+  var recs = 0, bytes = 0, liveN = 0, deadN = 0;
   try {
     recs = state ? state.tasks.length : 0;
     bytes = JSON.stringify(state ? state.tasks : []).length;
+    var arr = state ? state.tasks : [];
+    for (var ti = 0; ti < arr.length; ti++) {
+      if (arr[ti] && arr[ti].deleted) deadN++;
+      else liveN++;
+    }
   } catch (x) {}
   var collapsed = C.getCollapsed();
   var collapsedN = 0;
@@ -196,7 +201,7 @@ function diagText() {
   var lines = [
     'Внешний мозг ' + C.getVersion(),
     'Задач: ' + alive + ' · готово ' + (st.done || 0),
-    'Размер: ' + recs + ' записей · ' +
+    'Размер: ' + recs + ' записей (живых ' + liveN + ' · мёртвых ' + deadN + ') · ' +
       (bytes < 1024 ? bytes + ' Б' : (bytes / 1024).toFixed(1) + ' КБ'),
     'Синк: ' + (sy.status || '—') + (sy.at ? ' (в ' + fmtDT(sy.at) + ')' : '')
   ];

@@ -210,8 +210,10 @@ function removeTask(tasks, id, nowMs) {
   return task;
 }
 
-/* Сжатие могил: tombstone с текстом заменяется минимальным маркером
- * {id, deleted, ts/updatedAt} — текст могил составляет весь вес файла.
+/* Сжатие могил: tombstone заменяется минимальным маркером
+ * {id, deleted, ts/updatedAt} — вес файла составляют могилы (текст
+ * и поля), поэтому сжимаются ВСЕ могилы, а не только с текстом: иначе
+ * счёт «живые + сжатие» не сходится с размером файла и путает.
  * Маркер свежее (ts = max(now, старая)): забытое устройство с живой копией
  * его не воскресит (LWW побеждает свежий), могилы с других устройств сами
  * сойдутся в маркеры при слиянии. Возвращает число сжатых. */
@@ -222,7 +224,6 @@ function purgeTombstones(tasks, nowMs) {
   for (var i = 0; i < tasks.length; i++) {
     var t = tasks[i];
     if (!t || !t.id || !t.deleted) continue;
-    if (!String(t.title || '')) continue;
     var ts = toInt(t.ts, 0);
     if (now > ts) ts = now;
     tasks[i] = { id: String(t.id).slice(0, 64), deleted: true, ts: ts, updatedAt: ts };

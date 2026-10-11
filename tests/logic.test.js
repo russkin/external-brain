@@ -596,18 +596,18 @@ describe('сжатие могил (purgeTombstones)', () => {
     return { id: id, title: title, status: 'inbox', estMin: 0, sumKids: true,
       indent: 0, createdAt: ts, updatedAt: ts, doneAt: 0, ts: ts, deleted: true };
   }
-  it('могилы с текстом сжимаются в маркеры, остальные целы', () => {
+  it('все могилы сжимаются в маркеры, остальные целы', () => {
     const t = [
       { id: 'a', title: 'Жива', status: 'inbox', ts: 100, createdAt: 100, updatedAt: 100 },
       { id: 'b', title: 'Готово', status: 'done', ts: 100, createdAt: 101, updatedAt: 100 },
       tomb('c', 'Мусор', 200),
       tomb('d', '', 200)
     ];
-    assert.equal(L.purgeTombstones(t, 500), 1, 'сжата только могила с текстом');
+    assert.equal(L.purgeTombstones(t, 500), 2, 'сжаты все могилы, не только с текстом');
     assert.equal(t[0].title, 'Жива', 'живая тронута');
     assert.equal(t[1].status, 'done', 'выполненная тронута');
     assert.deepEqual(t[2], { id: 'c', deleted: true, ts: 500, updatedAt: 500 });
-    assert.equal(t[3].title, '', 'пустая могила переписана');
+    assert.deepEqual(t[3], { id: 'd', deleted: true, ts: 500, updatedAt: 500 });
   });
   it('метка свежее (max) — забытое устройство не воскресит', () => {
     const t = [tomb('c', 'Мусор', 900)];
