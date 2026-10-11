@@ -177,11 +177,11 @@ describe('устойчивость к рассинхрону кэшей', () => 
      * иначе вторая пустая прыгает выше первой. */
     assert.ok(/atStart = inp\.selectionStart === 0 && inp\.selectionEnd === 0 &&\s*\n\s*!!String\(inp\.value \|\| ''\)\.trim\(\)/.test(appSrc),
       'atStart считает пустую строку вставкой сверху');
-    /* v70: после драга ЧЕРЕЗ черновик якорь поля пересчитывается по DOM —
-     * иначе data-id-порядок не меняется и render возвращает всё назад. */
+    /* no-draft: поля-черновика нет — пересчёт его якоря после драга
+     * не нужен, порядок пишется досдвиговым слепком. */
     assert.ok(gestSrc.includes('var reordered = persistLineOrder(preDrop)') &&
-      gestSrc.includes('dR.afterId = newAfterB'),
-      'нет пересчёта якоря черновика после драга');
+      !gestSrc.includes('dR.afterId = newAfterB'),
+      'пересчёт якоря черновика остался');
     /* Отмена возвращает и отступ: слепок истории — до applyDropIndent,
      * иначе ↩ возвращал порядок, но не уровень (родитель не уходил с 1 на 0). */
     assert.ok(gestSrc.includes('var preDrop = (di !== -1 && di !== oldPos) ? C.snapFull() : null'),
@@ -417,27 +417,22 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(sBody.includes('hasKidsFull(tasks[i].id)'),
       'свернуть все смотрит только на живых детей');
     var iD = rendSrc.indexOf('Выполненные — под полем добавления');
-    var dBody = rendSrc.slice(iD, rendSrc.indexOf('function focusTrailing'));
+    var dBody = rendSrc.slice(iD, iD + 2200);
     assert.ok(!dBody.includes('isHiddenByCollapse(full, di, collapsed)'),
       'секция выполненных зависит от сворачивания живых групп');
     assert.ok(dBody.includes('var doneVis = done.slice();'),
       'секция показывает не всех выполненных');
   });
-  it('Захват точек у черновика: задача создаётся, фокус уходит, жест идёт по строке', () => {
-    var iG = gestSrc.indexOf('var draftRowG');
-    assert.ok(iG !== -1, 'нет коммита черновика при захвате grip');
-    var gBody = gestSrc.slice(iG, gestSrc.indexOf('var aeNow = document.activeElement', iG));
-    assert.ok(gBody.includes('C.insertTaskAfter(anchorG, commitTxt, indG'),
-      'черновик не создаётся задачей на своём месте');
-    assert.ok(gBody.includes('div.setAttribute(\'data-id\', madeG.id)'),
-      'узел жеста не становится задачей');
-    assert.ok(gBody.includes('div.removeAttribute(\'data-trailing\')'),
-      'узел жеста остаётся черновиком');
-    assert.ok(gBody.includes('C.setDraft({ afterId: null, text: \'\', indent: null })'),
-      'текст черновика не очищен');
-    assert.ok(gBody.includes('C.effTrailingIndent()'), 'отступ черновика не взят');
-    assert.ok(gestSrc.indexOf('var draftRowG') < gestSrc.indexOf('var focusInDraft'),
-      'коммит черновика идёт после вычисления возврата курсора');
+  it('в жестах черновика нет: захват сразу ведёт строку', () => {
+    assert.ok(!gestSrc.includes('var draftRowG'), 'коммит черновика при захвате остался');
+    assert.ok(!gestSrc.includes('data-trailing'), 'жесты ищут поле-черновик');
+    assert.ok(!gestSrc.includes('refocusDraft'), 'возврат курсора в черновик остался');
+    assert.ok(!gestSrc.includes('C.touchLastPD') && !gestSrc.includes('C.setDraftTapBusy'),
+      'гард blur-создания остался');
+    assert.ok(!gestSrc.includes('C.getDraft(') && !gestSrc.includes('C.setDraft('),
+      'жесты читают черновик через контекст');
+    assert.ok(!gestSrc.includes('function commitTrailingIntoBranch'),
+      'доводка поля при завершении ветки осталась');
   });
   it('Enter в середине: хвост уходит в задачу ниже, курсор в её начало', () => {
     assert.ok(appSrc.includes('splitPos > 0 && splitPos < splitVal.length'),
@@ -507,14 +502,10 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('focusAfterHistory'), 'отмена не ведёт курсор');
     assert.ok(appSrc.includes('snapChainLive'), 'курсор путает концевое поле с вызванным');
   });
-  it('перетаскивание пустого поля пишется в историю', () => {
-    assert.ok(gestSrc.includes('dragUiBefore'), 'старт drag не запоминает поле');
-    assert.ok(gestSrc.includes('dragUiBefore.afterId'), 'возврат поля не знает старое место');
-  });
-  it('перенос черновика берёт отступ соседа сверху', () => {
-    assert.ok(gestSrc.includes('var wantInd'), 'нет расчёта отступа при посадке поля');
-    assert.ok(gestSrc.includes('dL.indent = wantInd'), 'перенос поля не ставит отступ по месту');
-    assert.ok(gestSrc.includes('wantInd !== oldInd'), 'смена только отступа не пишется в историю');
+  it('перетаскивание пишется в историю досдвиговым слепком', () => {
+    assert.ok(gestSrc.includes('var preDrop = (di !== -1 && di !== oldPos) ? C.snapFull() : null'),
+      'нет досдвигового слепка перед applyDropIndent');
+    assert.ok(!gestSrc.includes('dragUiBefore'), 'стартовый слепок поля остался');
   });
   it('показ стека ↩ в диагностике убран (v121)', () => {
     assert.ok(!diagSrc.includes('Стек ↩') && !diagSrc.includes('getHistoryPeek'),
@@ -562,17 +553,13 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(block.includes('pinScroll()'), 'прокрутка не заперта на время жеста');
     assert.ok(block.includes("document.addEventListener('pointerup', finish)"),
       'нет document-страховки от зависшего pid (жест умирает без pointerup на grip)');
-    assert.ok(block.includes('refocusDraft'), 'черновик не запоминается для возврата курсора');
-    assert.ok(block.includes("div.getAttribute('data-trailing')"),
-      'возврат курсора не привязан к переносу самого поля (чужой жест возвращает фокус)');
     var iF = gestSrc.indexOf('function finish(e)');
     assert.ok(iF !== -1 && gestSrc.slice(iF, iF + 700).includes('dragActive = false'),
       'флаг не снимается на финише жеста');
     var fin = gestSrc.slice(iF, iF + 2200);
     assert.ok(fin.includes('.blur()'), 'фокус не снимается на финише жеста');
-    assert.ok(fin.includes('C.touchLastPD(grip)'),
-      'гард blur-создания чужого черновика не оживлён перед отложенным blur');
-    assert.ok(fin.includes('C.focusTrailing()'), 'поле не возвращает курсор после переноса');
+    assert.ok(fin.includes('unpinScroll(500)'),
+      'закрытие клавиатуры после жеста не подстраховано пином');
   });
   it('жест держит прокрутку, порог вертикали симметричен, захват перехватывается', () => {
     assert.ok(gestSrc.includes('function pinScroll'), 'нет pinScroll');
@@ -592,17 +579,13 @@ describe('логика вызывается с state.tasks', () => {
   });
   it('свайп и отметка выполненной снимают фокус, поле уходит с веткой', () => {
     var iS = gestSrc.indexOf('function wireLineSwipe');
-    var swBlock = gestSrc.slice(iS, gestSrc.indexOf('function commitTrailingIntoBranch'));
-    assert.ok(swBlock.includes('C.setDraftTapBusy(true)'), 'свайп не гасит blur-создание черновика');
+    var swBlock = gestSrc.slice(iS, gestSrc.indexOf('function toggleDoneSlide'));
     assert.ok(swBlock.includes('.blur()'), 'свайп не снимает фокус с полей');
     assert.ok(swBlock.includes('dragActive = true'), 'render во время свайпа не подавлен');
     assert.ok(swBlock.includes('dragActive = false'), 'подавление render не снимается на конце свайпа');
     assert.ok(swBlock.includes('setPointerCapture'), 'отпускание мимо строки оставляет флаг жеста');
-    assert.ok(gestSrc.includes('function commitTrailingIntoBranch'), 'нет доводки поля при завершении ветки');
-    assert.ok(gestSrc.includes('fi <= base'), 'отступ поля не углубляется под родителем ветки');
     var iT = gestSrc.indexOf('function toggleDoneSlide');
     var tBlock = gestSrc.slice(iT, gestSrc.indexOf('function persistLineOrder'));
-    assert.ok(tBlock.includes('commitTrailingIntoBranch(taskId)'), 'поле не до-создаётся при отметке');
     assert.ok(tBlock.includes("tagName === 'TEXTAREA'"), 'отметка не снимает фокус с полей');
   });
   it('Время задачи: метка в углу, свайп вправо, модалка со стрелками', () => {
@@ -622,7 +605,7 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(mkBlock.includes('L.fmtDur(opts.estMin)'), 'метка без формата из логики');
     assert.ok(mkBlock.includes('openDuration(id)'), 'тап по метке не открывает модалку');
     var iW = gestSrc.indexOf('function wireLineSwipe');
-    var swBlock = gestSrc.slice(iW, gestSrc.indexOf('function commitTrailingIntoBranch'));
+    var swBlock = gestSrc.slice(iW, gestSrc.indexOf('function toggleDoneSlide'));
     assert.ok(swBlock.includes('dx > 48'), 'нет порога свайпа вправо');
     assert.ok(swBlock.includes('C.openDuration(taskId)'), 'свайп вправо не открывает время');
     assert.ok(swBlock.includes('swHadFlag = true') && swBlock.includes('!swHadFlag'),
@@ -864,9 +847,9 @@ describe('синк: триггеры и протокол', () => {
     assert.ok(html.includes('src/triggers.js') && swSrc.includes('src/triggers.js'),
       'модуль не подключён (index.html / sw.js)');
   });
-  it('жесты — модуль src/gestures.js (этап 6)', () => {
+  it('жесты — модуль src/gestures.js (этап 6, без черновика)', () => {
     for (const fn of ['wireLineSwipe', 'wireLineDrag', 'toggleDoneSlide', 'persistLineOrder',
-      'applyDropIndent', 'dropMargins', 'commitTrailingIntoBranch', 'pinScroll', 'init']) {
+      'applyDropIndent', 'dropMargins', 'pinScroll', 'init']) {
       assert.ok(gestSrc.includes('function ' + fn), 'нет ' + fn + ' в src/gestures.js');
     }
     assert.ok(gestSrc.includes('isDragActive') && gestSrc.includes('window.EBGestures'),
@@ -882,32 +865,33 @@ describe('синк: триггеры и протокол', () => {
       !appSrc.includes('var dragActive = false') && !appSrc.includes('function pinScroll') &&
       !appSrc.includes("grip.addEventListener('pointerdown'"),
       'жесты остались в app.js (вынос нечистый)');
-    assert.ok(appSrc.includes('EBGestures.init({') && appSrc.includes('setDraftTapBusy: setDraftTapBusy') &&
-      appSrc.includes('touchLastPD: touchLastPD') && appSrc.includes('getDraft: getDraft'),
-      'app.js не отдаёт контекст модулю жестов');
-    assert.ok(gestSrc.includes('C.getDraft()') && gestSrc.includes('C.setDraft(') &&
+    assert.ok(appSrc.includes('EBGestures.init({') && appSrc.includes('toggleDoneNow: toggleDoneNow') &&
+      appSrc.includes('openDuration: openDuration') && !appSrc.includes('touchLastPD: touchLastPD'),
+      'app.js не отдаёт контекст модулю жестов / мосты черновика остались');
+    assert.ok(!gestSrc.includes('C.getDraft()') && !gestSrc.includes('C.setDraft(') &&
       gestSrc.includes('C.getState()') && gestSrc.includes('C.getCollapsed()'),
-      'модуль читает общее состояние напрямую, а не через контекст');
+      'модуль читает черновик / состояние не через контекст');
     assert.ok(html.includes('src/gestures.js') && swSrc.includes('src/gestures.js'),
       'модуль не подключён (index.html / sw.js)');
   });
-  it('отрисовка — модуль src/render.js (этап 7)', () => {
+  it('отрисовка — модуль src/render.js (этап 7, без черновика)', () => {
     for (const fn of ['render', 'renderLines', 'renderStatus', 'makeLine', 'makeGrip',
       'autosize', 'updateDurchip', 'refreshDurchips', 'lineEstMin', 'expandForAnchor',
-      'focusTrailing', 'init']) {
+      'init']) {
       assert.ok(rendSrc.includes('function ' + fn), 'нет ' + fn + ' в src/render.js');
     }
     assert.ok(rendSrc.includes('window.EBRender'),
       'нет UMD-экспорта модуля');
     assert.ok(appSrc.includes('window.EBRender.render()') &&
       appSrc.includes('window.EBRender.renderStatus()') &&
-      appSrc.includes('window.EBRender.focusTrailing()') &&
+      !appSrc.includes('window.EBRender.focusTrailing()') &&
       appSrc.includes('window.EBRender.expandForAnchor(anchorId, indent)') &&
       appSrc.includes('window.EBRender.autosize(ta)') &&
       appSrc.includes('window.EBRender.updateDurchip(inp, chip)') &&
       appSrc.includes('window.EBRender.refreshDurchips(box)'),
       'app.js не ходит в отрисовку через тонкие алиасы (вынос нечистый)');
-    assert.ok(!rendSrc.includes('function wireLineInput') &&
+    assert.ok(!rendSrc.includes('function focusTrailing') &&
+      !rendSrc.includes('function wireLineInput') &&
       !appSrc.includes('function renderLines') && !appSrc.includes('function makeLine') &&
       !appSrc.includes('function lineEstMin') && !appSrc.includes('function makeGrip'),
       'проводка ввода уехала в модуль / отрисовка осталась в app.js (вынос нечистый)');

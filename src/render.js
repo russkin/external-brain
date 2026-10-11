@@ -3,7 +3,7 @@
  * порядок строк и секция выполненных (renderLines), статусная строка,
  * фокус черновика и разворот предков при создании.
  * Вынесено из app.js (рефакторинг, этап 7): код перенесён как есть.
- * В app.js остались тонкие алиасы (render/renderStatus/focusTrailing/
+ * В app.js остались тонкие алиасы (render/renderStatus/
  * expandForAnchor/autosize/updateDurchip/refreshDurchips), чтобы десятки
  * вызовов во вводе, истории, жестах и boot не трогать. Проводка ввода
  * (wireLineInput) и мутации черновика остались в app.js и идут сюда
@@ -348,15 +348,6 @@ function renderLines() {
   refreshDurchips(box);
 }
 
-function focusTrailing() {
-  var box = el('lines');
-  if (!box || !box.querySelector) return;
-  var inp = box.querySelector('.tline[data-trailing] .tinput');
-  if (inp && inp.focus) {
-    try { inp.focus(); } catch (x) {}
-  }
-}
-
 /* Шапка над клавиатурой: в оверлейном режиме (iOS Safari, часть Android)
  * браузер везёт к полю ВИЗУАЛЬНЫЙ вьюпорт (visualViewport.offsetTop > 0),
  * а липкая шапка привязана к верху РАСКЛАДКИ — и уезжает вверх за экран,
@@ -466,7 +457,6 @@ var api = {
   init: init,
   render: render,
   renderStatus: renderStatus,
-  focusTrailing: focusTrailing,
   expandForAnchor: expandForAnchor,
   autosize: autosize,
   updateDurchip: updateDurchip,

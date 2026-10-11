@@ -276,9 +276,6 @@
   function renderStatus() {
     if (window.EBRender) window.EBRender.renderStatus();
   }
-  function focusTrailing() {
-    if (window.EBRender) window.EBRender.focusTrailing();
-  }
   function expandForAnchor(anchorId, indent) {
     if (window.EBRender) window.EBRender.expandForAnchor(anchorId, indent);
   }
@@ -444,18 +441,6 @@
   var trailingAfterId = null;
   var trailingText = '';
   var trailingIndent = null;
-  /* Защита от двойного тапа по флагу черновика: pointerup+click приходят
-   * парой и без гарда создают две задачи вместо одной. */
-  var draftTapBusy = false;
-  /* Последний pointerdown (захват — до смены фокуса): по нему blur черновика
-   * отличает «тап по флагу/грипу/строке» (у их жестов своя логика — не мешаем)
-   * от настоящей потери фокуса (задача создаётся). */
-  var lastPDTarget = null, lastPDts = 0;
-  document.addEventListener('pointerdown', function (e) {
-    lastPDTarget = e.target;
-    lastPDts = Date.now();
-  }, true);
-
   /* Жесты списка (свайп, drag за grip, отметка со слайдом) — модуль
    * src/gestures.js (рефакторинг, этап 6): здесь только тонкие алиасы,
    * чтобы вызовы в makeLine/mutate и контексте истории не трогать.
@@ -472,9 +457,8 @@
   function isDragActive() {
     return window.EBGestures ? window.EBGestures.isDragActive() : false;
   }
-  /* Мосты черновика и гарда blur-создания в контекст модуля жестов:
-   * сами переменные (якорь/текст/отступ, draftTapBusy, lastPD) остались
-   * здесь — десятки читателей ввода их трогать не нужно. */
+  /* Мосты черновика в контекст истории (жесты от него отвязаны):
+   * сами переменные (якорь/текст/отступ) остались здесь. */
   function getDraft() {
     return { afterId: trailingAfterId, text: trailingText, indent: trailingIndent };
   }
@@ -483,8 +467,6 @@
     trailingText = d.text;
     trailingIndent = d.indent;
   }
-  function setDraftTapBusy(v) { draftTapBusy = !!v; }
-  function touchLastPD(target) { lastPDTarget = target; lastPDts = Date.now(); }
 
   /* Отступ строки в пикселях. Задача с отступом входит в группу задачи сверху. */
   function lineIndent(t) {
@@ -653,18 +635,6 @@
   /* Эффективный отступ черновика: ручной сдвиг, иначе 0.
    * Отступ строки сверху НЕ наследуем: новое поле всегда начинается
    * без отступа, в группу входит только сдвигом за grip. */
-  function effTrailingIndent() {
-    if (trailingIndent != null) return lineIndent({ indent: trailingIndent });
-    return 0;
-  }
-
-  function trailingAnchorId() {
-    if (!trailingAfterId) return null;
-    var t = L.getTask(state.tasks, trailingAfterId);
-    if (!t || t.deleted || t.status === 'done') return null;
-    return trailingAfterId;
-  }
-
   /* Backspace в начале строки задачи: сцепка с предыдущей живой — её
    * текст пополняется текущим, текущая удаляется (дети остаются на
    * месте: отступ не трогаем, вложением их держит сцепленная строка).
@@ -834,10 +804,8 @@
         if (madeEnter) expandForAnchor(newAnchor, newIndent);
         render();
         if (madeEnter) focusTaskEnd(madeEnter.id);
-        else focusTrailing();
       } else {
         render();
-        focusTrailing();
       }
     });
   }
@@ -1080,26 +1048,16 @@
       mutate: mutate,
       lineIndent: lineIndent,
       lineTasks: lineTasks,
-      effTrailingIndent: effTrailingIndent,
-      trailingAnchorId: trailingAnchorId,
-      getDraft: getDraft,
-      setDraft: setDraft,
       getCollapsed: function () { return collapsed; },
       saveCollapsed: saveCollapsed,
       hasKidsFull: hasKidsFull,
       toggleCollapse: toggleCollapse,
       toggleDoneNow: toggleDoneNow,
-      placeTaskAfter: placeTaskAfter,
-      insertTaskTop: insertTaskTop,
-      insertTaskAfter: insertTaskAfter,
-      focusTrailing: focusTrailing,
       openDuration: openDuration,
       snapFull: snapFull,
       snapTasks: snapTasks,
       pushUndo: pushUndo,
       updateHistoryButtons: updateHistoryButtons,
-      setDraftTapBusy: setDraftTapBusy,
-      touchLastPD: touchLastPD,
       INDENT_STEP: INDENT_STEP,
       LINES_GAP: LINES_GAP
     });

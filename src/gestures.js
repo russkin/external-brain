@@ -6,17 +6,14 @@
  * В app.js остались тонкие алиасы (wireLineSwipe/wireLineDrag/
  * toggleDoneSlide/isDragActive), чтобы вызовы в makeLine/mutate и
  * контексте истории не трогать.
- * Своё состояние (флаг жеста, возврат курсора в черновик, пин прокрутки)
- * живёт здесь; черновик (якорь/текст/отступ) и флаг blur-создания — в app.js
- * и идут сюда через контекст (getDraft/setDraft, setDraftTapBusy).
+ * Своё состояние (флаг жеста, пин прокрутки) живёт здесь; изменяемое
+ * (state, карта свёрнутых) — в app.js, только через контекст.
  * UMD: браузер (window.EBGestures) + Node (module.exports) для тестов.
  *
  * Контекст ctx: L, getState, render, save, mutate, lineIndent, lineTasks,
- *   effTrailingIndent, trailingAnchorId, getDraft, setDraft, getCollapsed,
- *   saveCollapsed, hasKidsFull, toggleCollapse, toggleDoneNow,
- *   placeTaskAfter, insertTaskTop, insertTaskAfter, focusTrailing,
+ *   getCollapsed, saveCollapsed, hasKidsFull, toggleCollapse, toggleDoneNow,
  *   openDuration, snapFull, snapTasks, pushUndo, updateHistoryButtons,
- *   setDraftTapBusy, touchLastPD, INDENT_STEP, LINES_GAP —
+ *   INDENT_STEP, LINES_GAP —
  *   стабильные ссылки; изменяемое (state, черновик, карта свёрнутых)
  *   только через геттеры. L/INDENT_STEP/LINES_GAP фиксируются в init.
  */
@@ -36,9 +33,6 @@ var LINES_GAP = 0;
  * содержимое уехало из-под пальца и жест глох (v51). Клавиатура
  * закрывается в finish — после pointerup. */
 var dragActive = false;
-/* Курсор стоял в поле-черновике — после ЖЕСТА ПО САМОМУ ПОЛЮ возвращаем
- * его (поле на месте — набирать-то надо). */
-var refocusDraft = false;
 
 /* Пин прокрутки: пока жест жив, страница не уезжает — автоскролы
  * (фокус, закрытие клавиатуры) держатся на месте, содержимое не
@@ -108,12 +102,8 @@ function wireLineSwipe(div, taskId) {
       /* Свайп — чужое действие: фокус снимаем сразу (на старых
        * устройствах blur сам не приходит — с клавиатурой уезжают
        * в свайп). Пока жест идёт, render подавлен (dragActive) —
-       * узлы строки не пересоздаются. Тап по строке при этом не
-       * должен сработать как blur-создание черновика (draftTapBusy,
-       * как у флага): текст поля остаётся на месте. */
+       * узлы строки не пересоздаются. */
       dragActive = true;
-      C.setDraftTapBusy(true);
-      setTimeout(function () { C.setDraftTapBusy(false); }, 400);
       /* Захват указателя: pointerup доедет до строки даже при
        * отпускании мимо — иначе dragActive залипнет и render
        * подавится навсегда. */
@@ -180,42 +170,7 @@ function wireLineSwipe(div, taskId) {
   }, true);
 }
 
-/* Поле-черновик с текстом, чей якорь — внутри завершаемой ветки:
- * до-создаём задачу на её месте, иначе набранное не улетает
- * в выполненные вместе с веткой, а поле свисает внизу живого списка.
- * Отступ — свой; если вдруг не глубже родителя ветки, принудительно
- * делаем дочерним — иначе completeBranch оборвётся на такой строке
- * и ветка не завершится целиком. */
-function commitTrailingIntoBranch(rootId) {
-  var dT = C.getDraft();
-  var text = String(dT.text || '').trim();
-  if (!text) return;
-  var anchor = C.trailingAnchorId();
-  var lt = C.lineTasks();
-  var rootIdx = -1;
-  for (var i = 0; i < lt.length; i++) {
-    if (lt[i] && lt[i].id === rootId) { rootIdx = i; break; }
-  }
-  if (rootIdx === -1) return;
-  var base = C.lineIndent(lt[rootIdx]);
-  var inside = false;
-  if (anchor && anchor === rootId) inside = true;
-  else if (anchor) {
-    for (var j = rootIdx + 1; j < lt.length; j++) {
-      if (C.lineIndent(lt[j]) <= base) break;
-      if (lt[j].id === anchor) { inside = true; break; }
-    }
-  }
-  if (!inside) return;
-  var fi = C.effTrailingIndent();
-  if (fi <= base) fi = base >= 8 ? 8 : base + 1;
-  var created = C.placeTaskAfter(anchor, text, fi);
-  if (!created) return;
-  C.setDraft({ afterId: null, text: '', indent: null });
-}
 
-/* Выполнить с анимацией: строка возвращается на место уже зачёркнутой,
- * затем спускается в секцию выполненных под полем ввода. */
 /* Выполнить/вернуть с анимацией: строка возвращается на место уже
  * зачёркнутой (или расчеркнутой), затем переезжает в свою секцию —
  * выполненные под поле ввода, вернувшаяся — на своё место в списке
@@ -226,15 +181,12 @@ function toggleDoneSlide(taskId) {
   if (!task || task.deleted) return;
   /* Фокус с любой строки/поля снимаем сразу (свайп уже снял — тут
    * no-op): отметка выполненной — чужое действие, клавиатура не должна
-   * пережить её ни в задаче, ни в поле-черновике. */
+   * пережить её ни в задаче, ни в поле ввода. */
   var aeF = document.activeElement;
   if (aeF && aeF.blur && (aeF.tagName === 'TEXTAREA' || aeF.tagName === 'INPUT')) {
     try { aeF.blur(); } catch (x) {}
   }
   var toDone = task.status !== 'done';
-  /* Набранное в поле внутри ветки: создаём задачу ДО completeBranch —
-   * иначе поле не улетает в выполненные вместе с родителем. */
-  if (toDone) commitTrailingIntoBranch(taskId);
   var box = el('lines');
   var row = null;
   if (box && box.querySelectorAll) {
@@ -398,7 +350,6 @@ function dropMargins(row, kidRows) {
       var rt = L.getTask(state.tasks, rid);
       if (rt) return C.lineIndent(rt);
     }
-    if (r.getAttribute && r.getAttribute('data-trailing')) return C.effTrailingIndent();
     return 0;
   }
   function setDrop(r) {
@@ -474,9 +425,6 @@ function wireLineDrag(div, grip, inp) {
   var mode = null, lastDx = 0, lastScrollTs = 0, phi = 0;
   var order = null, kids = [], fr = [], frSh = [];
   var indentCur = 0, indentMax = 0;
-  /* Поле и задачи на старте жеста: перестановка пишется в историю,
-   * отмена возвращает всё на места, а не трогает чужое. */
-  var dragUiBefore = null;
   var PEN = 14;
   /* Открыть дыру на позиции np: ряды ниже отходят на высоту блока,
    * ряды выше возвращаются. Трогаем только изменившиеся (иначе дёргание).
@@ -702,7 +650,6 @@ function wireLineDrag(div, grip, inp) {
     lastScrollTs = 0;
     mode = null;
     kids = [];
-    dragUiBefore = C.snapFull();
     try { grip.setPointerCapture(pid); } catch (x) {}
     pinScroll();
     document.addEventListener('pointerup', finish);
@@ -710,44 +657,8 @@ function wireLineDrag(div, grip, inp) {
     /* Взялись за grip — фокус НЕ трогаем: blur на захвате закрывал
      * клавиатуру посреди touch — вьюпорт прыгал, содержимое уезжало
      * из-под пальца и жест глох («сдвиг влево ничего не делает»).
-     * Клавиатура закрывается в finish. Коммит текста не рендерит
-     * (dragActive); blur-создание чужого черновика видит grip в lastPD
-     * и пропускает, а черновик СВОЕЙ строки с текстом создаётся задачей
-     * ниже. */
+     * Клавиатура закрывается в finish. */
     dragActive = true;
-    /* Черновик с текстом: захват точек сразу делает из него задачу —
-     * поле теряет фокус насовсем (курсор сюда не возвращается), а сам
-     * жест идёт уже по настоящей строке: отступ применяется setIndent
-     * к задаче, а не уходит в черновик (trailingIndent), который при
-     * следующем рендере/blur ведёт себя иначе. Рендер поднят
-     * (dragActive) — узлы не пересоздаются, узел жеста помечается
-     * data-id, поэтому myTask() и indentBounds() работают сразу. */
-    var draftRowG = !!(div.getAttribute && div.getAttribute('data-trailing'));
-    var dG = C.getDraft();
-    var commitTxt = draftRowG ? String(dG.text || '').trim() : '';
-    if (commitTxt) {
-      var atTopG = dG.afterId === 'TOP';
-      var anchorG = atTopG ? null : C.trailingAnchorId();
-      var indG = C.effTrailingIndent();
-      var madeG = null;
-      C.mutate(function () {
-        madeG = atTopG ?
-          C.insertTaskTop(commitTxt, Date.now()) :
-          C.insertTaskAfter(anchorG, commitTxt, indG, Date.now());
-      });
-      if (madeG) {
-        C.setDraft({ afterId: null, text: '', indent: null });
-        div.setAttribute('data-id', madeG.id);
-        div.removeAttribute('data-trailing');
-      }
-    }
-    var aeNow = document.activeElement;
-    /* Возврат курсор — только когда тащат САМО поле: при жесте на
-     * чужой строке (свайп родителя) фокус с набранного снимается
-     * насовсем (в finish), иначе клавиатура тут же возвращается. */
-    var focusInDraft = !!(aeNow && aeNow.closest && aeNow.closest('.tline[data-trailing]'));
-    var dragIsDraft = !!(div.getAttribute && div.getAttribute('data-trailing'));
-    refocusDraft = focusInDraft && dragIsDraft;
     if (e.cancelable) e.preventDefault();
   });
   grip.addEventListener('pointermove', function (e) {
@@ -756,12 +667,8 @@ function wireLineDrag(div, grip, inp) {
     var dy = e.clientY - y0;
     if (!mode) {
       if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 2) {
-        /* Черновик сдвигается так же, как остальные строки; запрет —
-         * только для выполненных. Раньше черновик отфутболивался здесь
-         * и отступ у нового поля не менялся вообще. */
         var _mt = myTask();
-        if (!_mt && !(div.getAttribute && div.getAttribute('data-trailing'))) return;
-        if (_mt && _mt.status === 'done') return;
+        if (!_mt || _mt.status === 'done') return;
         startIndent();
       } else if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx) * 2) {
         startVertical(e);
@@ -815,35 +722,15 @@ function wireLineDrag(div, grip, inp) {
     document.removeEventListener('pointercancel', finish);
     /* Фокус и клавиатура — только на финише: blur на захвате закрывал
      * клавиатуру посреди touch — вьюпорт прыгал, содержимое уезжало
-     * из-под пальца и жест глох (v51). lastPD перед blur оживляем:
-     * долгий жест (>700мс) иначе уводит blur-создание чужого черновика
-     * мимо гарда grip и набранный текст превращается в задачу. */
-    if (!refocusDraft) {
-      C.touchLastPD(grip);
-      var aeEnd = document.activeElement;
-      var didBlur = false;
-      if (aeEnd && aeEnd.blur && (aeEnd.tagName === 'TEXTAREA' || aeEnd.tagName === 'INPUT')) {
-        try { aeEnd.blur(); didBlur = true; } catch (x) {}
-      }
-      /* Закрытие клавиатуры двигает страницу уже ПОСЛЕ жеста:
-       * держим пин ещё полсекунды, чтобы итог не дёргался. */
-      if (didBlur) unpinScroll(500); else unpinScroll();
-    } else {
-      unpinScroll();
+     * из-под пальца и жест глох (v51). */
+    var aeEnd = document.activeElement;
+    var didBlur = false;
+    if (aeEnd && aeEnd.blur && (aeEnd.tagName === 'TEXTAREA' || aeEnd.tagName === 'INPUT')) {
+      try { aeEnd.blur(); didBlur = true; } catch (x) {}
     }
-    /* Курсор был в поле-черновике: возвращаем его после финального
-     * render (220мс), когда поле уже пересоздано на новом месте. */
-    if (refocusDraft) {
-      refocusDraft = false;
-      setTimeout(function () {
-        C.focusTrailing();
-        var bx = el('lines');
-        var ix = bx && bx.querySelector ? bx.querySelector('.tline[data-trailing] .tinput') : null;
-        if (ix && ix.setSelectionRange) {
-          try { var vv = ix.value; ix.setSelectionRange(vv.length, vv.length); } catch (x) {}
-        }
-      }, 240);
-    }
+    /* Закрытие клавиатуры двигает страницу уже ПОСЛЕ жеста:
+     * держим пин ещё полсекунды, чтобы итог не дёргался. */
+    if (didBlur) unpinScroll(500); else unpinScroll();
     /* Тап по многоточию родителя (без движения): свернуть/развернуть детей. */
     if (mode === null && e && e.type === 'pointerup') {
       var tapped = myTask();
@@ -868,27 +755,7 @@ function wireLineDrag(div, grip, inp) {
       if (lvl < 0) lvl = 0;
       if (lvl > bou.max) lvl = bou.max;
       var task = myTask();
-      if (!task) {
-        if (div.getAttribute && div.getAttribute('data-trailing')) {
-          /* Сдвиг пустого поля — тоже перестановка: пишем в историю,
-           * иначе отмена после сдвига откатит чужое действие. */
-          var dI = C.getDraft();
-          if (C.effTrailingIndent() !== lvl) {
-            C.pushUndo({
-              tasks: C.snapTasks(),
-              afterId: dI.afterId,
-              text: dI.text,
-              indent: dI.indent
-            });
-            C.updateHistoryButtons();
-          }
-          dI.indent = lvl;
-          C.setDraft(dI);
-          expandParentAbove(lvl);
-          C.render();
-        }
-        return;
-      }
+      if (!task) return;
       /* Разворот — всегда, а не только при смене уровня: строка могла
        * родиться под свёрнутым уже на своём уровне (черновик виден,
        * задача — нет), и сдвиг вхолостую её бы не показал. */
@@ -952,52 +819,6 @@ function wireLineDrag(div, grip, inp) {
         kids[m].style.display = '';
         box.insertBefore(kids[m], ref);
         ref = kids[m];
-      }
-      /* Черновик перетащили: запоминаем новое место (id соседа сверху
-       * или TOP) и берём отступ по новому месту — тот же закон, что
-       * у настоящих задач (applyDropIndent строку без data-id не видит,
-       * поэтому поле после переноса держало старый отступ: между
-       * дочерними оставалось на 0). Данные задач не трогаем. */
-      if (!myTask() && div.getAttribute && div.getAttribute('data-trailing')) {
-        var prevRow = div.previousSibling;
-        var prevId = null;
-        while (prevRow) {
-          if (prevRow.getAttribute && prevRow.getAttribute('data-id')) {
-            prevId = prevRow.getAttribute('data-id');
-            break;
-          }
-          prevRow = prevRow.previousSibling;
-        }
-        var nextRow2 = div.nextSibling;
-        var nextId = null;
-        while (nextRow2) {
-          if (nextRow2.getAttribute && nextRow2.getAttribute('data-id')) {
-            nextId = nextRow2.getAttribute('data-id');
-            break;
-          }
-          nextRow2 = nextRow2.nextSibling;
-        }
-        var newAfter = prevId || 'TOP';
-        var pT = prevId ? L.getTask(state.tasks, prevId) : null;
-        var nT = nextId ? L.getTask(state.tasks, nextId) : null;
-        var pInd = pT ? C.lineIndent(pT) : 0;
-        var nInd = nT ? C.lineIndent(nT) : -1;
-        var wantInd = !pT ? 0 : (nInd === pInd + 1 ? nInd : pInd);
-        var dL = C.getDraft();
-        var oldAfter = dragUiBefore ? dragUiBefore.afterId : dL.afterId;
-        var oldInd = C.effTrailingIndent();
-        if (newAfter !== oldAfter || wantInd !== oldInd) {
-          C.pushUndo({
-            tasks: C.snapTasks(),
-            afterId: oldAfter,
-            text: dragUiBefore ? String(dragUiBefore.text || '') : dL.text,
-            indent: dragUiBefore ? dragUiBefore.indent : dL.indent
-          });
-          C.updateHistoryButtons();
-        }
-        dL.afterId = newAfter;
-        dL.indent = wantInd;
-        C.setDraft(dL);
       }
       /* Только теперь возвращаем строку в поток — место уже измерено. */
       div.style.position = '';
@@ -1065,39 +886,6 @@ function wireLineDrag(div, grip, inp) {
       C.pushUndo(preDrop);
       C.updateHistoryButtons();
       reordered = true;
-    }
-    /* Задачу тащили ЧЕРЕЗ черновик (или мимо него): data-id-порядок мог
-     * не измениться — persist no-op, а render вернул бы поле на старый
-     * якорь («всё возвращается на свои места»). Якорь поля — живая
-     * строка непосредственно над ним (или TOP), отступ — по соседям,
-     * как при переносе самого поля. Если порядок задач уже переставлен,
-     * его undo-слепок (snapFull) несёт и старый якорь — второй шаг
-     * истории не плодим. */
-    var dRowB = box && box.querySelector ? box.querySelector('.tline[data-trailing]') : null;
-    if (dRowB && myTask()) {
-      var prB = dRowB.previousSibling, pIdB = null;
-      while (prB) {
-        if (prB.getAttribute && prB.getAttribute('data-id')) { pIdB = prB.getAttribute('data-id'); break; }
-        prB = prB.previousSibling;
-      }
-      var newAfterB = pIdB || 'TOP';
-      var pTB = pIdB ? L.getTask(state.tasks, pIdB) : null;
-      var nRB = dRowB.nextSibling, nIdB = null;
-      while (nRB) {
-        if (nRB.getAttribute && nRB.getAttribute('data-id')) { nIdB = nRB.getAttribute('data-id'); break; }
-        nRB = nRB.nextSibling;
-      }
-      var nTB = nIdB ? L.getTask(state.tasks, nIdB) : null;
-      var pIndB = pTB ? C.lineIndent(pTB) : 0;
-      var nIndB = nTB ? C.lineIndent(nTB) : -1;
-      var wantIndB = !pTB ? 0 : (nIndB === pIndB + 1 ? nIndB : pIndB);
-      var dR = C.getDraft();
-      if (newAfterB !== dR.afterId || wantIndB !== dR.indent) {
-        if (!reordered) { C.pushUndo(C.snapFull()); C.updateHistoryButtons(); }
-        dR.afterId = newAfterB;
-        dR.indent = wantIndB;
-        C.setDraft(dR);
-      }
     }
     setTimeout(function () {
       div.style.transition = '';
