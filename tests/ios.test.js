@@ -208,10 +208,11 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'нет красного «!» на светофоре при 409/422');
     assert.ok(trigSrc.includes("on('syncLight', 'click', function () { doSync(true); })"),
       'нет тапа по светофору — принудительного синка');
-    /* v121: яркость светофора вдвое слабее + жёлтый «!» слева от красного. */
-    assert.ok(trigSrc.includes('#265728') && trigSrc.includes('#7f6003') &&
-      trigSrc.includes('#7a211b') && trigSrc.includes('#5d5d5d'),
-      'цвета светофора не приглушены вдвое');
+    /* v121: яркость светофора слабее + жёлтый «!» слева от красного;
+     * v127: ×0.7 вместо ÷2 (÷2 давало почти чёрные цвета). */
+    assert.ok(trigSrc.includes('#357a38') && trigSrc.includes('#b28705') &&
+      trigSrc.includes('#ab2f26') && trigSrc.includes('#838383'),
+      'цвета светофора не приглушены (×0.7)');
     assert.ok(html.includes('id="syncAlert"') && trigSrc.includes("el('syncAlert')") &&
       trigSrc.includes("warn.classList.toggle('on', alert)"),
       'нет жёлтого «!» перед красным квадратиком');

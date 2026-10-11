@@ -113,8 +113,9 @@ function doSync(force) {
 function setLight(color, blink) {
   var n = el('syncLight');
   if (!n) return;
-  /* Яркость вдвое слабее обычных (каналы ÷2 — запрос v121). */
-  var map = { green: '#265728', yellow: '#7f6003', red: '#7a211b', gray: '#5d5d5d' };
+  /* Яркость слабее обычных (каналы ×0.7): деление на 2 давало почти
+   * чёрные цвета на мелком квадратике. */
+  var map = { green: '#357a38', yellow: '#b28705', red: '#ab2f26', gray: '#838383' };
   n.style.background = map[color] || map.gray;
   if (blink) n.classList.add('blink');
   else n.classList.remove('blink');
