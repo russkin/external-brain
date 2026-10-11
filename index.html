@@ -123,6 +123,11 @@
       border-radius: 8px; margin: 2px 6px; }
     #backupMenu.open { display: block; }
     #backupMenu button { padding-left: 28px; font-size: 15px; }
+    /* Подменю «Очистка»: те же правила, другой оттенок. */
+    #cleanupMenu { display: none; background: rgba(76,175,80,.10);
+      border-radius: 8px; margin: 2px 6px; }
+    #cleanupMenu.open { display: block; }
+    #cleanupMenu button { padding-left: 28px; font-size: 15px; }
     /* Пункт-ссылка (инструкция): как кнопка меню, но нативный переход —
      * window.open + запасной location давали ДВЕ страницы (open возвращает
      * null, когда вкладка уходит во внешний браузер). */
@@ -185,7 +190,11 @@
     <button id="shareBtn">📤 Поделиться списком</button>
     <button id="shareAppBtn">🔗 Поделиться приложением</button>
     <a id="guideBtn" href="./docs/USER_GUIDE.html" target="_blank" rel="noopener">📖 Инструкция</a>
-    <button id="clearDone">Удалить выполненные</button>
+    <button id="cleanupBtn">🧹 Очистка</button>
+    <div id="cleanupMenu">
+      <button id="clearDone">Удалить выполненные</button>
+      <button id="purgeBtn">Удалить мёртвые (сжать)</button>
+    </div>
     <button id="backupBtn">💾 Резервная копия</button>
     <div id="backupMenu">
       <button id="restoreBtn">♻ Восстановить копию задач</button>

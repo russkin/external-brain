@@ -590,3 +590,40 @@ describe('отступ (группы)', () => {
     assert.equal(L.isHiddenByCollapse(arr, 1, { a: true }), false);
   });
 });
+
+describe('сжатие могил (purgeTombstones)', () => {
+  function tomb(id, title, ts) {
+    return { id: id, title: title, status: 'inbox', estMin: 0, sumKids: true,
+      indent: 0, createdAt: ts, updatedAt: ts, doneAt: 0, ts: ts, deleted: true };
+  }
+  it('могилы с текстом сжимаются в маркеры, остальные целы', () => {
+    const t = [
+      { id: 'a', title: 'Жива', status: 'inbox', ts: 100, createdAt: 100, updatedAt: 100 },
+      { id: 'b', title: 'Готово', status: 'done', ts: 100, createdAt: 101, updatedAt: 100 },
+      tomb('c', 'Мусор', 200),
+      tomb('d', '', 200)
+    ];
+    assert.equal(L.purgeTombstones(t, 500), 1, 'сжата только могила с текстом');
+    assert.equal(t[0].title, 'Жива', 'живая тронута');
+    assert.equal(t[1].status, 'done', 'выполненная тронута');
+    assert.deepEqual(t[2], { id: 'c', deleted: true, ts: 500, updatedAt: 500 });
+    assert.equal(t[3].title, '', 'пустая могила переписана');
+  });
+  it('метка свежее (max) — забытое устройство не воскресит', () => {
+    const t = [tomb('c', 'Мусор', 900)];
+    L.purgeTombstones(t, 500);
+    assert.equal(t[0].ts, 900, 'старая метка не занижается');
+    const stale = [{ id: 'c', title: 'Мусор', status: 'inbox', ts: 800, createdAt: 100, updatedAt: 800 }];
+    const m = L.mergeTasks(stale, t);
+    assert.equal(m[0].deleted, true, 'живая копия с забытого устройства воскресла');
+  });
+  it('маркер переживает нормализацию и слияние', () => {
+    const t = [{ id: 'c', deleted: true, ts: 500, updatedAt: 500 }];
+    const n = L.normalizeTasks(t);
+    assert.equal(n.length, 1);
+    assert.equal(n[0].deleted, true);
+    assert.equal(n[0].ts, 500);
+    assert.equal(L.purgeTombstones(null), 0);
+    assert.equal(L.purgeTombstones([]), 0);
+  });
+});

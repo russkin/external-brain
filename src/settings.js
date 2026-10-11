@@ -1,5 +1,5 @@
 /* settings.js — меню ⚙ и окно «Репозиторий и токен»: открытие/закрытие
- * меню и подменю копий, модальное окно с двумя полями и кнопками
+ * меню и подменю копий и очистки, модальное окно с двумя полями и кнопками
  * Сохранить/Отмена.
  * Вынесено из app.js (рефакторинг, этап 3): код перенесён как есть,
  * общее — только через ctx. Своих глобалов не трогает.
@@ -62,12 +62,19 @@ function init(ctx) {
     if (gear && !gear.classList.contains('open')) {
       var bm = el('backupMenu');
       if (bm) bm.classList.remove('open');
+      var cm = el('cleanupMenu');
+      if (cm) cm.classList.remove('open');
     }
   });
   /* Подменю «Резервная копия»: три пункта-копии в одном. */
   ctx.on('backupBtn', 'click', function () {
     var bm = el('backupMenu');
     if (bm) bm.classList.toggle('open');
+  });
+  /* Подменю «Очистка»: удаление выполненных + сжатие могил. */
+  ctx.on('cleanupBtn', 'click', function () {
+    var cm = el('cleanupMenu');
+    if (cm) cm.classList.toggle('open');
   });
   /* Репозиторий и токен — только для администратора: сначала предупреждение,
    * затем модальное окно по центру с двумя полями и кнопками

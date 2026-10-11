@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v141';
+  var APP_VERSION = 'v142';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -863,6 +863,33 @@
     } else manual('Скопируй вручную', text);
   }
 
+  /* Сжать могилы: tombstone с текстом заменяются короткими метками
+   * (файл худеет). Живые и выполненные не трогаются; шаг пишется в историю
+   * (↩ возвращает полные могилы). ДВОЙНОЕ предупреждение: текст могил
+   * после синка пропадёт везде, а забытые устройства безопасны — метки
+   * свежее их копий, воскрешения не будет (кроме рассинхрона часов). */
+  function askPurgeTombs() {
+    if (!state) return;
+    var n = 0;
+    for (var i = 0; i < state.tasks.length; i++) {
+      var t = state.tasks[i];
+      if (t && t.deleted && String(t.title || '')) n++;
+    }
+    if (!n) {
+      askText('Мёртвых записей с текстом нет — сжимать нечего', '', false).then(function () {});
+      return;
+    }
+    askConfirm('Сжать ' + n + ' мёртвых записей? Текст удалённых сотрётся, останутся короткие метки, файл похудеет. Живые и выполненные не тронутся, отмена ↩ вернёт всё обратно. Продолжить?').then(function (ok) {
+      if (!ok || !state) return;
+      askConfirm('Точно сжать? Лучше сначала синкнуть ВСЕ устройства, включая забытые, — тогда чистка разлетится сразу. Забытые воскресить удалённое не смогут (метки свежее их копий). Сжимаем?').then(function (ok2) {
+        if (!ok2 || !state) return;
+        mutate(function () { L.purgeTombstones(state.tasks, Date.now()); });
+        lastAction = 'могилы сжаты';
+        renderStatus();
+      });
+    });
+  }
+
   /* Удалить выполненные — с подтверждением (кнопка в шапке и в ⚙). */
   function askClearDone() {
     /* Выполненных нет — и корзина, и пункт меню ничего не удаляют:
@@ -948,6 +975,7 @@
     });
     on('clearDone', 'click', function () { askClearDone(); });
     on('deleteDoneBtn', 'click', function () { askClearDone(); });
+    on('purgeBtn', 'click', function () { askPurgeTombs(); });
     on('restoreBtn', 'click', function () {
       if (!state) return;
       var info = window.EBStore.backupInfo ? window.EBStore.backupInfo() : null;

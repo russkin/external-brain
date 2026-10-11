@@ -830,6 +830,26 @@ describe('логика вызывается с state.tasks', () => {
       assert.ok(html.includes('id="' + sid + '"'), 'нет ' + sid);
     }
   });
+  it('очистка сгруппирована в подменю: выполненные + сжатие могил', () => {
+    assert.ok(html.includes('id="cleanupBtn"') && html.includes('id="cleanupMenu"') &&
+      html.includes('id="purgeBtn"'),
+      'нет пункта и подменю «Очистка»');
+    assert.ok(html.includes('#cleanupMenu { display: none;'),
+      'подменю очистки видно сразу');
+    assert.ok(settingsSrc.includes("on('cleanupBtn'"),
+      'подменю очистки не открывается');
+    assert.ok(appSrc.includes("on('purgeBtn'") && appSrc.includes('function askPurgeTombs'),
+      'чистка могил не подписана');
+    assert.ok(appSrc.includes('L.purgeTombstones(state.tasks, Date.now())'),
+      'чистка идёт не через логику с историей');
+    var iP = appSrc.indexOf('function askPurgeTombs');
+    var pBody = appSrc.slice(iP, iP + 1600);
+    assert.ok(pBody.includes('Мёртвых записей с текстом нет'),
+      'нет честного «нечего сжимать»');
+    assert.ok(pBody.indexOf('askConfirm(') !== -1 &&
+      pBody.indexOf('askConfirm(', pBody.indexOf('askConfirm(') + 1) !== -1,
+      'нет двойного предупреждения');
+  });
   it('меню не вылезает за маленький экран', () => {
     assert.ok(/#gearMenu\.open\s*\{[^}]*max-height:\s*calc\(100vh - 70px\)[^}]*overflow-y:\s*auto/.test(html),
       'меню без потолка высоты и прокрутки');

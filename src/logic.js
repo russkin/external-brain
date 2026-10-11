@@ -210,6 +210,27 @@ function removeTask(tasks, id, nowMs) {
   return task;
 }
 
+/* Сжатие могил: tombstone с текстом заменяется минимальным маркером
+ * {id, deleted, ts/updatedAt} — текст могил составляет весь вес файла.
+ * Маркер свежее (ts = max(now, старая)): забытое устройство с живой копией
+ * его не воскресит (LWW побеждает свежий), могилы с других устройств сами
+ * сойдутся в маркеры при слиянии. Возвращает число сжатых. */
+function purgeTombstones(tasks, nowMs) {
+  if (!Array.isArray(tasks)) return 0;
+  var now = toInt(nowMs, Date.now());
+  var n = 0;
+  for (var i = 0; i < tasks.length; i++) {
+    var t = tasks[i];
+    if (!t || !t.id || !t.deleted) continue;
+    if (!String(t.title || '')) continue;
+    var ts = toInt(t.ts, 0);
+    if (now > ts) ts = now;
+    tasks[i] = { id: String(t.id).slice(0, 64), deleted: true, ts: ts, updatedAt: ts };
+    n++;
+  }
+  return n;
+}
+
 /* Отступ: задача с отступом входит в группу задачи сверху.
  * Уровень ограничен 0..MAX_INDENT; правило «не глубже соседа сверху +1»
  * держит UI, сюда приходит уже проверенное значение. */
@@ -524,6 +545,7 @@ var api = {
   reopenTask: reopenTask,
   reopenBranch: reopenBranch,
   removeTask: removeTask,
+  purgeTombstones: purgeTombstones,
   setIndent: setIndent,
   hasKids: hasKids,
   isDoneShown: isDoneShown,
