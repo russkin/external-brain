@@ -995,18 +995,17 @@
         return;
       }
       commitLine(taskId, inp.value, false);
-      /* Позиция поля: каретка в начале текста — НАД текущей строкой на
-       * её же отступе (вставка сверху, якорь — строка перед ней или
-       * TOP); иначе — под строкой: у родителя (за ним первая дочерняя)
-       * сразу на её отступе, у листа — свой уровень. Вызов поля —
-       * отдельная точка в истории, иначе ↩ откатит чужое давнее
-       * действие (вплоть до воскрешения удалённого в выполненных). */
+      /* Поля-черновика больше нет: Enter сразу рождает пустую задачу
+       * на вычисленном месте. Каретка в начале набранного — НАД текущей
+       * строкой на её же отступе (вставка сверху); иначе — под строкой:
+       * у родителя сразу на отступе первой дочерней, у листа — свой
+       * уровень. Создание — одна точка истории (через placeTask*,
+       * отмена — tombstone), курсор — в новую строку. */
       var moved = L.getTask(state.tasks, taskId);
       if (moved && moved.status !== 'done') {
-        /* Пустое поле у пустой задачи: каретка и так в «начале» — это не
-         * «вставка сверху», а следующее поле ПОД строкой (иначе вторая
-         * пустая прыгает выше первой). Вставка сверху — только при
-         * каретке в начале НАБРАННОГО текста. */
+        /* Каретка в начале ПУСТОЙ строки — не «вставка сверху», а строка
+         * ПОД текущей (иначе вторая пустая прыгает выше первой). Вставка
+         * сверху — только при каретке в начале НАБРАННОГО текста. */
         var atStart = inp.selectionStart === 0 && inp.selectionEnd === 0 &&
           !!String(inp.value || '').trim();
         var newIndent = lineIndent(moved);
@@ -1022,22 +1021,17 @@
           }
           break;
         }
-        if (trailingAfterId !== newAnchor || effTrailingIndent() !== newIndent) {
-          pushUndo({
-            tasks: snapTasks(),
-            afterId: trailingAfterId,
-            text: trailingText,
-            indent: trailingIndent,
-            focusId: taskId
-          });
-          updateHistoryButtons();
-        }
-        trailingAfterId = newAnchor;
-        trailingIndent = newIndent;
-        expandForAnchor(newAnchor, newIndent);
+        var madeEnter = (newAnchor === 'TOP') ?
+          placeTaskTop('', true) :
+          placeTaskAfter(newAnchor, '', newIndent, true);
+        if (madeEnter) expandForAnchor(newAnchor, newIndent);
+        render();
+        if (madeEnter) focusTaskEnd(madeEnter.id);
+        else focusTrailing();
+      } else {
+        render();
+        focusTrailing();
       }
-      render();
-      focusTrailing();
     });
   }
 

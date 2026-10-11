@@ -375,6 +375,7 @@ describe('логика вызывается с state.tasks', () => {
       'между наименованиями нет пробела');
     var iM = appSrc.indexOf('function mergeTaskIntoPrev');
     var mBody = appSrc.slice(iM, appSrc.indexOf('function commitLine'));
+    assert.ok(mBody.includes('if (idx <= 0) return;'), 'Backspace в первой строке что-то делает');
     assert.ok(mBody.includes('L.removeTask(state.tasks, cur.id)'), 'текущая строка не удаляется');
     assert.ok(mBody.includes('trailingAfterId === cur.id'), 'поле под строкой остаётся на мёртвом якоре');
     assert.ok(mBody.includes('focusTaskEnd(prev.id, prevLen + 1)'),
@@ -483,11 +484,14 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(mgBody.includes('inputClosed = true'),
       'сцепка не закрывает input от позднего change');
   });
-  it('Enter в строке даёт пустое поле ниже, а не фокус дальше', () => {
-    assert.ok(appSrc.includes('trailingAfterId'), 'пустое поле не переезжает');
-    assert.ok(appSrc.includes('placeTaskAfter'), 'нет вставки по месту');
+  it('Enter в строке рождает пустую задачу ниже, курсор в неё', () => {
+    assert.ok(appSrc.includes("placeTaskAfter(newAnchor, '', newIndent, true)"),
+      'нет вставки пустой задачи по месту');
+    assert.ok(appSrc.includes("placeTaskTop('', true)"), 'нет вставки сверху через TOP');
+    assert.ok(appSrc.includes('focusTaskEnd(madeEnter.id)'), 'курсор не встаёт в новую строку');
     assert.ok(!appSrc.includes('focusLineAfter'), 'старый фокус дальше остался');
-    assert.ok(appSrc.includes('trailingText'), 'текст поля теряется при перерисовке');
+    assert.ok(appSrc.includes('expandForAnchor(newAnchor, newIndent)'),
+      'строка под свёрнутым родится невидимой');
   });
   it('пустое поле не висит при длинном списке', () => {
     assert.ok(rendSrc.includes('showDraft'), 'нет гейта пустого поля');
@@ -504,7 +508,7 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(historySrc.includes('snapTasks() !== tasksJson'), 'возврат поля дёргает метки синка');
   });
   it('отмена убирает вызванное поле и возвращает курсор', () => {
-    assert.ok(appSrc.includes('focusId: taskId'), 'Enter не пишет точку с фокусом');
+    assert.ok(appSrc.includes('focusId: created.id'), 'Enter не пишет точку с фокусом');
     assert.ok(appSrc.includes('focusTaskEnd'), 'курсор не возвращается в конец задачи');
     assert.ok(appSrc.includes('setSelectionRange'), 'курсор не ставится в конец');
     assert.ok(appSrc.includes('focusAfterHistory'), 'отмена не ведёт курсор');
@@ -556,26 +560,26 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(block.includes('effTrailingIndent()'), 'отступ висячего черновика не из состояния');
     assert.ok(block.includes('trailingText = \'\''), 'текст висячего черновика не стёрт');
   });
-  it('Enter в родителе: поле на уровне первой дочерней', () => {
+  it('Enter в родителе: пустая задача на уровне первой дочерней', () => {
     var iN = appSrc.indexOf('var newIndent');
-    assert.ok(iN !== -1, 'нет расчёта отступа поля под строкой');
-    var iA = appSrc.indexOf('trailingIndent = newIndent', iN);
-    assert.ok(iA > iN, 'отступ не считается до присваивания');
+    assert.ok(iN !== -1, 'нет расчёта отступа строки под строкой');
+    var iA = appSrc.indexOf("placeTaskAfter(newAnchor, '', newIndent, true)", iN);
+    assert.ok(iA > iN, 'пустая задача не создаётся на вычисленном месте');
     var block = appSrc.slice(iN, iA);
     assert.ok(block.includes('lineIndent(nx) > newIndent'),
-      'первая дочерняя не подхватывается (поле уходит на уровень родителя)');
+      'первая дочерняя не подхватывается (строка уходит на уровень родителя)');
     assert.ok(block.includes('lineTasks()'), 'следующая строка не из живого списка');
-    assert.ok(block.includes('effTrailingIndent() !== newIndent'),
-      'повторный вызов поля пишет лишнюю точку истории');
+    assert.ok(appSrc.includes('if (madeEnter) focusTaskEnd(madeEnter.id);'),
+      'курсор не встаёт в новую строку');
   });
-  it('Enter с кареткой в начале: поле над текущей строкой', () => {
+  it('Enter с кареткой в начале: строка над текущей', () => {
     assert.ok(appSrc.includes('inp.selectionStart === 0 && inp.selectionEnd === 0'),
       'нет распознавания каретки в начале текста');
     assert.ok(appSrc.includes("newAnchor = li > 0 ? lt[li - 1].id : 'TOP'"),
       'нет якоря перед текущей строкой (или TOP для первой)');
-    assert.ok(appSrc.includes('trailingAfterId = newAnchor'), 'поле не ставится по новому якорю');
-    assert.ok(appSrc.includes('trailingIndent = newIndent'),
-      'поле над строкой не берёт её отступ');
+    assert.ok(appSrc.includes("placeTaskTop('', true)"), 'нет вставки сверху через TOP');
+    assert.ok(appSrc.includes("placeTaskAfter(newAnchor, '', newIndent, true)"),
+      'строка над текущей не создаётся на её отступе');
     var iTop = rendSrc.indexOf("showDraft && d.afterId === 'TOP'");
     assert.ok(iTop !== -1 && rendSrc.slice(iTop, iTop + 220).includes('tailIndent'),
       'поле сверху игнорирует отступ из состояния');
