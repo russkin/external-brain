@@ -17,6 +17,7 @@ const settingsSrc = fs.readFileSync(path.join(root, 'src/settings.js'), 'utf8');
 const searchSrc = fs.readFileSync(path.join(root, 'src/search.js'), 'utf8');
 const trigSrc = fs.readFileSync(path.join(root, 'src/triggers.js'), 'utf8');
 const gestSrc = fs.readFileSync(path.join(root, 'src/gestures.js'), 'utf8');
+const rendSrc = fs.readFileSync(path.join(root, 'src/render.js'), 'utf8');
 
 function appVersion() {
   const m = appSrc.match(/APP_VERSION\s*=\s*'([^']+)'/);
@@ -38,7 +39,7 @@ describe('версии app.js и sw.js меняются вместе', () => {
   });
   it('версия видна в шапке', () => {
     assert.ok(html.includes('id="appVerHead"'), 'нет appVerHead в шапке');
-    assert.ok(appSrc.includes("el('appVerHead')"), 'версия не подставляется');
+    assert.ok(rendSrc.includes("el('appVerHead')"), 'версия не подставляется');
   });
 });
 
@@ -62,7 +63,7 @@ describe('service worker: методика кэша', () => {
     assert.ok(trigSrc.includes('caches.delete'), 'нет чистки кэша при обновлении');
   });
   it('в кэш положены все части оболочки', () => {
-    for (const u of ["'./'", 'index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'src/triggers.js', 'src/gestures.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'docs/USER_GUIDE.html']) {
+    for (const u of ["'./'", 'index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'src/triggers.js', 'src/gestures.js', 'src/render.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'docs/USER_GUIDE.html']) {
       assert.ok(swSrc.includes(u), 'нет ' + u + ' в ASSETS');
     }
   });
@@ -156,7 +157,7 @@ describe('устойчивость к рассинхрону кэшей', () => 
     assert.ok(!appSrc.includes("return 'removed'") &&
       appSrc.includes("clarifyTask(state.tasks, taskId, { title: '' })"),
       'commitLine удаляет задачу с пустым текстом вместо очистки');
-    assert.ok(appSrc.includes("isTrailing ? 'Новая задача…' : '…'"),
+    assert.ok(rendSrc.includes("isTrailing ? 'Новая задача…' : '…'"),
       'пустая задача не отличается плейсхолдером от черновика');
     /* v69: grabDy — при захвате, иначе дыра недобирает вверх. */
     assert.ok(gestSrc.includes('grabDy = e.clientY - div.getBoundingClientRect().top') &&
@@ -248,10 +249,11 @@ describe('логика вызывается с state.tasks', () => {
     }
   });
   it('стартовый экран: строки читаются из state.tasks', () => {
-    for (const fn of ['stats', 'shareText', 'doneList']) {
+    for (const fn of ['shareText', 'doneList']) {
       assert.ok(appSrc.includes('L.' + fn + '(state.tasks'), 'нет ' + fn + '(state.tasks');
     }
-    assert.ok(appSrc.includes('renderLines'), 'нет renderLines');
+    assert.ok(rendSrc.includes('L.stats(state.tasks'), 'нет stats(state.tasks');
+    assert.ok(rendSrc.includes('renderLines'), 'нет renderLines');
     assert.ok(appSrc.includes("el('lines')"), 'нет lines в app.js');
     assert.ok(!appSrc.includes('focusTask(state.tasks'), 'фокус дня должен быть убран из UI');
   });
@@ -259,8 +261,8 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(html.includes('id="lines"'), 'нет lines в index.html');
     assert.ok(html.includes("class=\"grip\"") || html.includes('.grip'), 'нет grip в index.html');
     assert.ok(html.includes('tinput'), 'нет tinput в index.html/app');
-    assert.ok(appSrc.includes("className = 'tline'") || appSrc.includes('tline'), 'нет tline в app.js');
-    assert.ok(appSrc.includes("className = 'tinput'") || appSrc.includes('tinput'), 'нет tinput в app.js');
+    assert.ok(rendSrc.includes("className = 'tline'"), 'нет tline в src/render.js');
+    assert.ok(rendSrc.includes("className = 'tinput'"), 'нет tinput в src/render.js');
     assert.ok(appSrc.includes('Enter'), 'нет Enter для новой строки');
   });
   it('отступ по месту отпускания: родители→0, внутри→от соседа', () => {
@@ -270,7 +272,7 @@ describe('логика вызывается с state.tasks', () => {
   });
   it('группы отступом: сдвиг за grip, наследование, потолок +1', () => {
     assert.ok(appSrc.includes('INDENT_STEP'), 'нет шага отступа');
-    assert.ok(appSrc.includes('marginLeft'), 'отступ не применяется к строке');
+    assert.ok(rendSrc.includes('marginLeft'), 'отступ не применяется к строке');
     assert.ok(appSrc.includes('lineIndent'), 'нет чтения уровня отступа');
     assert.ok(gestSrc.includes('indentBounds'), 'нет потолка «сосед сверху +1»');
     assert.ok(appSrc.includes('{ indent:'), 'новая строка не наследует отступ');
@@ -280,9 +282,9 @@ describe('логика вызывается с state.tasks', () => {
       'сдвиг двигает одну строку вместо ветки');
     assert.ok(gestSrc.includes('expandParentAbove(lvl)'),
       'сдвиг под свёрнутого прячет строку (родитель не разворачивается)');
-    assert.ok(appSrc.includes('function expandForAnchor(anchorId, indent)'),
+    assert.ok(rendSrc.includes('function expandForAnchor(anchorId, indent)'),
       'создание под свёрнутым прячет задачу с рождения');
-    assert.ok(appSrc.includes('\n  function expandForAnchor(anchorId, indent)'),
+    assert.ok(rendSrc.includes('\nfunction expandForAnchor(anchorId, indent)'),
       'expandForAnchor внутри замыкания drag — из Enter не видна, Enter молча умирает');
   });
   it('уровни цветом, collapse, шапка с тремя кнопками', () => {
@@ -301,7 +303,7 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(historySrc.includes('collapsed: vc') && historySrc.includes('setViewState'),
       'слепок истории без вида, возврат вида невозможен');
     assert.ok(appSrc.includes('askClearDone'), 'нет удаления выполненных с подтверждением');
-    assert.ok(appSrc.includes('collapsed-kid'), 'нет скрытия вложенных');
+    assert.ok(rendSrc.includes('collapsed-kid'), 'нет скрытия вложенных');
   });
   it('Корзина без выполненных не спрашивает подтверждение', () => {
     var iC = appSrc.indexOf('function askClearDone()');
@@ -317,29 +319,29 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(gestSrc.includes('swiped'), 'нет раскрытия свайпом');
     assert.ok(appSrc.includes('toggleDoneSlide'), 'нет завершения со слайдом');
     assert.ok(appSrc.includes('L.doneList(state.tasks)'), 'нет секции выполненных');
-    assert.ok(appSrc.includes('done-sep'), 'нет разделителя выполненных');
-    assert.ok(appSrc.includes('if (done.length)'),
+    assert.ok(rendSrc.includes('done-sep'), 'нет разделителя выполненных');
+    assert.ok(rendSrc.includes('if (done.length)'),
       'разделитель пропадает, когда все выполненные спрятаны в свёрнутых группах');
-    assert.ok(appSrc.includes("addEventListener('click'") && appSrc.includes('toggleDoneHidden'),
+    assert.ok(rendSrc.includes("addEventListener('click'") && appSrc.includes('toggleDoneHidden'),
       'нет тапа по разделителю для скрытия выполненных');
     assert.ok(appSrc.includes('loadDoneHidden') && appSrc.includes('doneHidden'),
       'состояние скрытия выполненных не сохраняется');
-    assert.ok(appSrc.includes("'Выполнено · ' + done.length"),
+    assert.ok(rendSrc.includes("'Выполнено · ' + done.length"),
       'счётчик показывает видимых, а не всех выполненных');
-    assert.ok(/sep\.addEventListener\('click'[\s\S]{0,600}e\.collapsed = bvCollapsed/.test(appSrc),
+    assert.ok(/sep\.addEventListener\('click'[\s\S]{0,600}e\.collapsed = bvCollapsed/.test(rendSrc),
       'тап по разделителю не пишет шаг истории');
     assert.ok(!appSrc.includes('expandDoneParents') && !appSrc.includes('anyDoneShown'),
       'тап по разделителю трогает сворачивание живых веток');
     assert.ok(!appSrc.includes('fullOrdered'),
       'обход предков по своему порядку: tombstone сдвигают индексы');
-    assert.ok(appSrc.includes('is-done'), 'нет зачёркивания');
+    assert.ok(rendSrc.includes('is-done'), 'нет зачёркивания');
     assert.ok(html.includes('user-select'), 'свайп проигрывает выделению текста');
     assert.ok(gestSrc.includes('_swOpen'), 'состояние свайпа рассинхронизировано');
     assert.ok(html.includes('translateX(-108px)'), 'флаг наезжает на поле задачи');
     assert.ok(appSrc.includes('activeElement'), 'курсор остаётся в поле после выполнения');
   });
   it('возврат из выполненных и история undo/redo', () => {
-    assert.ok(appSrc.includes('Не выполнено'), 'нет флага возврата');
+    assert.ok(rendSrc.includes('Не выполнено'), 'нет флага возврата');
     assert.ok(appSrc.includes('L.reopenBranch(state.tasks'), 'нет возврата задачи');
     assert.ok(appSrc.includes('completeBranch'), 'ветка не выполняется целиком');
     assert.ok(appSrc.includes('reopenBranch'), 'ветка не возвращается целиком');
@@ -411,8 +413,8 @@ describe('логика вызывается с state.tasks', () => {
     var sBody = appSrc.slice(iS, iS + 450);
     assert.ok(sBody.includes('hasKidsFull(tasks[i].id)'),
       'свернуть все смотрит только на живых детей');
-    var iD = appSrc.indexOf('Выполненные — под полем добавления');
-    var dBody = appSrc.slice(iD, appSrc.indexOf('function focusTrailing'));
+    var iD = rendSrc.indexOf('Выполненные — под полем добавления');
+    var dBody = rendSrc.slice(iD, rendSrc.indexOf('function focusTrailing'));
     assert.ok(!dBody.includes('isHiddenByCollapse(full, di, collapsed)'),
       'секция выполненных зависит от сворачивания живых групп');
     assert.ok(dBody.includes('var doneVis = done.slice();'),
@@ -483,9 +485,9 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('trailingText'), 'текст поля теряется при перерисовке');
   });
   it('пустое поле не висит при длинном списке', () => {
-    assert.ok(appSrc.includes('showDraft'), 'нет гейта пустого поля');
-    assert.ok(appSrc.includes('tasks.length <= 1'), 'поле не ограничено коротким списком');
-    assert.ok(appSrc.includes('hasDraftText'), 'набранный текст поля может потеряться');
+    assert.ok(rendSrc.includes('showDraft'), 'нет гейта пустого поля');
+    assert.ok(rendSrc.includes('tasks.length <= 1'), 'поле не ограничено коротким списком');
+    assert.ok(rendSrc.includes('hasDraftText'), 'набранный текст поля может потеряться');
   });
   it('Enter продолжает уровень: дочерняя за дочерней', () => {
     assert.ok(appSrc.includes('trailingIndent = lineIndent(created)'), 'цепочка не держит отступ');
@@ -520,7 +522,7 @@ describe('логика вызывается с state.tasks', () => {
   });
   it('в окне коммита черновик не рисуется (дубль на кадр)', () => {
     assert.ok(appSrc.includes('var draftCommitting = 0;'), 'нет счётчика окна коммита');
-    assert.ok(appSrc.includes('!draftCommitting && ('), 'рендер рисует поле поверх рождающейся задачи');
+    assert.ok(rendSrc.includes('!C.isDraftCommitting() && ('), 'рендер рисует поле поверх рождающейся задачи');
   });
   it('потеря фокуса поля создаёт задачу', () => {
     assert.ok(appSrc.includes("addEventListener('blur'"), 'нет blur-обработчика поля');
@@ -569,8 +571,8 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('trailingAfterId = newAnchor'), 'поле не ставится по новому якорю');
     assert.ok(appSrc.includes('trailingIndent = newIndent'),
       'поле над строкой не берёт её отступ');
-    var iTop = appSrc.indexOf("showDraft && trailingAfterId === 'TOP'");
-    assert.ok(iTop !== -1 && appSrc.slice(iTop, iTop + 220).includes('tailIndent'),
+    var iTop = rendSrc.indexOf("showDraft && d.afterId === 'TOP'");
+    assert.ok(iTop !== -1 && rendSrc.slice(iTop, iTop + 220).includes('tailIndent'),
       'поле сверху игнорирует отступ из состояния');
   });
   it('захват grip не гасит клавиатуру, pin держит страницу, коммит не рендерит', () => {
@@ -639,8 +641,8 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(cssD.includes('background: transparent'), 'фон метки не прозрачный');
     assert.ok(cssD.includes('right: 8px') && cssD.includes('bottom: 5px'),
       'метка не в правом нижнем углу поля');
-    var iMk = appSrc.indexOf('function makeLine');
-    var mkBlock = appSrc.slice(iMk, appSrc.indexOf('function autosize'));
+    var iMk = rendSrc.indexOf('function makeLine');
+    var mkBlock = rendSrc.slice(iMk, rendSrc.indexOf('function autosize'));
     assert.ok(mkBlock.includes('durchip'), 'строка не рисует метку времени');
     assert.ok(mkBlock.includes('L.fmtDur(opts.estMin)'), 'метка без формата из логики');
     assert.ok(mkBlock.includes('openDuration(id)'), 'тап по метке не открывает модалку');
@@ -652,12 +654,12 @@ describe('логика вызывается с state.tasks', () => {
       'возврат из-под раскрытого флага не глушит открытие времени');
     assert.ok(appSrc.includes('if (hasKidsFull(taskId)) return;'),
       'родителю не закрыта установка времени');
-    assert.ok(appSrc.includes('function lineEstMin') && appSrc.includes('estMin: lineEstMin(t)'),
+    assert.ok(rendSrc.includes('function lineEstMin') && rendSrc.includes('estMin: lineEstMin(t)'),
       'метка родителя не считается автоматически');
-    assert.ok(appSrc.includes('sum += lineEstMin(full[j])') && appSrc.includes('ij === pin + 1'),
+    assert.ok(rendSrc.includes('sum += lineEstMin(full[j])') && rendSrc.includes('ij === pin + 1'),
       'сумма идёт не по первому вложению');
     /* v71: выполненные вложения не входят в авто-сумму родителя. */
-    assert.ok(appSrc.includes("if (full[j].status === 'done') continue;"),
+    assert.ok(rendSrc.includes("if (full[j].status === 'done') continue;"),
       'выполненные вложения считаются в метке времени родителя');
     assert.ok(swBlock.includes('_swBlockUntil'), 'клик после свайпа не заглушен (двойная модалка/фокус)');
     assert.ok(swBlock.includes('div._swRArm = false'), 'отменённый свайп не оставляет флаг');
@@ -665,17 +667,17 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('function openDuration'), 'нет точки входа модалки времени');
     assert.ok(appSrc.includes("clearBtn.textContent = 'Убрать'"), 'нет кнопки снятия метки');
     assert.ok(appSrc.includes('{ estMin: min }'), 'время не пишется в задачу');
-    assert.ok(appSrc.includes('estMin: lineEstMin(t)') &&
-      appSrc.includes('estMin: lineEstMin(doneVis[dv])'),
+    assert.ok(rendSrc.includes('estMin: lineEstMin(t)') &&
+      rendSrc.includes('estMin: lineEstMin(doneVis[dv])'),
       'редендер не отдаёт estMin в строку');
     assert.ok(appSrc.includes("on('durHp'") && appSrc.includes("on('durMm'"),
       'стрелки модалки подписаны не через on()');
-    assert.ok(appSrc.includes('function updateDurchip') && appSrc.includes('function refreshDurchips'),
+    assert.ok(rendSrc.includes('function updateDurchip') && rendSrc.includes('function refreshDurchips'),
       'нет пересчёта фона метки по тексту поля');
-    assert.ok(appSrc.includes("chip.style.backgroundColor = 'transparent'") &&
-      appSrc.includes("bg !== 'transparent'"),
+    assert.ok(rendSrc.includes("chip.style.backgroundColor = 'transparent'") &&
+      rendSrc.includes("bg !== 'transparent'"),
       'фон метки не переключается прозрачный/непрозрачный');
-    assert.ok(appSrc.includes('refreshDurchips(box)') &&
+    assert.ok(rendSrc.includes('refreshDurchips(box)') &&
       appSrc.includes('if (chipN) updateDurchip(inp, chipN)'),
       'рендер/набор текста не пересчитывают фон метки');
     assert.ok(appSrc.includes("refreshDurchips(el('lines'))"),
@@ -685,7 +687,7 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
   });
   it('перенос текста: многострочное поле', () => {
-    assert.ok(appSrc.includes('textarea'), 'нет textarea вместо input');
+    assert.ok(rendSrc.includes('textarea'), 'нет textarea вместо input');
     assert.ok(appSrc.includes('autosize'), 'поле не растёт за текстом');
     assert.ok(appSrc.includes('shiftKey'), 'Shift+Enter не отделён от Enter');
     assert.ok(html.includes('resize: none'), 'поле можно растягивать вручную');
@@ -700,7 +702,7 @@ describe('логика вызывается с state.tasks', () => {
       'дыра может уйти в раздел выполненных');
   });
   it('каркас drag не считает спрятанных классом: дыра не плывёт мимо свёрнутых', () => {
-    assert.ok(appSrc.includes('collapsed-kid') && gestSrc.includes('rowShown'),
+    assert.ok(rendSrc.includes('collapsed-kid') && gestSrc.includes('rowShown'),
       'нет проверки видимости ряда (класс collapsed-kid)');
     assert.ok(gestSrc.includes('if (!rowShown(cr)) continue'),
       'замороженный каркас включает спрятанные ряды (фантомные зазоры)');
@@ -710,8 +712,8 @@ describe('логика вызывается с state.tasks', () => {
       'слепок посадки включает спрятанные ряды');
   });
   it('позиция страницы не прыгает, автопрокрутка не дёргает', () => {
-    assert.ok(appSrc.includes('keepY'), 'скролл не сохраняется при перерисовке');
-    assert.ok(appSrc.includes('scrollTo(0, keepY)'), 'скролл не возвращается');
+    assert.ok(rendSrc.includes('keepY'), 'скролл не сохраняется при перерисовке');
+    assert.ok(rendSrc.includes('scrollTo(0, keepY)'), 'скролл не возвращается');
     assert.ok(gestSrc.includes('minHeight'), 'высота списка не фиксируется на время drag');
     assert.ok(gestSrc.includes('lastScrollTs'), 'автопрокрутка без троттлинга');
     assert.ok(gestSrc.includes('dragDist'), 'автопрокрутка без порога движения');
@@ -771,7 +773,7 @@ describe('логика вызывается с state.tasks', () => {
       'модуль читает общее состояние напрямую, а не через контекст');
     assert.ok(searchSrc.includes('syncSearchSpace') && searchSrc.includes('paddingBottom'),
       'низ страницы уходит под панель поиска');
-    assert.ok(appSrc.includes('EBSearch.init({') && appSrc.includes('window.EBSearch.currentId()'),
+    assert.ok(appSrc.includes('EBSearch.init({') && rendSrc.includes('window.EBSearch.currentId()'),
       'app.js не отдаёт контекст модулю и не дотягивает подсветку');
     assert.ok(html.includes('src/search.js') && swSrc.includes('src/search.js'),
       'модуль не подключён (index.html / sw.js)');
@@ -795,10 +797,6 @@ describe('логика вызывается с state.tasks', () => {
       assert.ok(html.includes('id="' + sid + '"'), 'нет ' + sid);
     }
   });
-  it('плашка тестовой версии видна (рефакторинг)', () => {
-    assert.ok(html.includes('id="testBanner"'), 'нет плашки тестовой версии');
-    assert.ok(html.includes('Тестовая версия'), 'нет текста про тестовую версию');
-  });
   it('меню не вылезает за маленький экран', () => {
     assert.ok(/#gearMenu\.open\s*\{[^}]*max-height:\s*calc\(100vh - 70px\)[^}]*overflow-y:\s*auto/.test(html),
       'меню без потолка высоты и прокрутки');
@@ -809,7 +807,7 @@ describe('логика вызывается с state.tasks', () => {
   });
   it('совместимость с Safari 15: без нового синтаксиса и API', () => {
     const logic = fs.readFileSync(path.join(root, 'src/logic.js'), 'utf8');
-    for (const [name, src] of [['app.js', appSrc], ['store.js', storeSrc], ['sync.js', syncSrc], ['logic.js', logic], ['triggers.js', trigSrc], ['gestures.js', gestSrc]]) {
+    for (const [name, src] of [['app.js', appSrc], ['store.js', storeSrc], ['sync.js', syncSrc], ['logic.js', logic], ['triggers.js', trigSrc], ['gestures.js', gestSrc], ['render.js', rendSrc]]) {
       assert.ok(!/\?\./.test(src) && !/\?\?/.test(src), 'опциональная цепочка в ' + name);
       assert.ok(!/async\s+function/.test(src), 'async/await в ' + name);
       assert.ok(!/replaceAll|matchAll|allSettled|structuredClone|randomUUID/.test(src),
@@ -906,6 +904,38 @@ describe('синк: триггеры и протокол', () => {
     assert.ok(html.includes('src/gestures.js') && swSrc.includes('src/gestures.js'),
       'модуль не подключён (index.html / sw.js)');
   });
+  it('отрисовка — модуль src/render.js (этап 7)', () => {
+    for (const fn of ['render', 'renderLines', 'renderStatus', 'makeLine', 'makeGrip',
+      'autosize', 'updateDurchip', 'refreshDurchips', 'lineEstMin', 'expandForAnchor',
+      'focusTrailing', 'init']) {
+      assert.ok(rendSrc.includes('function ' + fn), 'нет ' + fn + ' в src/render.js');
+    }
+    assert.ok(rendSrc.includes('window.EBRender'),
+      'нет UMD-экспорта модуля');
+    assert.ok(appSrc.includes('window.EBRender.render()') &&
+      appSrc.includes('window.EBRender.renderStatus()') &&
+      appSrc.includes('window.EBRender.focusTrailing()') &&
+      appSrc.includes('window.EBRender.expandForAnchor(anchorId, indent)') &&
+      appSrc.includes('window.EBRender.autosize(ta)') &&
+      appSrc.includes('window.EBRender.updateDurchip(inp, chip)') &&
+      appSrc.includes('window.EBRender.refreshDurchips(box)'),
+      'app.js не ходит в отрисовку через тонкие алиасы (вынос нечистый)');
+    assert.ok(!rendSrc.includes('function wireLineInput') &&
+      !appSrc.includes('function renderLines') && !appSrc.includes('function makeLine') &&
+      !appSrc.includes('function lineEstMin') && !appSrc.includes('function makeGrip'),
+      'проводка ввода уехала в модуль / отрисовка осталась в app.js (вынос нечистый)');
+    assert.ok(appSrc.includes('EBRender.init({') && appSrc.includes('isDraftCommitting: isDraftCommitting') &&
+      appSrc.includes('toggleDoneHidden: toggleDoneHidden') && appSrc.includes('wireLineInput: wireLineInput'),
+      'app.js не отдаёт контекст модулю отрисовки');
+    assert.ok(rendSrc.includes('C.getDraft()') && rendSrc.includes('C.setDraft(') &&
+      rendSrc.includes('C.getState()') && rendSrc.includes('C.getCollapsed()') &&
+      rendSrc.includes('C.isDraftCommitting()') && rendSrc.includes('C.isDoneHidden()'),
+      'модуль читает общее состояние напрямую, а не через контекст');
+    assert.ok(html.includes('src/render.js') && swSrc.includes('src/render.js'),
+      'модуль не подключён (index.html / sw.js)');
+    assert.ok(!html.includes('testBanner'),
+      'плашка тестовой версии осталась после конца рефакторинга');
+  });
   it('sync.js: LWW по задачам, no-store, ретраи 409/422', () => {
     assert.ok(syncSrc.includes('mergeTasks'), 'нет mergeTasks в sync');
     assert.ok(syncSrc.includes('normalizeTasks'), 'нет normalizeTasks в sync');
@@ -930,7 +960,7 @@ describe('PWA-оболочка', () => {
     assert.ok(fs.existsSync(path.join(root, 'icon-512.png')), 'нет icon-512.png');
   });
   it('все скрипты подключены', () => {
-    for (const s of ['src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'src/triggers.js', 'src/gestures.js', 'store.js', 'sync.js', 'app.js']) {
+    for (const s of ['src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'src/triggers.js', 'src/gestures.js', 'src/render.js', 'store.js', 'sync.js', 'app.js']) {
       assert.ok(html.includes(s), 'нет ' + s + ' в index.html');
     }
   });
