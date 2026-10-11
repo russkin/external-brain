@@ -113,9 +113,9 @@ function doSync(force) {
 function setLight(color, blink) {
   var n = el('syncLight');
   if (!n) return;
-  /* Яркость слабее обычных (каналы ×0.7): деление на 2 давало почти
-   * чёрные цвета на мелком квадратике. */
-  var map = { green: '#357a38', yellow: '#b28705', red: '#ab2f26', gray: '#838383' };
+  /* Цвета светофора — обычные яркие (игры с яркостью v121/v127
+   * отменены: приглушённые на мелком квадратике читались как чёрные). */
+  var map = { green: '#4caf50', yellow: '#ffc107', red: '#f44336', gray: '#bbb' };
   n.style.background = map[color] || map.gray;
   if (blink) n.classList.add('blink');
   else n.classList.remove('blink');
