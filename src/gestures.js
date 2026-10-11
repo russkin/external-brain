@@ -264,11 +264,32 @@ function persistLineOrder(beforeOverride) {
   var m = be - bs + 1;
   var P = bs > 0 ? at(bs - 1) : null;
   var N = be < domAlive.length - 1 ? at(be + 1) : null;
+  /* Занятые метки чужих (вне двигаемого отрезка): вставать встык с ними
+   * нельзя — обход предков (isDoneShown) увидит чужого done-родителя
+   * и зачёркивание «загуляет» (см. insertTaskAfter в app.js). */
+  var inSeg = {};
+  for (var sgi = 0; sgi < m; sgi++) inSeg[domAlive[bs + sgi]] = true;
+  var busyAt = {};
+  state.tasks.forEach(function (t) {
+    if (t && !t.deleted && !inSeg[t.id]) busyAt[t.createdAt] = true;
+  });
   var vals = null;
-  if (P !== null || N !== null) {
-    if (P === null) { vals = []; for (var a = 0; a < m; a++) vals.push(N - m + a); }
-    else if (N === null) { vals = []; for (var b = 0; b < m; b++) vals.push(P + 1 + b); }
-    else if (N - P > m) { vals = []; for (var c = 0; c < m; c++) vals.push(P + 1 + c); }
+  if (P === null && N !== null) {
+    vals = [];
+    for (var c0 = N - 1; vals.length < m; c0--) {
+      if (!busyAt[c0]) vals.unshift(c0);
+    }
+  } else if (N === null && P !== null) {
+    vals = [];
+    for (var c1 = P + 1; vals.length < m; c1++) {
+      if (!busyAt[c1]) vals.push(c1);
+    }
+  } else if (P !== null && N !== null && N - P > m) {
+    vals = [];
+    for (var c = P + 1; c < N && vals.length < m; c++) {
+      if (!busyAt[c]) vals.push(c);
+    }
+    if (vals.length < m) vals = null;
   }
   if (vals) {
     for (var v = 0; v < m; v++) {
@@ -279,11 +300,16 @@ function persistLineOrder(beforeOverride) {
       bt.updatedAt = now;
     }
   } else {
-    /* Зазор исчерпан: перенумеровать всех живых (выполненных не трогаем). */
-    var base = now - domAlive.length;
-    domAlive.forEach(function (id, idx) {
-      var t2 = L.getTask(state.tasks, id);
-      if (!t2) return;
+    /* Зазор исчерпан: перенумеровать ВСЕ видимые подряд в текущем порядке
+     * (живых и выполненных) — относительный порядок не меняется, перепрыгнуть
+     * через замороженные метки негде. */
+    var all = state.tasks.filter(function (t) { return t && !t.deleted; });
+    all.sort(function (a, b) {
+      if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
+      return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
+    });
+    var base = now - all.length;
+    all.forEach(function (t2, idx) {
       t2.createdAt = base + idx;
       t2.ts = now;
       t2.updatedAt = now;

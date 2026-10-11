@@ -730,6 +730,18 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(gestSrc.includes('function dropMargins') && gestSrc.includes('dropMargins(div, kids)'),
       'посадка не ставит итоговый отступ в том же кадре (прыжок до render)');
   });
+  it('сдвиги порядка двигают и выполненных, иначе зачёркивание гуляет', () => {
+    assert.ok(appSrc.includes('sj && !sj.deleted && sj.createdAt > prev.createdAt'),
+      'тесная вставка сдвигает только живых — перепрыг через замороженные done');
+    assert.ok(appSrc.includes('sj && !sj.deleted && sj.createdAt >= slot'),
+      'вставка сверху сдвигает только живых');
+    assert.ok(gestSrc.includes('busyAt[t.createdAt] = true') &&
+      gestSrc.includes('if (!busyAt[c0]) vals.unshift(c0)') &&
+      gestSrc.includes('if (vals.length < m) vals = null;'),
+      'посадка встаёт встык с чужими метками');
+    assert.ok(gestSrc.includes('var all = state.tasks.filter(function (t) { return t && !t.deleted; });'),
+      'перенумер затрагивает только живых');
+  });
   it('поиск: кнопка, оверлей, проводка (модуль src/search.js)', () => {
     assert.ok(html.includes('id="searchBtn"'), 'нет кнопки поиска в шапке');
     for (const sid of ['searchBar', 'searchInput', 'searchTotal', 'searchPos', 'searchGo', 'searchCancel', 'searchUp', 'searchDown']) {

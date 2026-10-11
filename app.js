@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v132';
+  var APP_VERSION = 'v133';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -498,7 +498,10 @@
 
   /* Создать задачу сразу под prevId (той же цепочкой Enter вниз).
    * createdAt втискиваем между соседями целым числом; тесно — сдвигаем
-   * всех выше на 1 (редко, ms-метки почти всегда с зазором). */
+   * всех выше на 1 (редко, ms-метки почти всегда с зазором). Сдвигаем
+   * ВСЕ видимые (живых и выполненных): сдвиг только живых перепрыгивал
+   * через замороженные createdAt выполненных — и обходы предков
+   * (isDoneShown) видели чужого done-родителя: зачёркивание «гуляло». */
   function insertTaskAfter(prevId, title, indent, now, allowEmpty) {
     var alive = lineTasks();
     var idx = -1;
@@ -513,11 +516,12 @@
     if (!next || next.createdAt - prev.createdAt > 1) {
       slot = next ? prev.createdAt + Math.floor((next.createdAt - prev.createdAt) / 2) : now;
     } else {
-      for (var j = 0; j < alive.length; j++) {
-        if (alive[j].createdAt > prev.createdAt) {
-          alive[j].createdAt += 1;
-          alive[j].ts = now;
-          alive[j].updatedAt = now;
+      for (var j = 0; j < state.tasks.length; j++) {
+        var sj = state.tasks[j];
+        if (sj && !sj.deleted && sj.createdAt > prev.createdAt) {
+          sj.createdAt += 1;
+          sj.ts = now;
+          sj.updatedAt = now;
         }
       }
       slot = prev.createdAt + 1;
@@ -536,11 +540,13 @@
     var slot = now;
     if (alive.length) {
       slot = alive[0].createdAt;
-      for (var j = 0; j < alive.length; j++) {
-        if (alive[j].createdAt >= slot) {
-          alive[j].createdAt += 1;
-          alive[j].ts = now;
-          alive[j].updatedAt = now;
+      /* Всех не ниже слота — включая выполненных (см. insertTaskAfter). */
+      for (var j = 0; j < state.tasks.length; j++) {
+        var sj = state.tasks[j];
+        if (sj && !sj.deleted && sj.createdAt >= slot) {
+          sj.createdAt += 1;
+          sj.ts = now;
+          sj.updatedAt = now;
         }
       }
     }
