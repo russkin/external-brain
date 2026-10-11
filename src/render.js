@@ -434,6 +434,51 @@ function syncHeaderLift() {
   h.style.transform = lift;
 }
 
+/* Активная строка — в центр видимого места: браузер подвозит поле минимумом,
+ * и оно остаётся под шапкой или под клавиатурой, а работать надо глазами.
+ * На focusin (браузерный скролл ещё не отработал — полю уже видно, ему
+ * нечего двигать) подвозим страницу так, чтобы середина поля встала
+ * в середину видимой области. Только если поле реально перекрыто
+ * (верх — под шапкой, низ — под клавиатурой); уже видимое не трогаем.
+ * Только строки задач (.tline): модалки и поиск живут своей жизнью. */
+function centerActiveLine() {
+  var ae = null;
+  try { ae = document.activeElement; } catch (x) { ae = null; }
+  if (!ae || !ae.getBoundingClientRect) return;
+  if (ae.tagName !== 'TEXTAREA' && ae.tagName !== 'INPUT') return;
+  var row = null;
+  try { row = ae.closest ? ae.closest('.tline') : null; } catch (x) { row = null; }
+  if (!row) return;
+  var r = ae.getBoundingClientRect();
+  var fh = r.height || 0;
+  if (!(fh > 0)) return;
+  var vv = null;
+  try { vv = window.visualViewport || null; } catch (x) { vv = null; }
+  /* rect — от верха раскладки, видимая позиция — минус пан клавиатуры. */
+  var pan = vv ? (vv.offsetTop || 0) : 0;
+  var vh = vv ? (vv.height || 0) : 0;
+  if (!(vh > 0)) vh = window.innerHeight || 0;
+  if (!(vh > 0)) return;
+  var h = null;
+  try { h = document.querySelector('header'); } catch (x) { h = null; }
+  var hh = 0;
+  try { hh = h && h.offsetHeight ? h.offsetHeight : 0; } catch (x) { hh = 0; }
+  var gap = 8;
+  var visTop = r.top - pan;
+  var visBottom = visTop + fh;
+  if (visTop >= hh + gap && visBottom <= vh - gap) return;
+  var y = 0;
+  try { y = window.pageYOffset || 0; } catch (x) { y = 0; }
+  var target;
+  if (fh > vh - hh - gap * 2) {
+    /* Поле выше видимого места: верх — под шапку с зазором. */
+    target = y + r.top - (hh + gap);
+  } else {
+    target = y + r.top + fh / 2 - (pan + vh / 2);
+  }
+  try { window.scrollTo(0, Math.round(target)); } catch (x) {}
+}
+
 function renderStatus() {
   var state = C.getState();
   C.renderNet();
@@ -465,6 +510,7 @@ function init(ctx) {
     }
     document.addEventListener('focusin', syncHeaderLift);
     document.addEventListener('focusout', syncHeaderLift);
+    document.addEventListener('focusin', centerActiveLine);
   } catch (x) {}
 }
 

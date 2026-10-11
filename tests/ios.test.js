@@ -953,6 +953,17 @@ describe('синк: триггеры и протокол', () => {
       rendSrc.includes("addEventListener('scroll', syncHeaderLift"),
       'панелирование клавиатуры не слушается');
   });
+  it('активная строка — в центр видимого места', () => {
+    assert.ok(rendSrc.includes('function centerActiveLine'), 'нет центрирования активной строки');
+    assert.ok(rendSrc.includes("addEventListener('focusin', centerActiveLine"),
+      'центровка не на focusin');
+    assert.ok(rendSrc.includes("closest('.tline')"),
+      'центровка трогает не только строки задач');
+    assert.ok(rendSrc.includes('offsetTop') && rendSrc.includes('innerHeight'),
+      'центр считается не от видимой области');
+    assert.ok(rendSrc.includes('if (visTop >= hh + gap && visBottom <= vh - gap) return;'),
+      'видимое поле тоже двигают');
+  });
   it('sync.js: LWW по задачам, no-store, ретраи 409/422', () => {
     assert.ok(syncSrc.includes('mergeTasks'), 'нет mergeTasks в sync');
     assert.ok(syncSrc.includes('normalizeTasks'), 'нет normalizeTasks в sync');
