@@ -447,11 +447,6 @@
   /* Защита от двойного тапа по флагу черновика: pointerup+click приходят
    * парой и без гарда создают две задачи вместо одной. */
   var draftTapBusy = false;
-  /* Окно коммита из черновика: пока задача рождается, сам черновик не
-   * рисуем — иначе кадр успевает показать и задачу, и поле (дубль
-   * на долю секунды). Счётчик (не флаг): создания вкладываются. */
-  var draftCommitting = 0;
-
   /* Последний pointerdown (захват — до смены фокуса): по нему blur черновика
    * отличает «тап по флагу/грипу/строке» (у их жестов своя логика — не мешаем)
    * от настоящей потери фокуса (задача создаётся). */
@@ -461,7 +456,6 @@
     lastPDts = Date.now();
   }, true);
 
-  var draftBlurTimer = null;
   /* Жесты списка (свайп, drag за grip, отметка со слайдом) — модуль
    * src/gestures.js (рефакторинг, этап 6): здесь только тонкие алиасы,
    * чтобы вызовы в makeLine/mutate и контексте истории не трогать.
@@ -491,7 +485,6 @@
   }
   function setDraftTapBusy(v) { draftTapBusy = !!v; }
   function touchLastPD(target) { lastPDTarget = target; lastPDts = Date.now(); }
-  function isDraftCommitting() { return draftCommitting > 0; }
 
   /* Отступ строки в пикселях. Задача с отступом входит в группу задачи сверху. */
   function lineIndent(t) {
@@ -535,6 +528,9 @@
   function toggleDoneNow(taskId, toDone) {
     if (toDone) {
       L.completeBranch(lineTasks(), taskId, Date.now());
+      /* Живых не осталось — стартер, иначе некуда вставать (в том же
+       * mutate: одна точка истории, стартер отдельно не отменяется). */
+      ensureStarter();
       return L.getTask(state.tasks, taskId);
     }
     /* Возврат — всей веткой: дети возвращаются к родителю в невыполненные. */
@@ -559,8 +555,6 @@
    * createdAt втискиваем между соседями целым числом; тесно — сдвигаем
    * всех выше на 1 (редко, ms-метки почти всегда с зазором). */
   function insertTaskAfter(prevId, title, indent, now, allowEmpty) {
-    draftCommitting++;
-    try {
     var alive = lineTasks();
     var idx = -1;
     for (var i = 0; i < alive.length; i++) {
@@ -590,12 +584,9 @@
       created.updatedAt = now;
     }
     return created;
-    } finally { draftCommitting--; }
   }
 
   function insertTaskTop(title, now, allowEmpty) {
-    draftCommitting++;
-    try {
     var alive = lineTasks();
     var slot = now;
     if (alive.length) {
@@ -616,12 +607,9 @@
       created.updatedAt = now;
     }
     return created;
-    } finally { draftCommitting--; }
   }
 
   function placeTaskAfter(prevId, title, indent, allowEmpty) {
-    draftCommitting++;
-    try {
     var title0 = String(title == null ? '' : title).trim();
     if (!title0 && !allowEmpty) return null;
     var now = Date.now();
@@ -630,12 +618,9 @@
       created = insertTaskAfter(prevId, title0, indent, now, allowEmpty);
     });
     return created;
-    } finally { draftCommitting--; }
   }
 
   function placeTaskTop(title, allowEmpty) {
-    draftCommitting++;
-    try {
     var title0 = String(title == null ? '' : title).trim();
     if (!title0 && !allowEmpty) return null;
     var now = Date.now();
@@ -644,7 +629,25 @@
       created = insertTaskTop(title0, now, allowEmpty);
     });
     return created;
-    } finally { draftCommitting--; }
+  }
+
+  /* Удалить пустую строку кнопкой-флагом «✕ Удалить»: только если в списке
+   * есть ещё живые (последняя неудаляема — иначе список опустеет и некуда
+   * будет встать). Дети удаляемой остаются на месте, как в сцепке. */
+  function deleteEmptyTask(taskId) {
+    var t = L.getTask(state.tasks, taskId);
+    if (!t || t.deleted) return;
+    if (lineTasks().length <= 1) return;
+    mutate(function () { L.removeTask(state.tasks, taskId); });
+  }
+
+  /* Строка-стартер: живых нет — создать одну пустую сверху напрямую
+   * (без mutate/истории: нечего отменять, стартер — не действие).
+   * Вызывается только в точках, где живые могли кончиться: загрузка,
+   * выполнение последней, восстановление копии. */
+  function ensureStarter() {
+    if (lineTasks().length) return null;
+    return insertTaskTop('', Date.now(), true);
   }
 
   /* Эффективный отступ черновика: ручной сдвиг, иначе 0.
@@ -655,33 +658,6 @@
     return 0;
   }
 
-  /* Тап по флагу черновика: есть текст — создать и сразу выполнить,
-   * пусто — убрать поле вниз. Одна запись в истории. Поле очищается
-   * ДО мутации, иначе render внутри mutate покажет старый текст рядом
-   * с улетевшей в выполненные копией (дубль при одной задаче). */
-  function tapDraftFlag() {
-    if (draftTapBusy) return;
-    var title = String(trailingText || '').trim();
-    if (!title) { dismissDraft(); return; }
-    draftTapBusy = true;
-    var atTop = trailingAfterId === 'TOP';
-    var anchor = atTop ? null : trailingAnchorId();
-    var ind = effTrailingIndent();
-    trailingAfterId = null;
-    trailingText = '';
-    trailingIndent = null;
-    mutate(function () {
-      var now = Date.now();
-      var created = atTop ?
-        insertTaskTop(title, now) :
-        insertTaskAfter(anchor, title, ind, now);
-      if (created) L.completeTask(state.tasks, created.id, now);
-    });
-    render();
-    focusTrailing();
-    setTimeout(function () { draftTapBusy = false; }, 400);
-  }
-
   function trailingAnchorId() {
     if (!trailingAfterId) return null;
     var t = L.getTask(state.tasks, trailingAfterId);
@@ -689,101 +665,10 @@
     return trailingAfterId;
   }
 
-  /* Убрать поле-черновик с текущего места: текст стёрт, поле — вниз. */
-  function dismissDraft() {
-    trailingAfterId = null;
-    trailingText = '';
-    trailingIndent = null;
-    render();
-    focusTrailing();
-  }
-
-  /* Потеря фокуса поля с текстом = создание задачи, но поле-продолжение
-   * НЕ оставляем: новое пустое поле вызывается Enter в любой строке
-   * (фокус не воруем — клавиатуру закрыли неслучайно). Тап по флагу/грипу
-   * своей строки — их жест (создание+выполнение, drag) сам разберётся;
-   * тап по другой строке — задача создаётся и фокус возвращается в неё
-   * (render пересоздаёт строки, старый узел мёртв). История — одна точка
-   * (само создание, её пишет mutate): отмена снимает задачу и возвращает
-   * текст в поле. */
-  function createDraftOnBlur(inp, indent) {
-    if (draftTapBusy) return;
-    if (!inp || !document.contains(inp)) return;
-    var title = String(trailingText || '').trim();
-    var fresh = (Date.now() - lastPDts) < 700;
-    /* Пустое поле фиксируем ТОЛЬКО по настоящему тапу мимо (свежий
-     * pointerdown): программный blur (снятие фокуса при отметке
-     * выполненной, клавиатура ушла) не должен плодить пустые задачи. */
-    if (!title && !fresh) return;
-    var focusId = null;
-    if (fresh && lastPDTarget && lastPDTarget.closest) {
-      if (lastPDTarget.closest('.doneflag')) return;
-      if (lastPDTarget.closest('.grip')) {
-        /* Тап по чужому grip: набранное не теряем — тихо создаём задачу.
-         * Без render (идёт жест, DOM под пальцем святой — dragActive его
-         * подавляет в mutate); флаг — нет: у его тапа своя логика. */
-        if (title) {
-          placeTaskAfter(trailingAnchorId(), title, indent, true);
-          trailingText = '';
-          trailingAfterId = null;
-          trailingIndent = null;
-        }
-        return;
-      }
-      var row = lastPDTarget.closest('.tline');
-      if (row) {
-        if (row.getAttribute('data-trailing')) return;
-        if (!lastPDTarget.closest('.tinput')) return;
-        focusId = row.getAttribute('data-id');
-      }
-    } else {
-      var ae = document.activeElement;
-      if (ae && ae.classList && ae.classList.contains('tinput') && ae.closest) {
-        var arow = ae.closest('.tline');
-        if (arow && arow.getAttribute('data-trailing')) return;
-        if (arow && arow.getAttribute('data-id')) focusId = arow.getAttribute('data-id');
-      }
-    }
-    var created = (trailingAfterId === 'TOP') ?
-      placeTaskTop(title, true) :
-      placeTaskAfter(trailingAnchorId(), title, indent, true);
-    if (!created) return;
-    /* Поле гасим ДО следующего render (mutate уже отрендерил с текстом
-     * рядом с новой задачей — дубль живёт один кадр, как у Enter). */
-    trailingText = '';
-    trailingAfterId = null;
-    trailingIndent = null;
-    render();
-    if (focusId) focusTaskEnd(focusId);
-  }
-
-  /* Backspace в начале набранного черновика: как потеря фокуса — задача
-   * создаётся (текст не теряется), потом курсор уезжает в конец задачи
-   * сверху. Если поле стоит под TOP — сверху некуда, фокус остаётся на
-   * только что созданной (она и есть верхняя). Одна точка истории. */
-  function backspaceCreateDraft() {
-    var title = String(trailingText || '').trim();
-    if (!title) { dismissDraft(); return; }
-    var atTop = trailingAfterId === 'TOP';
-    var anchor = atTop ? null : trailingAnchorId();
-    var created = atTop ?
-      placeTaskTop(title) :
-      placeTaskAfter(anchor, title, effTrailingIndent());
-    if (!created) return;
-    /* Поле гасим ДО следующего render (дубль — один кадр, как у blur). */
-    trailingText = '';
-    trailingAfterId = null;
-    trailingIndent = null;
-    render();
-    focusTaskEnd(anchor || created.id);
-  }
-
   /* Backspace в начале строки задачи: сцепка с предыдущей живой — её
    * текст пополняется текущим, текущая удаляется (дети остаются на
    * месте: отступ не трогаем, вложением их держит сцепленная строка).
-   * Одна точка истории: отмена возвращает и разъединение, и строку.
-   * Поле-черновик, стоявшее под удаляемой строкой, якорится на
-   * сцепленную — висеть на мёртвом якоре не должно. */
+   * Одна точка истории: отмена возвращает и разъединение, и строку. */
   function mergeTaskIntoPrev(taskId, liveVal) {
     var lt = lineTasks();
     var idx = -1;
@@ -802,7 +687,6 @@
        * предыдущей. Отложенное сохранение удаляемой — no-op. */
       mutate(function () {
         L.removeTask(state.tasks, cur.id);
-        if (trailingAfterId === cur.id) trailingAfterId = prev.id;
       });
       focusTaskEnd(prev.id);
       return;
@@ -813,22 +697,15 @@
     mutate(function () {
       L.clarifyTask(state.tasks, prev.id, { title: joined });
       L.removeTask(state.tasks, cur.id);
-      if (trailingAfterId === cur.id) trailingAfterId = prev.id;
     });
     /* Курсор — на стык: конец текста верхней, пробел, дальше перенесённый.
      * Длину верхней запоминаем ДО mutate (после — там уже склейка). */
     focusTaskEnd(prev.id, prevLen + 1);
   }
 
-  function commitLine(taskId, value, isTrailing, indent) {
+  function commitLine(taskId, value) {
     var title = String(value == null ? '' : value).trim();
-    if (isTrailing || !taskId) {
-      if (!title) return null;
-      var created = null;
-      /* Отступ берём из поля черновика (по умолчанию 0, правит сдвиг). */
-      mutate(function () { created = L.createTask(state.tasks, title, Date.now(), { indent: indent || 0 }); });
-      return created;
-    }
+    if (!taskId) return null;
     var task = L.getTask(state.tasks, taskId);
     if (!task) return null;
     if (!title) {
@@ -845,7 +722,7 @@
     return task;
   }
 
-  function wireLineInput(div, inp, taskId, isTrailing, indent) {
+  function wireLineInput(div, inp, taskId, indent) {
     var saveTimer = null;
     /* Строка расщеплена (Enter-сплит) или склеена/удалена (Backspace-merge):
      * render() сносит этот input, а Chrome шлёт с него поздний change со
@@ -857,7 +734,6 @@
       autosize(inp);
       var chipN = div.querySelector ? div.querySelector('.durchip') : null;
       if (chipN) updateDurchip(inp, chipN);
-      if (isTrailing) { trailingText = inp.value; return; }
       if (!taskId) return;
       if (saveTimer) clearTimeout(saveTimer);
       saveTimer = setTimeout(function () {
@@ -870,42 +746,14 @@
     });
     inp.addEventListener('change', function () {
       if (inputClosed) return;
-      if (isTrailing || !taskId) return;
+      if (!taskId) return;
       if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
-      var r = commitLine(taskId, inp.value, false);
+      var r = commitLine(taskId, inp.value);
       if (r === 'removed') { if (!isDragActive()) render(); }
       else renderStatus();
     });
-    if (isTrailing) {
-      /* Потеря фокуса = создание задачи: с набранной текстом — задача,
-       * с пустым полем — пустая задача (v70). Отложенный запуск:
-       * focus нового элемента и lastPD должны успеть устаканиться. */
-      inp.addEventListener('blur', function () {
-        if (draftBlurTimer) clearTimeout(draftBlurTimer);
-        draftBlurTimer = setTimeout(function () {
-          draftBlurTimer = null;
-          createDraftOnBlur(inp, indent);
-        }, 0);
-      });
-    }
     inp.addEventListener('keydown', function (e) {
-      if (e.key === 'Backspace' && isTrailing) {
-        if (!inp.value) {
-          dismissDraft();
-          e.preventDefault();
-          return;
-        }
-        /* Курсор в начале набранного: backspace работает как потеря
-         * фокуса — задача создаётся (текст не теряется), а курсор
-         * переезжает в конец задачи сверху. Середка текста — обычная
-         * правка, браузер удаляет символ сам. */
-        if (inp.selectionStart === 0 && inp.selectionEnd === 0) {
-          e.preventDefault();
-          backspaceCreateDraft();
-        }
-        return;
-      }
-      if (e.key === 'Backspace' && !isTrailing && taskId &&
+      if (e.key === 'Backspace' && taskId &&
           inp.selectionStart === 0 && inp.selectionEnd === 0) {
         /* Курсор в начале строки: backspace сцепляет её с предыдущей
          * живой — текст приклеивается вверх, текущая строка удаляется. */
@@ -916,46 +764,6 @@
       }
       if (e.key !== 'Enter' || e.shiftKey) return;
       e.preventDefault();
-      if (isTrailing) {
-        var oldAnchor = trailingAfterId;
-        var oldIndent = trailingIndent;
-        var created = (trailingAfterId === 'TOP') ?
-          placeTaskTop(inp.value, true) :
-          placeTaskAfter(trailingAnchorId(), inp.value, indent, true);
-        if (created) {
-          /* Вторая точка в истории: появление нового пустого поля —
-           * отменяется отдельно (задача с текстом остаётся). */
-          pushUndo({
-            tasks: snapTasks(),
-            afterId: oldAnchor,
-            text: '',
-            indent: oldIndent,
-            focusId: created.id
-          });
-          trailingText = '';
-          /* Продолжаем на том же уровне: следующее поле — с отступом
-           * только что созданной (дети набираются подряд). */
-          trailingIndent = lineIndent(created);
-          trailingAfterId = created.id;
-          render();
-          updateHistoryButtons();
-          focusTrailing();
-        }
-        return;
-      }
-      /* Набранный, но не созданный черновик висит где-то с текстом (фокус
-       * уже ушёл — blur-создание на grip/флажке не сработало): Enter в
-       * строке сначала ДОВОДИТ его до конца — задача встаёт на своём
-       * месте, — иначе поле просто переезжает сюда и старая «седьмая»
-       * улетает вниз. Потом под строкой вызывается свежее пустое поле. */
-      var lingering = String(trailingText || '').trim();
-      if (lingering) {
-        if (trailingAfterId === 'TOP') placeTaskTop(lingering);
-        else placeTaskAfter(trailingAnchorId(), lingering, effTrailingIndent());
-        trailingText = '';
-        trailingAfterId = null;
-        trailingIndent = null;
-      }
       /* Enter в середине текста: левая часть остаётся задачей, хвост
        * (от каретки до конца) уходит в новую задачу ниже — как в
        * редакторе. Отступ — по правилу поля под строкой: у родителя
@@ -989,7 +797,6 @@
         mutate(function () {
           L.clarifyTask(state.tasks, taskId, { title: splitLeft });
           madeSplit = insertTaskAfter(taskId, splitTail, spIndent, Date.now());
-          if (madeSplit && trailingAfterId === taskId) trailingAfterId = madeSplit.id;
         });
         if (madeSplit) focusLineStart(madeSplit.id);
         return;
@@ -1208,6 +1015,7 @@
             /* Пропавшие хоронятся tombstone'ом, иначе синк воскресит их. */
             state.tasks = L.restoreWithTombstones(state.tasks, restored.tasks, Date.now());
             state.updatedAt = Date.now();
+            ensureStarter();
           });
           lastAction = 'копия восстановлена';
           renderStatus();
@@ -1242,6 +1050,7 @@
             /* Пропавшие хоронятся tombstone'ом, иначе синк воскресит их. */
             state.tasks = L.restoreWithTombstones(state.tasks, restored.tasks, Date.now());
             state.updatedAt = Date.now();
+            ensureStarter();
           });
           lastAction = 'постоянная копия восстановлена';
           renderStatus();
@@ -1308,17 +1117,13 @@
       lineTasks: lineTasks,
       fullList: fullList,
       lineIndent: lineIndent,
-      effTrailingIndent: effTrailingIndent,
-      getDraft: getDraft,
-      setDraft: setDraft,
-      isDraftCommitting: isDraftCommitting,
       getCollapsed: function () { return collapsed; },
       isDoneHidden: function () { return doneHidden; },
       toggleDoneHidden: toggleDoneHidden,
       snapFull: snapFull,
       pushUndo: pushUndo,
       wireLineInput: wireLineInput,
-      tapDraftFlag: tapDraftFlag,
+      deleteEmptyTask: deleteEmptyTask,
       openDuration: openDuration,
       toggleDoneSlide: toggleDoneSlide,
       wireLineSwipe: wireLineSwipe,
@@ -1357,6 +1162,12 @@
     try { window.EBTriggers.restoreLog(window.EBDiag.load()); } catch (x) {}
     window.EBStore.load().then(function (s) {
       state = s;
+      /* Пустой список (первый запуск, переезд): стартер сверху сразу,
+       * иначе некуда встать. Истории нет — отменять нечего. */
+      if (!lineTasks().length) {
+        insertTaskTop('', Date.now(), true);
+        save();
+      }
       /* Первая загрузка новой версии: авто-пин «перед обновлением». */
       try {
         if (window.EBStore.pinOnVersion) window.EBStore.pinOnVersion(APP_VERSION);

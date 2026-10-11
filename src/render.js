@@ -14,9 +14,8 @@
  *
  * Контекст ctx: L, getState, getVersion, renderNet, getSyncInfo,
  *   getLastAction, getBoot, updateHistoryButtons, lineTasks, fullList,
- *   lineIndent, effTrailingIndent, getDraft, setDraft, isDraftCommitting,
- *   getCollapsed, isDoneHidden, toggleDoneHidden, snapFull, pushUndo,
- *   wireLineInput, tapDraftFlag, openDuration, toggleDoneSlide,
+ *   lineIndent, getCollapsed, isDoneHidden, toggleDoneHidden, snapFull,
+ *   pushUndo, wireLineInput, deleteEmptyTask, openDuration, toggleDoneSlide,
  *   wireLineSwipe, wireLineDrag, INDENT_STEP —
  *   стабильные ссылки; изменяемое (state, черновик, карта свёрнутых)
  *   только через геттеры. L/INDENT_STEP фиксируются в init.
@@ -131,12 +130,11 @@ function lineEstMin(t) {
   return sum;
 }
 
-function makeLine(taskId, value, isTrailing, indent, opts) {
+function makeLine(taskId, value, indent, opts) {
   opts = opts || {};
   var div = document.createElement('div');
   div.className = 'tline';
-  if (taskId) div.setAttribute('data-id', taskId);
-  else div.setAttribute('data-trailing', '1');
+  div.setAttribute('data-id', taskId);
   indent = C.lineIndent({ indent: indent });
   div.setAttribute('data-indent', String(indent));
   div._indent = indent;
@@ -151,77 +149,59 @@ function makeLine(taskId, value, isTrailing, indent, opts) {
   inp.className = 'tinput';
   inp.value = value || '';
   inp.rows = 1;
-  inp.placeholder = isTrailing ? 'Новая задача…' : '…';
+  inp.placeholder = '…';
   inp.autocomplete = 'off';
   inp.setAttribute('aria-label', 'Задача');
   if (opts.doneShown) inp.classList.add('is-done');
   body.appendChild(inp);
   autosize(inp);
-  if (!isTrailing) {
-    var flag = document.createElement('button');
-    flag.className = 'doneflag';
-    if (opts.doneShown) {
-      flag.textContent = '↩ Не выполнено';
-      flag.setAttribute('aria-label', 'Вернуть в работу');
-    } else {
-      flag.textContent = '✓ Выполнено';
-      flag.setAttribute('aria-label', 'Отметить выполненной');
-    }
-    (function (id, fl) {
-      /* Тап срабатывает и по click, и по pointerup: если браузер съел
-       * одно событие — дойдёт второе. Двойное выполнение отсекает guard
-       * внутри toggleDoneSlide. Тап со сдвигом (скролл) игнорируется. */
-      var flagDownX = 0, flagDownY = 0, flagDown = false;
-      fl.addEventListener('pointerdown', function (ev) {
-        flagDownX = ev.clientX;
-        flagDownY = ev.clientY;
-        flagDown = true;
-      });
-      fl.addEventListener('pointerup', function (ev) {
-        if (!flagDown) return;
-        flagDown = false;
-        if (Math.abs(ev.clientX - flagDownX) > 12 || Math.abs(ev.clientY - flagDownY) > 12) return;
-        C.toggleDoneSlide(id);
-      });
-      fl.addEventListener('pointercancel', function () { flagDown = false; });
-      fl.addEventListener('click', function () { C.toggleDoneSlide(id); });
-    })(taskId, flag);
-    div.appendChild(flag);
-    C.wireLineSwipe(div, taskId);
+  /* Пустая строка (кроме выполненных): вместо «✓ Выполнено» — «✕ Удалить».
+   * Пустота для поведения — по живому тексту поля в момент тапа (набранное,
+   * но не сохранённое за 800 мс, удалять нельзя); текст кнопки — на момент
+   * отрисовки и может отставать на кадр. */
+  var rowEmpty = !opts.doneShown && !String(value || '').trim();
+  var flag = document.createElement('button');
+  flag.className = 'doneflag';
+  if (opts.doneShown) {
+    flag.textContent = '↩ Не выполнено';
+    flag.setAttribute('aria-label', 'Вернуть в работу');
+  } else if (rowEmpty) {
+    flag.textContent = '✕ Удалить';
+    flag.setAttribute('aria-label', 'Удалить строку');
   } else {
-    /* Черновик — та же кнопка, что у остальных строк: свайп открывает
-     * флаг «✓ Выполнено». Тап по флагу: есть текст — создать и сразу
-     * выполнить (поле очищается), пусто — убрать поле вниз. */
-    var dflag = document.createElement('button');
-    dflag.className = 'doneflag';
-    dflag.textContent = '✓ Выполнено';
-    dflag.setAttribute('aria-label', 'Отметить выполненной');
-    (function (fl) {
-      var fDownX = 0, fDownY = 0, fDown = false;
-      fl.addEventListener('pointerdown', function (ev) {
-        fDownX = ev.clientX;
-        fDownY = ev.clientY;
-        fDown = true;
-      });
-      function draftGo(ev) {
-        if (!fDown) return;
-        fDown = false;
-        if (ev && (Math.abs(ev.clientX - fDownX) > 12 || Math.abs(ev.clientY - fDownY) > 12)) return;
-        C.tapDraftFlag();
-      }
-      fl.addEventListener('pointerup', draftGo);
-      fl.addEventListener('pointercancel', function () { fDown = false; });
-      fl.addEventListener('click', function () { C.tapDraftFlag(); });
-    })(dflag);
-    div.appendChild(dflag);
-    C.wireLineSwipe(div, null);
+    flag.textContent = '✓ Выполнено';
+    flag.setAttribute('aria-label', 'Отметить выполненной');
   }
+  (function (id, fl, field, noDel) {
+    /* Тап срабатывает и по click, и по pointerup: если браузер съел
+     * одно событие — дойдёт второе. Двойное выполнение отсекает guard
+     * внутри toggleDoneSlide (удаление идемпотентно через deleted). */
+    var flagDownX = 0, flagDownY = 0, flagDown = false;
+    fl.addEventListener('pointerdown', function (ev) {
+      flagDownX = ev.clientX;
+      flagDownY = ev.clientY;
+      flagDown = true;
+    });
+    function flagGo(ev) {
+      if (!flagDown) return;
+      flagDown = false;
+      if (ev && (Math.abs(ev.clientX - flagDownX) > 12 || Math.abs(ev.clientY - flagDownY) > 12)) return;
+      var live = field && field.value != null ? String(field.value).trim() : '';
+      if (!noDel && !live) { C.deleteEmptyTask(id); return; }
+      C.toggleDoneSlide(id);
+    }
+    fl.addEventListener('pointerup', flagGo);
+    fl.addEventListener('pointercancel', function () { flagDown = false; });
+    fl.addEventListener('click', function () { flagGo(null); });
+  })(taskId, flag, inp, !!opts.doneShown);
+  div.appendChild(flag);
+  C.wireLineSwipe(div, taskId);
   /* Метка времени — НАЛОЖЕНИЕ в правом нижнем углу поля задачи
    * (position: absolute против .tline): тап — та же модалка, что свайп
    * вправо. Фон прозрачный, пока текст не доходит до метки (см.
    * updateDurchip — при пересчёте становится непрозрачным). Пустое
    * время (estMin=0) — метки нет, угол поля свободен. */
-  if (!isTrailing && taskId && opts.estMin > 0) {
+  if (taskId && opts.estMin > 0) {
     var chip = document.createElement('button');
     chip.className = 'durchip';
     chip.type = 'button';
@@ -235,7 +215,7 @@ function makeLine(taskId, value, isTrailing, indent, opts) {
     })(taskId, chip);
     body.appendChild(chip);
   }
-  C.wireLineInput(div, inp, taskId, isTrailing, indent);
+  C.wireLineInput(div, inp, taskId, indent);
   C.wireLineDrag(div, grip, inp);
   return div;
 }
@@ -317,49 +297,15 @@ function renderLines() {
   var full = C.fullList();
   var fullIdx = {};
   for (var fi = 0; fi < full.length; fi++) fullIdx[full[fi].id] = fi;
-  /* Пустое поле живёт под строкой trailingAfterId (цепочка Enter вниз),
-   * иначе — в конце живых. Отступ — свой ручной, по умолчанию 0.
-   * Лишнее поле не показываем: при более чем одной живой задаче
-   * (без цепочки и без набранного текста) его нет — новое поле
-   * вызывается через Enter в строке. При пустом/единичном списке
-   * поле всегда под рукой; набранный текст показываем всегда,
-   * иначе ввод потеряется. Все живые выполнены — остаётся одно
-   * пустое поле + секция выполненных. */
-  var d = C.getDraft();
-  var anchorIdx = -1;
-  if (d.afterId) {
-    for (var ai = 0; ai < tasks.length; ai++) {
-      if (tasks[ai].id === d.afterId) { anchorIdx = ai; break; }
-    }
-  }
-  var tailIndent = C.effTrailingIndent();
-  var hasDraftText = String(d.text || '').trim() !== '';
-  /* В окне коммита поле не рисуем даже при живом черновике. */
-  var showDraft = !C.isDraftCommitting() && ((d.afterId === 'TOP') || (anchorIdx !== -1) ||
-    (tasks.length <= 1) || hasDraftText);
-  if (!showDraft) {
-    /* Поля нет на экране — сбрасываем протухший якорь/сдвиг,
-     * чтобы пустое поле не воскресало в случайном месте. */
-    d.afterId = null;
-    d.indent = null;
-    C.setDraft(d);
-  }
   function taskRow(t, i) {
-    return makeLine(t.id, t.title, false, C.lineIndent(t), {
+    return makeLine(t.id, t.title, C.lineIndent(t), {
       doneShown: L.isDoneShown(full, fullIdx[t.id]),
       hidden: L.isHiddenByCollapse(tasks, i, collapsed),
       estMin: lineEstMin(t)
     });
   }
-  if (showDraft && d.afterId === 'TOP') {
-    box.appendChild(makeLine(null, d.text, true, tailIndent));
-  }
   for (var i = 0; i < tasks.length; i++) {
     box.appendChild(taskRow(tasks[i], i));
-    if (showDraft && i === anchorIdx) box.appendChild(makeLine(null, d.text, true, tailIndent));
-  }
-  if (showDraft && anchorIdx === -1 && d.afterId !== 'TOP') {
-    box.appendChild(makeLine(null, d.text, true, tailIndent));
   }
   /* Выполненные — под полем добавления, новые выше старых. Сворачивание
    * групп секцию НЕ прячет: видимость — только тумблером разделителя.
@@ -392,7 +338,7 @@ function renderLines() {
     box.appendChild(sep);
     if (!C.isDoneHidden()) {
       for (var dv = 0; dv < doneVis.length; dv++) {
-        box.appendChild(makeLine(doneVis[dv].id, doneVis[dv].title, false, C.lineIndent(doneVis[dv]), { doneShown: true, estMin: lineEstMin(doneVis[dv]) }));
+        box.appendChild(makeLine(doneVis[dv].id, doneVis[dv].title, C.lineIndent(doneVis[dv]), { doneShown: true, estMin: lineEstMin(doneVis[dv]) }));
       }
     }
   }

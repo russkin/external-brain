@@ -156,24 +156,23 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'lineTasks фильтрует пустые задачи');
     assert.ok(!appSrc.includes('return !t.deleted && t.title;'),
       'fullList фильтрует пустые задачи');
-    assert.ok(appSrc.includes('placeTaskAfter(trailingAnchorId(), inp.value, indent, true)'),
+    assert.ok(appSrc.includes("placeTaskAfter(newAnchor, '', newIndent, true)"),
       'нет создания пустой задачи по Enter');
     assert.ok(!appSrc.includes("return 'removed'") &&
       appSrc.includes("clarifyTask(state.tasks, taskId, { title: '' })"),
       'commitLine удаляет задачу с пустым текстом вместо очистки');
-    assert.ok(rendSrc.includes("isTrailing ? 'Новая задача…' : '…'"),
-      'пустая задача не отличается плейсхолдером от черновика');
+    assert.ok(rendSrc.includes("inp.placeholder = '…';") && !rendSrc.includes('Новая задача'),
+      'у пустой задачи остался черновик-плейсхолдер');
     /* v69: grabDy — при захвате, иначе дыра недобирает вверх. */
     assert.ok(gestSrc.includes('grabDy = e.clientY - div.getBoundingClientRect().top') &&
       gestSrc.includes('if (grabDy == null)'),
       'grabDy меряется в pointerdown, а не при старте режима');
-    /* v70: тап мимо с пустым черновиком создаёт пустую задачу —
-     * но только по свежему pointerdown (программный blur не плодит пустые). */
-    assert.ok(appSrc.includes('if (!title && !fresh) return;'),
-      'пустое поле создаётся не по любому blur');
-    assert.ok(appSrc.includes('placeTaskTop(title, true)') &&
-      appSrc.includes('placeTaskAfter(trailingAnchorId(), title, indent, true)'),
-      'blur-создание пустой без allowEmpty');
+    /* no-draft: создания по потере фокуса больше нет — строка рождается
+     * задачей сразу по Enter; недописанное живёт в задаче (автосейв). */
+    assert.ok(!appSrc.includes('function createDraftOnBlur'),
+      'blur-создание осталось (черновик не выкручен)');
+    assert.ok(!appSrc.includes('createDraftOnBlur(inp, indent)'),
+      'подписка blur на создание осталась');
     /* v70: каретка в начале ПУСТОЙ строки — не «вставка сверху»:
      * иначе вторая пустая прыгает выше первой. */
     assert.ok(/atStart = inp\.selectionStart === 0 && inp\.selectionEnd === 0 &&\s*\n\s*!!String\(inp\.value \|\| ''\)\.trim\(\)/.test(appSrc),
@@ -343,7 +342,7 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(html.includes('user-select'), 'свайп проигрывает выделению текста');
     assert.ok(gestSrc.includes('_swOpen'), 'состояние свайпа рассинхронизировано');
     assert.ok(html.includes('translateX(-108px)'), 'флаг наезжает на поле задачи');
-    assert.ok(appSrc.includes('activeElement'), 'курсор остаётся в поле после выполнения');
+    assert.ok(gestSrc.includes('activeElement'), 'курсор остаётся в поле после выполнения');
   });
   it('возврат из выполненных и история undo/redo', () => {
     assert.ok(rendSrc.includes('Не выполнено'), 'нет флага возврата');
@@ -361,34 +360,32 @@ describe('логика вызывается с state.tasks', () => {
       'логика отмены осталась в app.js');
     assert.ok(historySrc.includes('deleted = true'), 'отмена создания не переживёт синк');
   });
-  it('черновик: удаление, сдвиг, перетаскивание; выполненные не таскаем', () => {
-    assert.ok(appSrc.includes('dismissDraft'), 'черновик нельзя убрать');
-    assert.ok(appSrc.includes('trailingIndent'), 'у черновика нет своего отступа');
+  it('пустые строки: удаление флагом, сдвиг, перетаскивание; выполненные не таскаем', () => {
+    assert.ok(rendSrc.includes('✕ Удалить'), 'нет флага удаления на пустой строке');
+    assert.ok(rendSrc.includes('C.deleteEmptyTask(id)'), 'флаг не удаляет пустую строку');
+    assert.ok(appSrc.includes('function deleteEmptyTask'), 'нет удаления пустой строки');
+    assert.ok(appSrc.includes('lineTasks().length <= 1'), 'последняя строка удаляема');
     assert.ok(appSrc.includes('Backspace'), 'нет сброса пустого поля');
     assert.ok(appSrc.includes('placeTaskTop'), 'нет создания в начало');
     assert.ok(gestSrc.includes('не таскаем'), 'нет запрета drag выполненных');
   });
-  it('Backspace: сцепка с предыдущей, черновик создаётся и курсор уезжает вверх', () => {
+  it('Backspace: сцепка с предыдущей, курсор уезжает вверх', () => {
     assert.ok(appSrc.includes('function mergeTaskIntoPrev'), 'нет сцепки строк по Backspace');
-    assert.ok(appSrc.includes('function backspaceCreateDraft'), 'нет создания черновика по Backspace');
+    assert.ok(!appSrc.includes('function backspaceCreateDraft'), 'создание черновика по Backspace осталось');
     assert.ok(appSrc.includes('String(prev.title || \'\') + \' \' + curText'),
       'между наименованиями нет пробела');
     var iM = appSrc.indexOf('function mergeTaskIntoPrev');
     var mBody = appSrc.slice(iM, appSrc.indexOf('function commitLine'));
     assert.ok(mBody.includes('if (idx <= 0) return;'), 'Backspace в первой строке что-то делает');
     assert.ok(mBody.includes('L.removeTask(state.tasks, cur.id)'), 'текущая строка не удаляется');
-    assert.ok(mBody.includes('trailingAfterId === cur.id'), 'поле под строкой остаётся на мёртвом якоре');
     assert.ok(mBody.includes('focusTaskEnd(prev.id, prevLen + 1)'),
       'курсор не встаёт на стык верхней и перенесённого');
     assert.ok(mBody.includes('liveVal'), 'сцепка идёт не по живому значению строки');
     assert.ok(mBody.indexOf('var prevLen = String(prev.title') < mBody.lastIndexOf('mutate(function'),
       'длина верхней не запомнена до склейки');
-    var iB = appSrc.indexOf('function backspaceCreateDraft');
-    var bBody = appSrc.slice(iB, iB + 700);
-    assert.ok(bBody.includes('focusTaskEnd(anchor || created.id)'), 'курсор не уезжает в задачу сверху');
     var iK = appSrc.indexOf("inp.addEventListener('keydown'");
     var kBody = appSrc.slice(iK, iK + 1400);
-    assert.ok(kBody.includes('backspaceCreateDraft()') && kBody.includes('mergeTaskIntoPrev(taskId, inp.value)'),
+    assert.ok(!kBody.includes('backspaceCreateDraft()') && kBody.includes('mergeTaskIntoPrev(taskId, inp.value)'),
       'Backspace не обрабатывается в keydown');
     assert.ok(kBody.includes('inp.selectionStart === 0 && inp.selectionEnd === 0'),
       'нет каретки в начале строки');
@@ -453,8 +450,9 @@ describe('логика вызывается с state.tasks', () => {
       'хвост не создаётся задачей ниже');
     assert.ok(appSrc.includes('focusLineStart(madeSplit.id)'),
       'курсор не встаёт в начало хвоста');
-    assert.ok(appSrc.includes('trailingAfterId === taskId'),
-      'поле-продолжение не переякоривается на хвост');
+    assert.ok(!appSrc.includes('trailingAfterId === taskId') &&
+      !gestSrc.includes('trailingAfterId === taskId'),
+      'сплит переякоривает мёртвое поле');
     assert.ok(appSrc.includes('function focusLineStart'), 'нет фокуса в начало строки');
     var iSp = appSrc.indexOf('var splitPos = inp.selectionStart');
     var spBody = appSrc.slice(iSp, appSrc.indexOf('commitLine(taskId, inp.value', iSp));
@@ -493,22 +491,17 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('expandForAnchor(newAnchor, newIndent)'),
       'строка под свёрнутым родится невидимой');
   });
-  it('пустое поле не висит при длинном списке', () => {
-    assert.ok(rendSrc.includes('showDraft'), 'нет гейта пустого поля');
-    assert.ok(rendSrc.includes('tasks.length <= 1'), 'поле не ограничено коротким списком');
-    assert.ok(rendSrc.includes('hasDraftText'), 'набранный текст поля может потеряться');
-  });
   it('Enter продолжает уровень: дочерняя за дочерней', () => {
-    assert.ok(appSrc.includes('trailingIndent = lineIndent(created)'), 'цепочка не держит отступ');
     assert.ok(appSrc.includes('var newIndent = lineIndent(moved)'), 'Enter в строке не даёт сестру');
+    assert.ok(appSrc.includes("placeTaskAfter(newAnchor, '', newIndent, true)"),
+      'цепочка не держит отступ');
   });
-  it('отмена Enter: сначала поле, потом задача', () => {
-    assert.ok(historySrc.includes('function snapFull'), 'нет полного слепка с полем');
-    assert.ok(appSrc.includes('afterId: oldAnchor'), 'появление поля не делится в истории');
-    assert.ok(historySrc.includes('snapTasks() !== tasksJson'), 'возврат поля дёргает метки синка');
+  it('отмена Enter: задача уходит одним шагом', () => {
+    assert.ok(historySrc.includes('function snapFull'), 'нет полного слепка');
+    assert.ok(!appSrc.includes('afterId: oldAnchor'), 'лишняя точка появления поля');
+    assert.ok(historySrc.includes('snapTasks() !== tasksJson'), 'возврат дёргает метки синка');
   });
-  it('отмена убирает вызванное поле и возвращает курсор', () => {
-    assert.ok(appSrc.includes('focusId: created.id'), 'Enter не пишет точку с фокусом');
+  it('отмена возвращает курсор', () => {
     assert.ok(appSrc.includes('focusTaskEnd'), 'курсор не возвращается в конец задачи');
     assert.ok(appSrc.includes('setSelectionRange'), 'курсор не ставится в конец');
     assert.ok(appSrc.includes('focusAfterHistory'), 'отмена не ведёт курсор');
@@ -529,36 +522,10 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(!historySrc.includes('function peek') && !appSrc.includes('getHistoryPeek'),
       'peek остался в истории/контексте');
   });
-  it('в окне коммита черновик не рисуется (дубль на кадр)', () => {
-    assert.ok(appSrc.includes('var draftCommitting = 0;'), 'нет счётчика окна коммита');
-    assert.ok(rendSrc.includes('!C.isDraftCommitting() && ('), 'рендер рисует поле поверх рождающейся задачи');
-  });
-  it('потеря фокуса поля создаёт задачу', () => {
-    assert.ok(appSrc.includes("addEventListener('blur'"), 'нет blur-обработчика поля');
-    assert.ok(appSrc.includes('createDraftOnBlur'), 'нет создания по потере фокуса');
-    assert.ok(appSrc.includes('draftBlurTimer'), 'blur не отложен до смены фокуса');
-    assert.ok(appSrc.includes("lastPDTarget.closest('.doneflag')) return;"),
-      'тап по флагу ушёл в общее создание (у него своя логика)');
-    assert.ok(appSrc.includes('Тап по чужому grip: набранное не теряем'),
-      'тап по grip теряет набранный текст вместо тихого создания');
-    assert.ok(appSrc.includes('document.contains(inp)'), 'создание не ждёт удалённое поле');
-    var blurBody = appSrc.slice(appSrc.indexOf('function createDraftOnBlur'),
-      appSrc.indexOf('function commitLine'));
-    assert.ok(blurBody.includes('trailingAfterId = null'),
-      'после blur-create поле-продолжение остаётся');
-    assert.ok(!blurBody.includes('undoStack.push'),
-      'лишняя точка истории в blur-create (должна быть одна — от mutate)');
-  });
-  it('Enter в строке доводит висячий черновик до конца', () => {
-    var idxL = appSrc.indexOf('var lingering');
-    assert.ok(idxL !== -1, 'нет доводки набранного черновика');
-    var idxP = appSrc.indexOf('placeTaskAfter', idxL);
-    var idxC = appSrc.indexOf('commitLine(taskId', idxL);
-    assert.ok(idxP > idxL && idxC > idxP, 'черновик создаётся не на своём месте до commitLine');
-    var block = appSrc.slice(idxL, idxC);
-    assert.ok(block.includes('trailingAfterId = null'), 'после создания черновик не очищен');
-    assert.ok(block.includes('effTrailingIndent()'), 'отступ висячего черновика не из состояния');
-    assert.ok(block.includes('trailingText = \'\''), 'текст висячего черновика не стёрт');
+  it('стартер при пустом списке: некуда встать — строка рождается сама', () => {
+    assert.ok(appSrc.includes('function ensureStarter'), 'нет стартера пустого списка');
+    assert.ok(appSrc.includes("insertTaskTop('', Date.now(), true)"),
+      'стартер не создаётся пустой задачей сверху');
   });
   it('Enter в родителе: пустая задача на уровне первой дочерней', () => {
     var iN = appSrc.indexOf('var newIndent');
@@ -580,9 +547,8 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes("placeTaskTop('', true)"), 'нет вставки сверху через TOP');
     assert.ok(appSrc.includes("placeTaskAfter(newAnchor, '', newIndent, true)"),
       'строка над текущей не создаётся на её отступе');
-    var iTop = rendSrc.indexOf("showDraft && d.afterId === 'TOP'");
-    assert.ok(iTop !== -1 && rendSrc.slice(iTop, iTop + 220).includes('tailIndent'),
-      'поле сверху игнорирует отступ из состояния');
+    assert.ok(appSrc.includes('if (madeEnter) focusTaskEnd(madeEnter.id);'),
+      'курсор не встаёт в созданную строку');
   });
   it('захват grip не гасит клавиатуру, pin держит страницу, коммит не рендерит', () => {
     assert.ok(gestSrc.includes('var dragActive = false'), 'нет флага жеста');
@@ -945,13 +911,13 @@ describe('синк: триггеры и протокол', () => {
       !appSrc.includes('function renderLines') && !appSrc.includes('function makeLine') &&
       !appSrc.includes('function lineEstMin') && !appSrc.includes('function makeGrip'),
       'проводка ввода уехала в модуль / отрисовка осталась в app.js (вынос нечистый)');
-    assert.ok(appSrc.includes('EBRender.init({') && appSrc.includes('isDraftCommitting: isDraftCommitting') &&
+    assert.ok(appSrc.includes('EBRender.init({') && appSrc.includes('deleteEmptyTask: deleteEmptyTask') &&
       appSrc.includes('toggleDoneHidden: toggleDoneHidden') && appSrc.includes('wireLineInput: wireLineInput'),
       'app.js не отдаёт контекст модулю отрисовки');
-    assert.ok(rendSrc.includes('C.getDraft()') && rendSrc.includes('C.setDraft(') &&
+    assert.ok(!rendSrc.includes('C.getDraft()') && !rendSrc.includes('C.setDraft(') &&
       rendSrc.includes('C.getState()') && rendSrc.includes('C.getCollapsed()') &&
-      rendSrc.includes('C.isDraftCommitting()') && rendSrc.includes('C.isDoneHidden()'),
-      'модуль читает общее состояние напрямую, а не через контекст');
+      rendSrc.includes('C.isDoneHidden()'),
+      'модуль читает черновик напрямую / состояние не через контекст');
     assert.ok(html.includes('src/render.js') && swSrc.includes('src/render.js'),
       'модуль не подключён (index.html / sw.js)');
     assert.ok(!html.includes('testBanner'),
