@@ -86,18 +86,18 @@ function expandForAnchor(anchorId, indent) {
   if (changed) C.saveCollapsed();
 }
 
-function makeGrip(folded) {
+function makeGrip(arrow) {
   var g = document.createElement('span');
   g.className = 'grip';
-  if (folded) {
-    /* Свёрнутая группа: треугольник вместо точек — видно, что внутри
-     * что-то спрятано. Сам элемент тот же (класс grip, размер, подписки
+  if (arrow === '▶' || arrow === '▼') {
+    /* Родительская группа: треугольник вместо точек (▶ — свёрнута,
+     * ▼ — развёрнута). Сам элемент тот же (класс grip, размер, подписки
      * жестов висят на нём, а не на точках): таскать и тапать работает
      * как раньше, механика не тронута. */
-    g.classList.add('folded');
-    g.title = 'Развернуть группу';
-    g.setAttribute('aria-label', 'Развернуть группу');
-    g.textContent = '▶';
+    g.classList.add('arrow');
+    g.title = arrow === '▶' ? 'Развернуть группу' : 'Свернуть группу';
+    g.setAttribute('aria-label', g.title);
+    g.textContent = arrow;
     return g;
   }
   g.title = 'Тащить / свернуть группу';
@@ -154,7 +154,7 @@ function makeLine(taskId, value, indent, opts) {
   var body = document.createElement('div');
   body.className = 'tbody';
   div.appendChild(body);
-  var grip = makeGrip(!!opts.folded);
+  var grip = makeGrip(opts.arrow);
   body.appendChild(grip);
   var inp = document.createElement('textarea');
   inp.className = 'tinput';
@@ -309,10 +309,11 @@ function renderLines() {
   var fullIdx = {};
   for (var fi = 0; fi < full.length; fi++) fullIdx[full[fi].id] = fi;
   function taskRow(t, i) {
+    var kids = L.hasKids(full, fullIdx[t.id]);
     return makeLine(t.id, t.title, C.lineIndent(t), {
       doneShown: L.isDoneShown(full, fullIdx[t.id]),
       hidden: L.isHiddenByCollapse(tasks, i, collapsed),
-      folded: !!(collapsed[t.id] && L.hasKids(full, fullIdx[t.id])),
+      arrow: !kids ? null : (collapsed[t.id] ? '▶' : '▼'),
       estMin: lineEstMin(t)
     });
   }
