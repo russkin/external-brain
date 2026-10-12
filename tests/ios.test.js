@@ -64,7 +64,7 @@ describe('service worker: методика кэша', () => {
     assert.ok(trigSrc.includes('caches.delete'), 'нет чистки кэша при обновлении');
   });
   it('в кэш положены все части оболочки', () => {
-    for (const u of ["'./'", 'index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'src/triggers.js', 'src/gestures.js', 'src/render.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'docs/USER_GUIDE.html']) {
+    for (const u of ["'./'", 'index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'src/triggers.js', 'src/gestures.js', 'src/render.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'docs/USER_GUIDE.html', 'docs/VERSIONS.html']) {
       assert.ok(swSrc.includes(u), 'нет ' + u + ' в ASSETS');
     }
   });
@@ -1110,5 +1110,26 @@ describe('срок токена (v144–v145): поле, пороги 7/3, хи�
       'маска не подписана на ввод/Backspace');
     assert.ok(settingsSrc.includes('expCaret'), 'каретка не держится за цифрой');
     assert.ok(html.includes('inputmode="numeric"'), 'нет цифровой клавиатуры у поля срока');
+  });
+});
+
+describe('история версий (v148)', () => {
+  it('пункт меню открывает страницу в новой вкладке (без двойного открытия)', () => {
+    assert.ok(html.includes('id="versionsBtn"'), 'нет versionsBtn в меню');
+    assert.ok(html.includes('docs/VERSIONS.html'), 'пункт не ведёт на VERSIONS.html');
+    assert.ok(/id="versionsBtn"[^>]*target="_blank"/.test(html), 'история не в новой вкладке');
+  });
+  it('страница в офлайн-кэше и закрывается на iPhone', () => {
+    const ver = fs.readFileSync(path.join(root, 'docs/VERSIONS.html'), 'utf8');
+    assert.ok(ver.includes('id="guideClose"'), 'страницу не закрыть на iPhone');
+    assert.ok(ver.includes("window.history.back()") && ver.includes("window.location.href = '../'"),
+      'закрытие без цепочки закрыть/назад/на главную');
+  });
+  it('история полная: от v1 до текущей версии', () => {
+    const ver = fs.readFileSync(path.join(root, 'docs/VERSIONS.html'), 'utf8');
+    const m = appSrc.match(/APP_VERSION\s*=\s*'([^']+)'/);
+    const appV = m && m[1];
+    assert.ok(ver.includes('<b>v1</b>'), 'нет первой версии');
+    assert.ok(appV && ver.includes('<b>' + appV + '</b>'), 'нет текущей версии ' + appV);
   });
 });
