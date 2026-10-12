@@ -389,17 +389,26 @@ function normEst(v) {
   return n;
 }
 
-/* Срок действия токена синка (настройка settings.tokenExp, 'ГГГГ-ММ-ДД'):
+/* Срок действия токена синка (настройка settings.tokenExp, 'ДД.ММ.ГГГГ'):
  * необязательное поле — GitHub показывает срок при создании токена.
- * Пустое/битое — '' (предупреждений нет). Только календарные даты. */
+ * Пустое/битое — '' (предупреждений нет). Только календарные даты.
+ * Старый формат 'ГГГГ-ММ-ДД' (v144) молча приводим к новому. */
 function normTokenExp(s) {
-  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s == null ? '' : s).trim());
-  if (!m) return '';
-  var y = parseInt(m[1], 10), mo = parseInt(m[2], 10), d = parseInt(m[3], 10);
-  if (mo < 1 || mo > 12 || d < 1 || d > 31) return '';
-  var back = new Date(Date.UTC(y, mo - 1, d));
-  if (back.getUTCFullYear() !== y || back.getUTCMonth() !== mo - 1 || back.getUTCDate() !== d) return '';
-  return m[1] + '-' + m[2] + '-' + m[3];
+  var v = String(s == null ? '' : s).trim();
+  var d, m, y;
+  var iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (iso) {
+    y = parseInt(iso[1], 10); m = parseInt(iso[2], 10); d = parseInt(iso[3], 10);
+  } else {
+    var dm = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(v);
+    if (!dm) return '';
+    d = parseInt(dm[1], 10); m = parseInt(dm[2], 10); y = parseInt(dm[3], 10);
+  }
+  if (m < 1 || m > 12 || d < 1 || d > 31) return '';
+  var back = new Date(Date.UTC(y, m - 1, d));
+  if (back.getUTCFullYear() !== y || back.getUTCMonth() !== m - 1 || back.getUTCDate() !== d) return '';
+  function p(n) { return (n < 10 ? '0' : '') + n; }
+  return p(d) + '.' + p(m) + '.' + y;
 }
 
 /* Полных дней до даты exp (по UTC-полуночам — часовой пояс не влияет).
@@ -408,8 +417,8 @@ function tokenDaysLeft(exp, nowMs) {
   var n = normTokenExp(exp);
   if (!n) return 9999;
   var now = toInt(nowMs, Date.now());
-  var p = n.split('-');
-  var end = Date.UTC(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+  var p = n.split('.');
+  var end = Date.UTC(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10));
   var nd = new Date(now);
   var start = Date.UTC(nd.getUTCFullYear(), nd.getUTCMonth(), nd.getUTCDate());
   return Math.floor((end - start) / 86400000);

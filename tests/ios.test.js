@@ -1074,7 +1074,7 @@ describe('PWA-оболочка', () => {
 describe('срок токена (v144): поле, пороги 7/3, хинт 401', () => {
   it('поле срока в окне репозитория (не пароль, всегда в DOM)', () => {
     assert.ok(html.includes('id="repoExpInput"'), 'нет repoExpInput в index.html');
-    assert.ok(html.includes('ГГГГ-ММ-ДД'), 'нет подсказки формата даты');
+    assert.ok(html.includes('ДД.ММ.ГГГГ'), 'нет подсказки формата даты');
     assert.ok(!/id="repoExpInput"[^>]*type="password"/.test(html), 'поле срока — пароль');
   });
   it('срок хранится и пишется через нормализацию', () => {

@@ -634,19 +634,21 @@ describe('срок токена (tokenExp)', () => {
   function exp(days) {
     const d = new Date(NOW + days * DAY);
     const p = (n) => (n < 10 ? '0' : '') + n;
-    return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate());
+    return p(d.getUTCDate()) + '.' + p(d.getUTCMonth() + 1) + '.' + d.getUTCFullYear();
   }
-  it('normTokenExp: календарная дата проходит, мусор — нет', () => {
-    assert.equal(L.normTokenExp('2026-11-01'), '2026-11-01');
-    assert.equal(L.normTokenExp(' 2026-11-01 '), '2026-11-01', 'пробелы тримятся');
+  it('normTokenExp: ДД.ММ.ГГГГ проходит, мусор — нет', () => {
+    assert.equal(L.normTokenExp('01.11.2026'), '01.11.2026');
+    assert.equal(L.normTokenExp(' 01.11.2026 '), '01.11.2026', 'пробелы тримятся');
+    assert.equal(L.normTokenExp('2026-11-01'), '01.11.2026', 'старый формат приводится');
     assert.equal(L.normTokenExp(''), '');
     assert.equal(L.normTokenExp(null), '');
     assert.equal(L.normTokenExp(12345), '');
-    assert.equal(L.normTokenExp('01.11.2026'), '');
-    assert.equal(L.normTokenExp('2026-13-01'), '', 'месяца 13 нет');
-    assert.equal(L.normTokenExp('2026-00-10'), '', 'месяца 0 нет');
-    assert.equal(L.normTokenExp('2026-02-30'), '', '30 февраля нет');
-    assert.equal(L.normTokenExp('2026-11-32'), '', '32-го нет');
+    assert.equal(L.normTokenExp('2026.11.01'), '');
+    assert.equal(L.normTokenExp('01-11-2026'), '');
+    assert.equal(L.normTokenExp('01.13.2026'), '', 'месяца 13 нет');
+    assert.equal(L.normTokenExp('01.00.2026'), '', 'месяца 0 нет');
+    assert.equal(L.normTokenExp('30.02.2026'), '', '30 февраля нет');
+    assert.equal(L.normTokenExp('32.11.2026'), '', '32-го нет');
   });
   it('tokenDaysLeft: дни по UTC-полуночам, битое — 9999', () => {
     assert.equal(L.tokenDaysLeft(exp(10), NOW), 10);
