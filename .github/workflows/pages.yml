@@ -43,6 +43,7 @@ jobs:
           cp src/gestures.js _site/src/gestures.js
           cp src/render.js _site/src/render.js
           cp docs/USER_GUIDE.html _site/docs/USER_GUIDE.html
+          cp docs/VERSIONS.html _site/docs/VERSIONS.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

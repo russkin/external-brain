@@ -19,6 +19,7 @@ const trigSrc = fs.readFileSync(path.join(root, 'src/triggers.js'), 'utf8');
 const gestSrc = fs.readFileSync(path.join(root, 'src/gestures.js'), 'utf8');
 const rendSrc = fs.readFileSync(path.join(root, 'src/render.js'), 'utf8');
 const logicSrc = fs.readFileSync(path.join(root, 'src/logic.js'), 'utf8');
+const pagesYml = fs.readFileSync(path.join(root, '.github/workflows/pages.yml'), 'utf8');
 
 function appVersion() {
   const m = appSrc.match(/APP_VERSION\s*=\s*'([^']+)'/);
@@ -1124,6 +1125,9 @@ describe('история версий (v148)', () => {
     assert.ok(ver.includes('id="guideClose"'), 'страницу не закрыть на iPhone');
     assert.ok(ver.includes("window.history.back()") && ver.includes("window.location.href = '../'"),
       'закрытие без цепочки закрыть/назад/на главную');
+  });
+  it('страница уезжает в прод (сборка Pages её копирует)', () => {
+    assert.ok(pagesYml.includes('docs/VERSIONS.html'), 'VERSIONS.html нет в сборке _site — в проде будет 404');
   });
   it('история полная: от v1 до текущей версии', () => {
     const ver = fs.readFileSync(path.join(root, 'docs/VERSIONS.html'), 'utf8');

@@ -224,7 +224,7 @@
 ### 3.15 PWA и публикация
 
 - **FR-82. Хостинг:** GitHub Pages, source = GitHub Actions; прод `https://russkin.github.io/external-brain/`.
-- **FR-83. Пайплайн `.github/workflows/pages.yml`:** job `test` (Node 24, 4 файла тестов) → job `build` (явный список файлов в `_site/`: `index.html, app.js, store.js, sync.js, manifest.webmanifest, sw.js, icon.svg, icon-192.png, icon-512.png, README.md` + `src/logic.js` + `docs/USER_GUIDE.html`; без `.env`/`.git`) → job `deploy`; `concurrency.cancel-in-progress: true` (первый запуск может быть `cancelled`).
+- **FR-83. Пайплайн `.github/workflows/pages.yml`:** job `test` (Node 24, 4 файла тестов) → job `build` (явный список файлов в `_site/`: `index.html, app.js, store.js, sync.js, manifest.webmanifest, sw.js, icon.svg, icon-192.png, icon-512.png, README.md` + `src/logic.js` + `docs/USER_GUIDE.html` + `docs/VERSIONS.html` (v148; без второй копии в списке — в проде 404); без `.env`/`.git`) → job `deploy`; `concurrency.cancel-in-progress: true` (первый запуск может быть `cancelled`).
 - **FR-84. `paths-ignore: ['data/**', 'logs/**']`** — и синк-коммиты (`data/state.json`), и лог-коммиты (`logs/sync-*.json`) деплой не триггерят. **Выполнено** (закрыто H-06, коммит `97f9c94`); AGENTS.md:209 согласован с workflow.
   *Проверка:* `.github/workflows/pages.yml` (блок `on.push.paths-ignore`), AGENTS.md:209.
 - **FR-85. Регламент публикации (AGENTS.md:31–43):** тесты → покрытие → commit → push по HTTPS с токеном из `.env` (вывод затирается `sed`) → дождаться workflow `completed/success` → curl'ом проверить 200 + маркеры версии в `app.js`/`sw.js` → сообщить пользователю версию и адрес.
@@ -244,7 +244,7 @@
   *Проверка:* `ios.test.js` it «мутации получают state.tasks, а не state», «стартовый экран: строки читаются из state.tasks».
 - **NFR-05. Предсказуемость сетевых вызовов.** Таймаут любого fetch — 20 сек (`timedFetch`); один синк за раз (single-flight); ретраи с backoff; `no-store` на GET (браузер кэширует ответы Contents API до минуты — иначе устройство рапортует `in-sync` со старым); установка SW строго из сети.
 - **NFR-06. Приватность по умолчанию.** Токен — только на устройстве (в DOM только при открытых настройках); в постоянную копию уходят **только задачи**; публикуемый журнал содержит `{device, version, at, тексты событий}` и **не содержит содержимого задач**; аналитики/трекеров нет (`Notification`, push, внешние счётчики — отсутствуют). Данные живут в приватном `kalugin-a/brain-data` (H-02).
-- **NFR-07. Тестируемость.** **177 тестов** (`logic` 65 + `ios` 86 + `sync` 22 + `sync-devices` 4), покрытие `logic.js` **99.67 лин / 91.14 веток / 100 funcs**, `sync.js` **98.48 / 91.21 / 100** (порог — строки ≥90%, ветки ≥89% ⇒ **H-11 закрыт**). Запуск — **перечислением файлов** (`node --test tests/…`). Проверка UI/жестов — только вручную на FR-02; DOM-тестов нет.
+- **NFR-07. Тестируемость.** **178 тестов** (`logic` 65 + `ios` 87 + `sync` 22 + `sync-devices` 4), покрытие `logic.js` **99.67 лин / 91.14 веток / 100 funcs**, `sync.js` **98.48 / 91.21 / 100** (порог — строки ≥90%, ветки ≥89% ⇒ **H-11 закрыт**). Запуск — **перечислением файлов** (`node --test tests/…`). Проверка UI/жестов — только вручную на FR-02; DOM-тестов нет.
 - **NFR-08. Русский язык и базовая доступность.** Весь интерфейс и инструкция — на русском; у интерактивных элементов строк есть `aria-label`/подсказки («Тащить», «Задача», «Отметить выполненной», «Вернуть в работу», «Время задачи: …», «Свернуть все группы», «Удалить выполненные» — `app.js:650, 842, 851, 854, 884, 915`, `index.html:131–135`).
 
 ---
