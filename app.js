@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v149';
+  var APP_VERSION = 'v150';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -890,6 +890,36 @@
     });
   }
 
+  /* Удалить задачу кнопкой «✕ Удалить» из свайп-панели (v150): через
+   * историю (↩ вернёт, удаление — tombstone), с подтверждением — палец
+   * после свайпа стоит ровно на кнопках. Пустая строка — сразу без
+   * вопросов (как флаг «✕ Удалить»). Последняя удаляемая рождает
+   * стартер, иначе списку некуда вставать. */
+  function askDeleteTask(taskId) {
+    if (!taskId || !state) return;
+    var t = L.getTask(state.tasks, taskId);
+    if (!t || t.deleted) return;
+    var name = String(t.title || '').trim();
+    if (!name) {
+      mutate(function () {
+        L.removeTask(state.tasks, taskId);
+        ensureStarter();
+      });
+      lastAction = 'строка удалена';
+      renderStatus();
+      return;
+    }
+    askConfirm('Удалить задачу «' + name.slice(0, 80) + '»? Отменить можно стрелкой ↩.').then(function (ok) {
+      if (!ok || !state) return;
+      mutate(function () {
+        L.removeTask(state.tasks, taskId);
+        ensureStarter();
+      });
+      lastAction = 'задача удалена';
+      renderStatus();
+    });
+  }
+
   /* Удалить выполненные — с подтверждением (кнопка в шапке и в ⚙). */
   function askClearDone() {
     /* Выполненных нет — и корзина, и пункт меню ничего не удаляют:
@@ -1089,6 +1119,7 @@
       pushUndo: pushUndo,
       wireLineInput: wireLineInput,
       deleteEmptyTask: deleteEmptyTask,
+      askDeleteTask: askDeleteTask,
       openDuration: openDuration,
       toggleDoneSlide: toggleDoneSlide,
       wireLineSwipe: wireLineSwipe,

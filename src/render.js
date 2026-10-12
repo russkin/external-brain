@@ -206,6 +206,31 @@ function makeLine(taskId, value, indent, opts) {
     fl.addEventListener('click', function () { flagGo(null); });
   })(taskId, flag, inp, !!opts.doneShown);
   div.appendChild(flag);
+  /* Красная «✕ Удалить» левее зелёной (v150): видна при том же свайпе,
+   * для всех строк включая выполненные. Тап — как у флага: pointerup
+   * или click, сдвиг > 12 px — не клик, повтор гасится тем же флагом. */
+  var del = document.createElement('button');
+  del.className = 'delflag';
+  del.textContent = '✕ Удалить';
+  del.setAttribute('aria-label', 'Удалить задачу');
+  (function (id, dl) {
+    var delDownX = 0, delDownY = 0, delDown = false;
+    dl.addEventListener('pointerdown', function (ev) {
+      delDownX = ev.clientX;
+      delDownY = ev.clientY;
+      delDown = true;
+    });
+    function delGo(ev) {
+      if (!delDown) return;
+      delDown = false;
+      if (ev && (Math.abs(ev.clientX - delDownX) > 12 || Math.abs(ev.clientY - delDownY) > 12)) return;
+      C.askDeleteTask(id);
+    }
+    dl.addEventListener('pointerup', delGo);
+    dl.addEventListener('pointercancel', function () { delDown = false; });
+    dl.addEventListener('click', function () { delGo(null); });
+  })(taskId, del);
+  div.appendChild(del);
   C.wireLineSwipe(div, taskId);
   /* Метка времени — НАЛОЖЕНИЕ в правом нижнем углу поля задачи
    * (position: absolute против .tline): тап — та же модалка, что свайп

@@ -161,8 +161,9 @@ function wireLineSwipe(div, taskId) {
       div._swBlockUntil = Date.now() + 400;
       C.openDuration(taskId);
     }
-    /* Тап по самому флагу сюда не входит: у него свой обработчик. */
-    if (e.target && e.target.closest && e.target.closest('.doneflag')) return;
+    /* Тап по самим кнопкам сюда не входит: у них свои обработчики. */
+    if (e.target && e.target.closest &&
+        (e.target.closest('.doneflag') || e.target.closest('.delflag'))) return;
     if (div._swOpen && Math.abs(e.clientX - tapX0) < 12 && Math.abs(e.clientY - tapY0) < 12) {
       div.classList.remove('swiped');
       div._swOpen = false;

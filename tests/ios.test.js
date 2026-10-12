@@ -348,7 +348,7 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(rendSrc.includes('is-done'), 'нет зачёркивания');
     assert.ok(html.includes('user-select'), 'свайп проигрывает выделению текста');
     assert.ok(gestSrc.includes('_swOpen'), 'состояние свайпа рассинхронизировано');
-    assert.ok(html.includes('translateX(-108px)'), 'флаг наезжает на поле задачи');
+    assert.ok(html.includes('translateX(-200px)'), 'флаг наезжает на поле задачи');
     assert.ok(gestSrc.includes('activeElement'), 'курсор остаётся в поле после выполнения');
   });
   it('возврат из выполненных и история undo/redo', () => {
@@ -1136,5 +1136,24 @@ describe('история версий (v148)', () => {
     const appV = m && m[1];
     assert.ok(ver.includes('<b>v1</b>'), 'нет первой версии');
     assert.ok(appV && ver.includes('<b>' + appV + '</b>'), 'нет текущей версии ' + appV);
+  });
+});
+
+describe('удаление свайпом (v150)', () => {
+  it('панель шире: зелёная + красная кнопки', () => {
+    assert.ok(html.includes('.tline.swiped .delflag'), 'нет кнопки удаления в панели');
+    assert.ok(html.includes('translateX(-200px)'), 'панель не расширена под две кнопки');
+    assert.ok(rendSrc.includes("del.className = 'delflag'"), 'строка не строит кнопку удаления');
+    assert.ok(rendSrc.includes('C.askDeleteTask(id)'), 'кнопка не зовёт удаление');
+    assert.ok(rendSrc.includes("aria-label', 'Удалить задачу"), 'нет подсказки у кнопки');
+  });
+  it('удаление через историю, с подтверждением', () => {
+    assert.ok(appSrc.includes('function askDeleteTask(taskId)'), 'нет askDeleteTask');
+    assert.ok(appSrc.includes('L.removeTask(state.tasks, taskId)'), 'удаление не tombstone');
+    assert.ok(appSrc.includes('askDeleteTask: askDeleteTask'), 'удаление не отдано отрисовке');
+    assert.ok(/Удалить задачу/.test(appSrc), 'нет подтверждения удаления');
+  });
+  it('тап по кнопке не закрывает панель', () => {
+    assert.ok(gestSrc.includes('.delflag'), 'тап по удалению закрывает панель');
   });
 });

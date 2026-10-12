@@ -43,12 +43,19 @@
     .tline { position: relative; touch-action: pan-y; }
     .tbody { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;
       transition: transform .2s ease; }
-    .tline.swiped .tbody { transform: translateX(-108px); }
+    /* Открытая строка уезжает на ширину двух кнопок (v150): зелёная
+     * «Выполнено» справа + красная «Удалить» левее неё. */
+    .tline.swiped .tbody { transform: translateX(-200px); }
     .doneflag { display: none; position: absolute; right: 6px; top: 50%;
       transform: translateY(-50%); background: #4caf50; color: #fff; border: none;
       border-radius: 8px; padding: 8px 4px; font-size: 12px; white-space: nowrap;
       max-width: 102px; overflow: hidden; text-overflow: ellipsis; z-index: 2; }
     .tline.swiped .doneflag { display: block; }
+    .delflag { display: none; position: absolute; right: 114px; top: 50%;
+      transform: translateY(-50%); background: #f44336; color: #fff; border: none;
+      border-radius: 8px; padding: 8px 4px; font-size: 12px; white-space: nowrap;
+      max-width: 80px; overflow: hidden; text-overflow: ellipsis; z-index: 2; }
+    .tline.swiped .delflag { display: block; }
     .tline.collapsed-kid { display: none; }
     .tline.sliding-done { transition: opacity .2s linear; opacity: 0; }
     .tline.landed { animation: ebLand .25s linear; }
