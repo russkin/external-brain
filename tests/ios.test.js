@@ -1103,4 +1103,12 @@ describe('срок токена (v144–v145): поле, пороги 7/3, хи�
     assert.ok(trigSrc.includes('401') && trigSrc.includes('токен истёк или отозван'),
       'нет хинта про истёкший токен при 401');
   });
+  it('маска даты: только цифры, точки сами (вариант А)', () => {
+    assert.ok(settingsSrc.includes('fmtExpDigits'), 'нет форматирования маски');
+    assert.ok(settingsSrc.includes("ctx.on('repoExpInput', 'input'") &&
+      settingsSrc.includes("ctx.on('repoExpInput', 'keydown'"),
+      'маска не подписана на ввод/Backspace');
+    assert.ok(settingsSrc.includes('expCaret'), 'каретка не держится за цифрой');
+    assert.ok(html.includes('inputmode="numeric"'), 'нет цифровой клавиатуры у поля срока');
+  });
 });

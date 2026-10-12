@@ -58,6 +58,29 @@ function closeRepoModal() {
   if (back) back.classList.remove('open');
 }
 
+/* Маска даты «ДД.ММ.ГГГГ» (v146, вариант А): человек жмёт только цифры,
+ * точки подставляются сами (`12` → `12.`, `12122026` → `12.12.2026`).
+ * Плейсхолдер серым виден, пока поле пустое; набранное — обычным цветом.
+ * Вставка целой даты и Backspace через авто-точку обрабатываются, каретка
+ * держится за той же по счёту цифрой. Финальный судья — normTokenExp. */
+function fmtExpDigits(d) {
+  d = String(d == null ? '' : d).replace(/\D/g, '').slice(0, 8);
+  if (d.length > 4) return d.slice(0, 2) + '.' + d.slice(2, 4) + '.' + d.slice(4);
+  if (d.length > 2) return d.slice(0, 2) + '.' + d.slice(2);
+  return d;
+}
+
+/* Поставить каретку за n-й по счёту цифрой (через авто-точку — перепрыгнуть). */
+function expCaret(inp, fmt, n) {
+  var np = 0, seen = 0;
+  while (np < fmt.length && seen < n) {
+    if (/\d/.test(fmt.charAt(np))) seen++;
+    np++;
+  }
+  if (fmt.charAt(np) === '.') np++;
+  try { inp.setSelectionRange(np, np); } catch (x) {}
+}
+
 function init(ctx) {
   C = ctx;
   ctx.on('gearBtn', 'click', function () {
@@ -115,6 +138,36 @@ function init(ctx) {
   });
   ctx.on('repoCancelBtn', 'click', function () {
     closeRepoModal();
+  });
+  /* Маска срока: только цифры с клавиатуры, точки сами (см. выше). */
+  ctx.on('repoExpInput', 'input', function () {
+    var inp = el('repoExpInput');
+    if (!inp) return;
+    var pos = null;
+    try { pos = inp.selectionStart; } catch (x) { pos = null; }
+    var before = inp.value;
+    var digitsBefore = 0;
+    if (pos != null) digitsBefore = before.slice(0, pos).replace(/\D/g, '').length;
+    var fmt = fmtExpDigits(before);
+    if (fmt !== before) {
+      inp.value = fmt;
+      if (pos != null) expCaret(inp, fmt, digitsBefore);
+    }
+  });
+  ctx.on('repoExpInput', 'keydown', function (e) {
+    if (!e || e.key !== 'Backspace') return;
+    var inp = el('repoExpInput');
+    if (!inp) return;
+    var s = null, en = null;
+    try { s = inp.selectionStart; en = inp.selectionEnd; } catch (x) { return; }
+    if (s == null || s !== en || s === 0) return;
+    if (inp.value.charAt(s - 1) !== '.') return;
+    /* Каретка сразу за авто-точкой: стираем цифру перед ней, а не точку. */
+    if (e.preventDefault) e.preventDefault();
+    var digits = inp.value.replace(/\D/g, '');
+    var dc = inp.value.slice(0, s).replace(/\D/g, '').length;
+    inp.value = fmtExpDigits(digits.slice(0, dc - 1) + digits.slice(dc));
+    expCaret(inp, inp.value, dc - 1);
   });
 }
 
