@@ -627,3 +627,43 @@ describe('сжатие могил (purgeTombstones)', () => {
     assert.equal(L.purgeTombstones([]), 0);
   });
 });
+
+describe('срок токена (tokenExp)', () => {
+  const DAY = 86400000;
+  const NOW = Date.UTC(2026, 9, 12, 12, 0, 0);
+  function exp(days) {
+    const d = new Date(NOW + days * DAY);
+    const p = (n) => (n < 10 ? '0' : '') + n;
+    return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate());
+  }
+  it('normTokenExp: календарная дата проходит, мусор — нет', () => {
+    assert.equal(L.normTokenExp('2026-11-01'), '2026-11-01');
+    assert.equal(L.normTokenExp(' 2026-11-01 '), '2026-11-01', 'пробелы тримятся');
+    assert.equal(L.normTokenExp(''), '');
+    assert.equal(L.normTokenExp(null), '');
+    assert.equal(L.normTokenExp(12345), '');
+    assert.equal(L.normTokenExp('01.11.2026'), '');
+    assert.equal(L.normTokenExp('2026-13-01'), '', 'месяца 13 нет');
+    assert.equal(L.normTokenExp('2026-00-10'), '', 'месяца 0 нет');
+    assert.equal(L.normTokenExp('2026-02-30'), '', '30 февраля нет');
+    assert.equal(L.normTokenExp('2026-11-32'), '', '32-го нет');
+  });
+  it('tokenDaysLeft: дни по UTC-полуночам, битое — 9999', () => {
+    assert.equal(L.tokenDaysLeft(exp(10), NOW), 10);
+    assert.equal(L.tokenDaysLeft(exp(0), NOW), 0);
+    assert.equal(L.tokenDaysLeft(exp(-2), NOW), -2);
+    assert.equal(L.tokenDaysLeft('', NOW), 9999);
+    assert.equal(L.tokenDaysLeft('мусор', NOW), 9999);
+  });
+  it('tokenWarnLevel: тихо / за 7 / за 3 и после срока', () => {
+    assert.equal(L.tokenWarnLevel(exp(8), NOW), 0);
+    assert.equal(L.tokenWarnLevel(exp(7), NOW), 1, 'ровно 7 — мягкое');
+    assert.equal(L.tokenWarnLevel(exp(4), NOW), 1);
+    assert.equal(L.tokenWarnLevel(exp(3), NOW), 2, 'ровно 3 — настойчивое');
+    assert.equal(L.tokenWarnLevel(exp(1), NOW), 2);
+    assert.equal(L.tokenWarnLevel(exp(0), NOW), 2);
+    assert.equal(L.tokenWarnLevel(exp(-5), NOW), 2, 'после срока — настойчивое');
+    assert.equal(L.tokenWarnLevel('', NOW), 0);
+    assert.equal(L.tokenWarnLevel('мусор', NOW), 0);
+  });
+});

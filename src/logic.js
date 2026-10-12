@@ -389,6 +389,42 @@ function normEst(v) {
   return n;
 }
 
+/* Срок действия токена синка (настройка settings.tokenExp, 'ГГГГ-ММ-ДД'):
+ * необязательное поле — GitHub показывает срок при создании токена.
+ * Пустое/битое — '' (предупреждений нет). Только календарные даты. */
+function normTokenExp(s) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s == null ? '' : s).trim());
+  if (!m) return '';
+  var y = parseInt(m[1], 10), mo = parseInt(m[2], 10), d = parseInt(m[3], 10);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return '';
+  var back = new Date(Date.UTC(y, mo - 1, d));
+  if (back.getUTCFullYear() !== y || back.getUTCMonth() !== mo - 1 || back.getUTCDate() !== d) return '';
+  return m[1] + '-' + m[2] + '-' + m[3];
+}
+
+/* Полных дней до даты exp (по UTC-полуночам — часовой пояс не влияет).
+ * Пустое/битое — 9999 (предупреждений нет). Прошлое — 0 и меньше. */
+function tokenDaysLeft(exp, nowMs) {
+  var n = normTokenExp(exp);
+  if (!n) return 9999;
+  var now = toInt(nowMs, Date.now());
+  var p = n.split('-');
+  var end = Date.UTC(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+  var nd = new Date(now);
+  var start = Date.UTC(nd.getUTCFullYear(), nd.getUTCMonth(), nd.getUTCDate());
+  return Math.floor((end - start) / 86400000);
+}
+
+/* Уровень предупреждения о сроке токена: 0 — тихо, 1 — за 7 дней
+ * (строка в статусе/диагностике), 2 — за 3 дня и после срока
+ * (плюс разовое окно). */
+function tokenWarnLevel(exp, nowMs) {
+  var left = tokenDaysLeft(exp, nowMs);
+  if (left <= 3) return 2;
+  if (left <= 7) return 1;
+  return 0;
+}
+
 /* Метка времени для строки: 0 → '', 30 → '30 м', 60 → '1ч', 90 → '1ч 30м'. */
 function fmtDur(mins) {
   var m = toInt(mins, 0);
@@ -559,6 +595,9 @@ var api = {
   shareText: shareText,
   searchTasks: searchTasks,
   fmtDur: fmtDur,
+  normTokenExp: normTokenExp,
+  tokenDaysLeft: tokenDaysLeft,
+  tokenWarnLevel: tokenWarnLevel,
   normalizeTask: normalizeTask,
   normalizeTasks: normalizeTasks,
   restoreWithTombstones: restoreWithTombstones,

@@ -160,6 +160,13 @@
     if (!state.settings) state.settings = { repo: 'russkin/external-brain', token: '' };
     if (!state.settings.repo) state.settings.repo = 'russkin/external-brain';
     if (state.settings.token == null) state.settings.token = '';
+    /* Срок токена — необязательное поле 'ГГГГ-ММ-ДД' (v144): битое чистим,
+     * иначе кривая дата вечно пугала бы предупреждениями. */
+    if (window.EBLogic && window.EBLogic.normTokenExp) {
+      state.settings.tokenExp = window.EBLogic.normTokenExp(state.settings.tokenExp);
+    } else if (state.settings.tokenExp == null) {
+      state.settings.tokenExp = '';
+    }
     if (!state.updatedAt) state.updatedAt = Date.now();
     return state;
   }

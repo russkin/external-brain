@@ -43,6 +43,10 @@ function openRepoModal() {
   var state = C.getState();
   var repo = el('repoModalInput');
   if (repo) repo.value = (state && state.settings.repo) || '';
+  /* Срок токена — обычное текстовое поле (не пароль): в DOM постоянно,
+   * Chrome его как логин не считает. Битое при открытии чистим видом. */
+  var expN = el('repoExpInput');
+  if (expN) expN.value = (state && state.settings.tokenExp) || '';
   repoTokenBuild();
   var back = el('repoModalBack');
   if (back) back.classList.add('open');
@@ -89,10 +93,20 @@ function init(ctx) {
   ctx.on('repoSaveBtn', 'click', function () {
     var repo = el('repoModalInput');
     var tok = document.getElementById('tokenInput');
+    var expN = el('repoExpInput');
     var state = C.getState();
     ctx.mutate(function () {
       if (repo && repo.value) state.settings.repo = repo.value.trim();
       if (tok) state.settings.token = tok.value.trim();
+      /* Срок — через нормализацию логики (битое станет пустым = без срока). */
+      if (expN) {
+        var raw = expN.value;
+        if (typeof window !== 'undefined' && window.EBLogic && window.EBLogic.normTokenExp) {
+          state.settings.tokenExp = window.EBLogic.normTokenExp(raw);
+        } else {
+          state.settings.tokenExp = String(raw == null ? '' : raw).trim();
+        }
+      }
     });
     closeRepoModal();
     var gear = el('gearMenu');

@@ -49,6 +49,58 @@ function scheduleSync() {
   syncTimer = setTimeout(function () { doSync(); }, 2000);
 }
 
+/* 401 от GitHub — почти всегда истёкший или отозванный токен: дописываем
+ * человеческую расшифровку, иначе виден только код ошибки. */
+function errHint(msg) {
+  var m = String(msg || 'ошибка');
+  if (/github-\S*\s401/.test(m)) {
+    m += ' — похоже, токен истёк или отозван (открой меню, пункт с ключом)';
+  }
+  return m.slice(0, 160);
+}
+
+/* Разовое предупреждение о сроке токена (v144): уровень 2 (3 дня и меньше,
+ * включая истёкший) — окном, не чаще раза в сутки (иначе задолбает при
+ * каждом возврате на вкладку). Уровень 1 (7 дней) — только строкой
+ * в статусе/диагностике, без окна. */
+var TOKENWARN_KEY = 'external-brain-tokenwarn-v1';
+function tokenWarnDay() {
+  var d = new Date();
+  return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+}
+function tokenWarnedToday() {
+  try {
+    var raw = localStorage.getItem(TOKENWARN_KEY);
+    if (!raw) return false;
+    var o = JSON.parse(raw);
+    return !!(o && o.day === tokenWarnDay());
+  } catch (x) { return false; }
+}
+function tokenWarnMark() {
+  try {
+    localStorage.setItem(TOKENWARN_KEY, JSON.stringify({ day: tokenWarnDay() }));
+  } catch (x) {}
+}
+function maybeWarnTokenExp() {
+  try {
+    if (!C || typeof C.askConfirm !== 'function') return;
+    var EB = (typeof window !== 'undefined') ? window.EBLogic : null;
+    if (!EB || !EB.normTokenExp) return;
+    var state = C.getState();
+    var st = state && state.settings;
+    if (!st || !st.token) return;
+    var exp = EB.normTokenExp(st.tokenExp);
+    if (!exp || EB.tokenWarnLevel(exp, Date.now()) < 2) return;
+    if (tokenWarnedToday()) return;
+    tokenWarnMark();
+    var left = EB.tokenDaysLeft(exp, Date.now());
+    var txt = left < 0
+      ? 'Срок токена вышел (' + exp + '). Синк встал — список живёт только в этом телефоне. Открой меню, пункт с ключом, и введи новый токен.'
+      : 'До конца срока токена осталось ' + left + ' дн. (' + exp + '). Без нового токена синк встанет — список останется только в этом телефоне. Продлить сейчас? (пункт с ключом в меню)';
+    C.askConfirm(txt).then(function () {});
+  } catch (x) {}
+}
+
 function doSync(force) {
   var state = C ? C.getState() : null;
   if (!state || !state.settings.token) {
@@ -64,7 +116,7 @@ function doSync(force) {
     syncStatus = res.status;
     if (res.status === 'error') {
       lastErrAt = Date.now();
-      lastErrMsg = String(res.error || 'ошибка').slice(0, 120);
+      lastErrMsg = errHint(res.error);
       window.EBDiag.push('ошибка синка: ' + lastErrMsg);
       window.EBDiag.save({ at: lastSyncAt, errAt: lastErrAt, err: lastErrMsg });
       setLight('red', false);
@@ -100,7 +152,7 @@ function doSync(force) {
     syncFlying = false;
     syncStatus = 'error: ' + String(e && e.message || e).slice(0, 120);
     lastErrAt = Date.now();
-    lastErrMsg = String(e && e.message || e).slice(0, 120);
+    lastErrMsg = errHint(e && e.message || e);
     window.EBDiag.push('ошибка синка: ' + lastErrMsg);
     window.EBDiag.save({ at: lastSyncAt, errAt: lastErrAt, err: lastErrMsg });
     setLight('red', false);
@@ -215,6 +267,7 @@ function onReady() {
   syncStatus = (state && state.settings.token) ? '' : 'выключен (нет ключа)';
   doSync();
   checkUpdate();
+  maybeWarnTokenExp();
   setupPolling();
 }
 
@@ -233,6 +286,7 @@ function init(ctx) {
     lastFg = now;
     pokeSwUpdate();
     checkUpdate();
+    maybeWarnTokenExp();
     doSync();
   }
   document.addEventListener('visibilitychange', function () {

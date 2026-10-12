@@ -214,7 +214,19 @@ function diagText() {
   lines.push('Сеть: ' + connLine());
   lines.push('Устройство: ' + deviceLine() + ' · id ' + journalDeviceId());
   lines.push('Repo: ' + (state ? state.settings.repo : '?'));
-  lines.push('Ключ: ' + (state && state.settings.token ? 'введён' : 'выключен (нет ключа)'));
+  /* Срок токена (v144): та же шкала, что в статусе, но с точной датой. */
+  var keyLine = 'Ключ: ' + (state && state.settings.token ? 'введён' : 'выключен (нет ключа)');
+  try {
+    if (state && state.settings.token && state.settings.tokenExp) {
+      var exp = C.L.normTokenExp(state.settings.tokenExp);
+      if (exp) {
+        var dleft = C.L.tokenDaysLeft(exp, Date.now());
+        keyLine += dleft < 0 ? ' — срок вышел ' + exp + '!'
+          : ' — до ' + exp + ' (осталось ' + dleft + ' дн.)';
+      }
+    }
+  } catch (x) {}
+  lines.push(keyLine);
   /* При ошибке отправки дописываем, что локальный журнал цел: иначе
    * «log-error» читается как потеря диагностики. */
   var pubNote = pubStatus.indexOf('log-error') === 0 ? ' (локальный журнал цел)' : '';

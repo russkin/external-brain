@@ -140,7 +140,7 @@
       max-height: calc(100vh - 40px); overflow-y: auto; }
     #repoModalText { margin-bottom: 10px; font-size: 14px; }
     #repoModalText small { display: block; color: #666; margin-top: 6px; }
-    #repoModalInput { width: 100%; box-sizing: border-box; font-size: 16px; padding: 10px; margin-bottom: 8px; }
+    #repoModalInput, #repoExpInput { width: 100%; box-sizing: border-box; font-size: 16px; padding: 10px; margin-bottom: 8px; }
     #repoTokenWrap input { width: 100%; box-sizing: border-box; font-size: 16px; padding: 10px; margin-bottom: 12px; }
     #repoModalBox .row { display: flex; gap: 8px; }
     #repoModalBox .row button { flex: 1 1 auto; }
@@ -227,6 +227,7 @@
         <span id="appVer"></span></small></div>
       <input id="repoModalInput" placeholder="owner/repo" autocomplete="off" aria-label="Репозиторий" />
       <span id="repoTokenWrap"></span>
+      <input id="repoExpInput" placeholder="Годен до ГГГГ-ММ-ДД (необязательно)" autocomplete="off" maxlength="10" aria-label="Срок действия токена" />
       <div class="row"><button id="repoSaveBtn">Сохранить</button><button id="repoCancelBtn">Отмена</button></div>
     </div>
   </div>

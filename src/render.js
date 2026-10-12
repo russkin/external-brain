@@ -444,6 +444,22 @@ function renderStatus() {
   ];
   var la = C.getLastAction();
   if (la) parts.push(la);
+  /* Срок токена (v144): за 7 дней — мягко в статус, за 3 и после — громко.
+   * Без токена или без даты молчим (выключенный синк — норма). */
+  try {
+    var st = state.settings || {};
+    if (st.token && st.tokenExp) {
+      var lvl = L.tokenWarnLevel(st.tokenExp, Date.now());
+      if (lvl === 1) {
+        parts.push('Токен до ' + st.tokenExp + ' (' +
+          L.tokenDaysLeft(st.tokenExp, Date.now()) + ' дн.)');
+      } else if (lvl === 2) {
+        var left = L.tokenDaysLeft(st.tokenExp, Date.now());
+        parts.push(left < 0 ? 'Токен истёк ' + st.tokenExp + ' — синк встал'
+          : 'Токен истекает! Осталось ' + left + ' дн.');
+      }
+    }
+  } catch (x) {}
   var be = C.getBoot().error;
   if (be) parts.push(be);
   s.textContent = parts.join(' · ');

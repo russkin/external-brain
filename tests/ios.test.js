@@ -18,6 +18,7 @@ const searchSrc = fs.readFileSync(path.join(root, 'src/search.js'), 'utf8');
 const trigSrc = fs.readFileSync(path.join(root, 'src/triggers.js'), 'utf8');
 const gestSrc = fs.readFileSync(path.join(root, 'src/gestures.js'), 'utf8');
 const rendSrc = fs.readFileSync(path.join(root, 'src/render.js'), 'utf8');
+const logicSrc = fs.readFileSync(path.join(root, 'src/logic.js'), 'utf8');
 
 function appVersion() {
   const m = appSrc.match(/APP_VERSION\s*=\s*'([^']+)'/);
@@ -1067,5 +1068,39 @@ describe('PWA-оболочка', () => {
     assert.ok(html.includes('id="shareAppBtn"'), 'нет shareAppBtn в меню');
     assert.ok(appSrc.includes("on('shareAppBtn'"), 'нет подписки shareAppBtn');
     assert.ok(appSrc.includes('location.href'), 'шарится не ссылка страницы');
+  });
+});
+
+describe('срок токена (v144): поле, пороги 7/3, хинт 401', () => {
+  it('поле срока в окне репозитория (не пароль, всегда в DOM)', () => {
+    assert.ok(html.includes('id="repoExpInput"'), 'нет repoExpInput в index.html');
+    assert.ok(html.includes('ГГГГ-ММ-ДД'), 'нет подсказки формата даты');
+    assert.ok(!/id="repoExpInput"[^>]*type="password"/.test(html), 'поле срока — пароль');
+  });
+  it('срок хранится и пишется через нормализацию', () => {
+    assert.ok(settingsSrc.includes('repoExpInput'), 'настройки не читают поле срока');
+    assert.ok(settingsSrc.includes('normTokenExp'), 'срок пишется без нормализации');
+    assert.ok(storeSrc.includes('tokenExp'), 'срок не хранится в store');
+  });
+  it('чистая логика: норма, дни, уровни 7/3', () => {
+    for (const fn of ['normTokenExp', 'tokenDaysLeft', 'tokenWarnLevel']) {
+      assert.ok(logicSrc.includes('function ' + fn), 'нет ' + fn + ' в src/logic.js');
+    }
+  });
+  it('за 7 дней — строка в статусе, за 3 — окно раз в сутки', () => {
+    assert.ok(rendSrc.includes('tokenWarnLevel'), 'статус не знает про срок токена');
+    assert.ok(rendSrc.includes('Токен истекает!') && rendSrc.includes('Токен истёк'),
+      'нет текстов порогов в статусе');
+    assert.ok(trigSrc.includes('maybeWarnTokenExp'), 'нет разового окна о сроке');
+    assert.ok(trigSrc.includes('external-brain-tokenwarn-v1'), 'окно без разового лимита в сутки');
+    assert.ok(trigSrc.includes('tokenWarnLevel'), 'окно без проверки уровня 2');
+  });
+  it('срок виден в диагностике', () => {
+    assert.ok(diagSrc.includes('tokenExp') || diagSrc.includes('срок вышел'),
+      'нет срока токена в диагностике');
+  });
+  it('401 от GitHub расшифровывается человечески', () => {
+    assert.ok(trigSrc.includes('401') && trigSrc.includes('токен истёк или отозван'),
+      'нет хинта про истёкший токен при 401');
   });
 });
