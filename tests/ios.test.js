@@ -883,6 +883,7 @@ describe('логика вызывается с state.tasks', () => {
   });
   it('инструкция — нативная ссылка в новой вкладке (без двойного открытия)', () => {
     assert.ok(html.includes('id="guideBtn"'), 'нет пункта инструкции в меню');
+    assert.ok(html.includes('📖 Инструкция пользователя'), 'пункт называется не «Инструкция пользователя»');
     assert.ok(html.includes('target="_blank"'), 'инструкция не в новой вкладке');
     assert.ok(!appSrc.includes("window.open('./docs/USER_GUIDE.html'"),
       'window.open + location дают две страницы инструкции');
