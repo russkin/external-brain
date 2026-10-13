@@ -1156,4 +1156,10 @@ describe('удаление свайпом (v150)', () => {
   it('тап по кнопке не закрывает панель', () => {
     assert.ok(gestSrc.includes('.delflag'), 'тап по удалению закрывает панель');
   });
+  it('пустая строка: одна кнопка удаления, сквозной клик глушится', () => {
+    assert.ok(rendSrc.includes('if (!rowEmpty)'), 'красная кнопка и на пустой строке — две «Удалить»');
+    assert.ok(rendSrc.includes('clickBlocked'), 'нет глушения сквозного клика');
+    assert.ok(rendSrc.includes('_ebUIClickBlocked'), 'нет метки блокировки кликов');
+    assert.ok(appSrc.includes('_ebUIClickBlocked'), 'удаление не взводит блокировку');
+  });
 });

@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v150';
+  var APP_VERSION = 'v151';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -590,6 +590,9 @@
     if (!t || t.deleted) return;
     if (lineTasks().length <= 1) return;
     mutate(function () { L.removeTask(state.tasks, taskId); });
+    /* Строка перестроена синхронно — следом придёт click того же тапа
+     * уже по новому дому: глушим его (см. clickBlocked в render.js). */
+    try { window._ebUIClickBlocked = Date.now() + 400; } catch (x) {}
   }
 
   /* Строка-стартер: живых нет — создать одну пустую сверху напрямую
@@ -905,6 +908,7 @@
         L.removeTask(state.tasks, taskId);
         ensureStarter();
       });
+      try { window._ebUIClickBlocked = Date.now() + 400; } catch (x) {}
       lastAction = 'строка удалена';
       renderStatus();
       return;
@@ -915,6 +919,9 @@
         L.removeTask(state.tasks, taskId);
         ensureStarter();
       });
+      /* Модалка подтверждения съела исходный тап (нового click уже не
+       * будет), но глушим на всякий случай — строка перестроена. */
+      try { window._ebUIClickBlocked = Date.now() + 400; } catch (x) {}
       lastAction = 'задача удалена';
       renderStatus();
     });

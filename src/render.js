@@ -29,6 +29,22 @@ var C = null;
 var L = null;
 var INDENT_STEP = 0;
 
+/* Глушение «сквозного» клика (v151): тап по кнопке в свайп-панели удаляет
+ * строку, mutate тут же синхронно перестраивает список — а браузер следом
+ * шлёт click от того же тапа уже по НОВОМУ дому: под палец подъезжает
+ * соседняя строка, и если там метка времени — открывается чужая модалка
+ * («окно не знаю к какой задаче»). После удаляющего тапа клики гаснут
+ * 400 мс (как `_swBlockUntil` у свайпа); взводит app.js. Обычные тапы
+ * метка не трогает — она живёт только 400 мс после удаления. */
+function clickBlocked() {
+  try {
+    return !!window._ebUIClickBlocked && Date.now() < window._ebUIClickBlocked;
+  } catch (x) { return false; }
+}
+function blockClicks() {
+  try { window._ebUIClickBlocked = Date.now() + 400; } catch (x) {}
+}
+
 function render() {
   var state = C.getState();
   if (!state) return;
@@ -196,6 +212,10 @@ function makeLine(taskId, value, indent, opts) {
     function flagGo(ev) {
       if (!flagDown) return;
       flagDown = false;
+      /* Click после удаляющего pointerup — уже сквозной (см. clickBlocked):
+       * строка перестроена, под пальцем сосед. Глушим только click (ev null),
+       * сам pointerup идёт как шёл. */
+      if (!ev && clickBlocked()) return;
       if (ev && (Math.abs(ev.clientX - flagDownX) > 12 || Math.abs(ev.clientY - flagDownY) > 12)) return;
       var live = field && field.value != null ? String(field.value).trim() : '';
       if (!noDel && !live) { C.deleteEmptyTask(id); return; }
@@ -207,30 +227,35 @@ function makeLine(taskId, value, indent, opts) {
   })(taskId, flag, inp, !!opts.doneShown);
   div.appendChild(flag);
   /* Красная «✕ Удалить» левее зелёной (v150): видна при том же свайпе,
-   * для всех строк включая выполненные. Тап — как у флага: pointerup
-   * или click, сдвиг > 12 px — не клик, повтор гасится тем же флагом. */
-  var del = document.createElement('button');
-  del.className = 'delflag';
-  del.textContent = '✕ Удалить';
-  del.setAttribute('aria-label', 'Удалить задачу');
-  (function (id, dl) {
-    var delDownX = 0, delDownY = 0, delDown = false;
-    dl.addEventListener('pointerdown', function (ev) {
-      delDownX = ev.clientX;
-      delDownY = ev.clientY;
-      delDown = true;
-    });
-    function delGo(ev) {
-      if (!delDown) return;
-      delDown = false;
-      if (ev && (Math.abs(ev.clientX - delDownX) > 12 || Math.abs(ev.clientY - delDownY) > 12)) return;
-      C.askDeleteTask(id);
-    }
-    dl.addEventListener('pointerup', delGo);
-    dl.addEventListener('pointercancel', function () { delDown = false; });
-    dl.addEventListener('click', function () { delGo(null); });
-  })(taskId, del);
-  div.appendChild(del);
+   * для всех строк включая выполненные — КРОМЕ пустых (v151): там уже
+   * есть зелёная «✕ Удалить», две кнопки с одним текстом путали.
+   * Тап — как у флага: pointerup или click, сдвиг > 12 px — не клик,
+   * повтор гасится тем же флагом, сквозной click — через clickBlocked. */
+  if (!rowEmpty) {
+    var del = document.createElement('button');
+    del.className = 'delflag';
+    del.textContent = '✕ Удалить';
+    del.setAttribute('aria-label', 'Удалить задачу');
+    (function (id, dl) {
+      var delDownX = 0, delDownY = 0, delDown = false;
+      dl.addEventListener('pointerdown', function (ev) {
+        delDownX = ev.clientX;
+        delDownY = ev.clientY;
+        delDown = true;
+      });
+      function delGo(ev) {
+        if (!delDown) return;
+        delDown = false;
+        if (!ev && clickBlocked()) return;
+        if (ev && (Math.abs(ev.clientX - delDownX) > 12 || Math.abs(ev.clientY - delDownY) > 12)) return;
+        C.askDeleteTask(id);
+      }
+      dl.addEventListener('pointerup', delGo);
+      dl.addEventListener('pointercancel', function () { delDown = false; });
+      dl.addEventListener('click', function () { delGo(null); });
+    })(taskId, del);
+    div.appendChild(del);
+  }
   C.wireLineSwipe(div, taskId);
   /* Метка времени — НАЛОЖЕНИЕ в правом нижнем углу поля задачи
    * (position: absolute против .tline): тап — та же модалка, что свайп
@@ -246,6 +271,9 @@ function makeLine(taskId, value, indent, opts) {
     (function (id, c) {
       c.addEventListener('click', function (ev) {
         ev.stopPropagation();
+        /* Сквозной click после удаления выше (под палец подъехала чужая
+         * метка) — модалку не открываем (см. clickBlocked). */
+        if (clickBlocked()) return;
         C.openDuration(id);
       });
     })(taskId, chip);
