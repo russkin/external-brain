@@ -698,16 +698,11 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('function wireDurBtn') && appSrc.includes('pointerup') &&
       appSrc.includes('pointercancel'),
       'стрелки слушают только click — первый тап после жеста съедается');
-    assert.ok(rendSrc.includes('function updateDurchip') && rendSrc.includes('function refreshDurchips'),
-      'нет пересчёта фона метки по тексту поля');
-    assert.ok(rendSrc.includes("chip.style.backgroundColor = 'transparent'") &&
-      rendSrc.includes("bg !== 'transparent'"),
-      'фон метки не переключается прозрачный/непрозрачный');
-    assert.ok(rendSrc.includes('refreshDurchips(box)') &&
-      appSrc.includes('if (chipN) updateDurchip(inp, chipN)'),
-      'рендер/набор текста не пересчитывают фон метки');
-    assert.ok(appSrc.includes("refreshDurchips(el('lines'))"),
-      'ресайз (клавиатура/поворот) не пересчитывает фон метки');
+    assert.ok(!rendSrc.includes('function updateDurchip') && !rendSrc.includes('function refreshDurchips'),
+      'замер-перекраска фона метки не выкинут');
+    assert.ok(!rendSrc.includes('backgroundColor') && !appSrc.includes('chipResizeT'),
+      'остатки непрозрачного фона / ресайз-пересчёта метки');
+    assert.ok(html.includes('background: transparent'), 'фон метки не прозрачный всегда');
   });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
@@ -967,7 +962,7 @@ describe('синк: триггеры и протокол', () => {
   });
   it('отрисовка — модуль src/render.js (этап 7, без черновика)', () => {
     for (const fn of ['render', 'renderLines', 'renderStatus', 'makeLine', 'makeGrip',
-      'autosize', 'updateDurchip', 'refreshDurchips', 'lineEstMin', 'expandForAnchor',
+      'autosize', 'lineEstMin', 'expandForAnchor',
       'init']) {
       assert.ok(rendSrc.includes('function ' + fn), 'нет ' + fn + ' в src/render.js');
     }
@@ -977,9 +972,7 @@ describe('синк: триггеры и протокол', () => {
       appSrc.includes('window.EBRender.renderStatus()') &&
       !appSrc.includes('window.EBRender.focusTrailing()') &&
       appSrc.includes('window.EBRender.expandForAnchor(anchorId, indent)') &&
-      appSrc.includes('window.EBRender.autosize(ta)') &&
-      appSrc.includes('window.EBRender.updateDurchip(inp, chip)') &&
-      appSrc.includes('window.EBRender.refreshDurchips(box)'),
+      appSrc.includes('window.EBRender.autosize(ta)'),
       'app.js не ходит в отрисовку через тонкие алиасы (вынос нечистый)');
     assert.ok(!rendSrc.includes('function focusTrailing') &&
       !rendSrc.includes('function wireLineInput') &&

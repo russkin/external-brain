@@ -1,14 +1,14 @@
 /* render.js — отрисовка списка: построение строк (makeLine/makeGrip),
- * проводка уже созданных строк жестами и вводом, пересчёт меток времени,
- * порядок строк и секция выполненных (renderLines), статусная строка,
- * фокус черновика и разворот предков при создании.
+ * метки времени, порядок строк и секция выполненных (renderLines),
+ * статусная строка, разворот предков при создании.
  * Вынесено из app.js (рефакторинг, этап 7): код перенесён как есть.
  * В app.js остались тонкие алиасы (render/renderStatus/
- * expandForAnchor/autosize/updateDurchip/refreshDurchips), чтобы десятки
- * вызовов во вводе, истории, жестах и boot не трогать. Проводка ввода
- * (wireLineInput) и мутации черновика остались в app.js и идут сюда
- * через контекст.
- * Своё состояние модуль не держит (карта свёрнутых, черновик, doneHidden —
+ * expandForAnchor/autosize), чтобы десятки вызовов во вводе, истории,
+ * жестах и boot не трогать. Проводка ввода (wireLineInput) осталась
+ * в app.js и идёт сюда через контекст. Замер-перекраска фона метки
+ * (updateDurchip/refreshDurchips) выкинуты в v153: фон метки всегда
+ * прозрачный, текст виден сквозь неё.
+ * Своё состояние модуль не держит (карта свёрнутых, doneHidden —
  * в app.js, читаются через геттеры контекста).
  * UMD: браузер (window.EBRender) + Node (module.exports) для тестов.
  *
@@ -17,10 +17,9 @@
  *   lineIndent, getCollapsed, isDoneHidden, toggleDoneHidden, snapFull,
  *   pushUndo, wireLineInput, deleteEmptyTask, openDuration, toggleDoneSlide,
  *   wireLineSwipe, wireLineDrag, INDENT_STEP —
- *   стабильные ссылки; изменяемое (state, черновик, карта свёрнутых)
+ *   стабильные ссылки; изменяемое (state, карта свёрнутых)
  *   только через геттеры. L/INDENT_STEP фиксируются в init.
  */
-(function () {
 'use strict';
 
 function el(id) { return document.getElementById(id); }
@@ -259,8 +258,8 @@ function makeLine(taskId, value, indent, opts) {
   C.wireLineSwipe(div, taskId);
   /* Метка времени — НАЛОЖЕНИЕ в правом нижнем углу поля задачи
    * (position: absolute против .tline): тап — та же модалка, что свайп
-   * вправо. Фон прозрачный, пока текст не доходит до метки (см.
-   * updateDurchip — при пересчёте становится непрозрачным). Пустое
+   * вправо. Фон ВСЕГДА прозрачный (v153): текст под меткой виден сквозь
+   * неё — так решил хозяин (замер-перекраска зеркалом выкинуты). Пустое
    * время (estMin=0) — метки нет, угол поля свободен. */
   if (taskId && opts.estMin > 0) {
     var chip = document.createElement('button');
@@ -289,64 +288,6 @@ function autosize(ta) {
   if (!ta || !ta.style) return;
   ta.style.height = 'auto';
   try { ta.style.height = ta.scrollHeight + 'px'; } catch (x) {}
-}
-
-/* Фон метки времени: прозрачный, пока текст поля под ней не мешает;
- * если последняя строка текста доезжает до метки — непрозрачный (цвета
- * поля), иначе два текста слипаются. Замер зеркалом поля (как в
- * getCaretCoordinates): браузер сам переносит строки, берём X конца
- * текста и сравниваем с левым краем метки. */
-function updateDurchip(inp, chip) {
-  if (!inp || !chip || !chip.style) return;
-  chip.style.backgroundColor = 'transparent';
-  var text = inp.value || '';
-  if (!text) return;
-  var m = document.createElement('div');
-  try {
-    var ir = inp.getBoundingClientRect();
-    var cr = chip.getBoundingClientRect();
-    /* Нет вёрстки (jsdom, скрытая строка) — остаёмся прозрачными. */
-    if (!ir.width || !cr.width) return;
-    var cs = window.getComputedStyle(inp);
-    var props = ['font-family', 'font-size', 'font-weight', 'font-style',
-      'line-height', 'letter-spacing', 'word-spacing', 'text-indent',
-      'text-align', 'text-transform', 'white-space', 'word-break',
-      'overflow-wrap', 'direction', 'padding-top', 'padding-right',
-      'padding-bottom', 'padding-left', 'box-sizing'];
-    m.style.position = 'absolute';
-    m.style.left = (ir.left + (window.pageXOffset || 0)) + 'px';
-    m.style.top = (ir.top + (window.pageYOffset || 0)) + 'px';
-    m.style.width = ir.width + 'px';
-    m.style.visibility = 'hidden';
-    m.style.pointerEvents = 'none';
-    for (var i = 0; i < props.length; i++) {
-      var v = cs.getPropertyValue(props[i]);
-      if (v) m.style.setProperty(props[i], v);
-    }
-    m.appendChild(document.createTextNode(text));
-    /* Пустой маркер после текста: его X = позиция конца последней строки. */
-    var marker = document.createElement('span');
-    m.appendChild(marker);
-    document.body.appendChild(m);
-    var mr = marker.getBoundingClientRect();
-    if (mr.left >= cr.left - 2) {
-      var bg = cs.getPropertyValue('background-color') || '';
-      chip.style.backgroundColor =
-        (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') ? bg : '#fff';
-    }
-  } catch (x) {} finally {
-    if (m.parentNode) m.parentNode.removeChild(m);
-  }
-}
-
-/* Пересчитать метки внутри списка: после рендера, набора и ресайза. */
-function refreshDurchips(box) {
-  if (!box || !box.querySelectorAll) return;
-  var chips = box.querySelectorAll('.durchip');
-  for (var c = 0; c < chips.length; c++) {
-    var rw = chips[c].closest ? chips[c].closest('.tline') : null;
-    updateDurchip(rw && rw.querySelector('.tinput'), chips[c]);
-  }
 }
 
 function renderLines() {
@@ -411,7 +352,6 @@ function renderLines() {
   /* Раскрыть многострочные по содержимому (в потоке, после вставки). */
   var areas = box.querySelectorAll ? box.querySelectorAll('.tinput') : [];
   for (var q = 0; q < areas.length; q++) autosize(areas[q]);
-  refreshDurchips(box);
 }
 
 /* Шапка над клавиатурой: в оверлейном режиме (iOS Safari, часть Android)
@@ -540,9 +480,7 @@ var api = {
   render: render,
   renderStatus: renderStatus,
   expandForAnchor: expandForAnchor,
-  autosize: autosize,
-  updateDurchip: updateDurchip,
-  refreshDurchips: refreshDurchips
+  autosize: autosize
 };
 
 if (typeof module !== 'undefined' && module.exports) {
