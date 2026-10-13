@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v151';
+  var APP_VERSION = 'v152';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -97,7 +97,21 @@
    * перенос разряда автоматический). OK — {минуты, флаг суммы}, «Убрать» —
    * {0, флаг}, Отмена — null. У родителя виден флаг «Суммировать
    * из вложенных»: снят — метка своя вручную (lineEstMin). Статичные
-   * кнопки стрелок подписаны в wire() через on(). */
+   * кнопки стрелок подписаны в wire() через wireDurBtn(). */
+  function wireDurBtn(id, fn) {
+    var n = el(id);
+    if (!n) return;
+    var armed = false;
+    n.addEventListener('pointerdown', function () { armed = true; });
+    function go() {
+      if (!armed) return;
+      armed = false;
+      fn();
+    }
+    n.addEventListener('pointerup', go);
+    n.addEventListener('pointercancel', function () { armed = false; });
+    n.addEventListener('click', go);
+  }
   function askDuration(initialMin, showSum, initialSum) {
     return new Promise(function (resolve) {
       var back = el('modalBack'), text = el('modalText'), input = el('modalInput');
@@ -1134,10 +1148,15 @@
       INDENT_STEP: INDENT_STEP
     });
     /* Стрелки модалки времени (часы ±60, минуты ±5 от общего итога). */
-    on('durHp', 'click', function () { durTot = Math.min(durTot + 60, 59999); durRender(); });
-    on('durHm', 'click', function () { durTot = Math.max(durTot - 60, 0); durRender(); });
-    on('durMp', 'click', function () { durTot = Math.min(durTot + 5, 59999); durRender(); });
-    on('durMm', 'click', function () { durTot = Math.max(durTot - 5, 0); durRender(); });
+    /* Стрелки модалки времени (v152): слушают pointerup И click. Браузер
+     * иногда отменяет click первого тапа после жеста (микроскролл,
+     * захват указателя, сдвиг раскладки), а pointerup доезжает всегда —
+     * иначе первый «+» молчит, работает только второй. Повтор гасится
+     * флагом, как у кнопок свайп-панели. */
+    wireDurBtn('durHp', function () { durTot = Math.min(durTot + 60, 59999); durRender(); });
+    wireDurBtn('durHm', function () { durTot = Math.max(durTot - 60, 0); durRender(); });
+    wireDurBtn('durMp', function () { durTot = Math.min(durTot + 5, 59999); durRender(); });
+    wireDurBtn('durMm', function () { durTot = Math.max(durTot - 5, 0); durRender(); });
 
     window.addEventListener('beforeinstallprompt', function (e) {
       e.preventDefault();

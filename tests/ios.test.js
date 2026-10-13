@@ -693,8 +693,11 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(rendSrc.includes('estMin: lineEstMin(t)') &&
       rendSrc.includes('estMin: lineEstMin(doneVis[dv])'),
       'редендер не отдаёт estMin в строку');
-    assert.ok(appSrc.includes("on('durHp'") && appSrc.includes("on('durMm'"),
-      'стрелки модалки подписаны не через on()');
+    assert.ok(appSrc.includes("wireDurBtn('durHp'") && appSrc.includes("wireDurBtn('durMm'"),
+      'стрелки модалки подписаны не через wireDurBtn()');
+    assert.ok(appSrc.includes('function wireDurBtn') && appSrc.includes('pointerup') &&
+      appSrc.includes('pointercancel'),
+      'стрелки слушают только click — первый тап после жеста съедается');
     assert.ok(rendSrc.includes('function updateDurchip') && rendSrc.includes('function refreshDurchips'),
       'нет пересчёта фона метки по тексту поля');
     assert.ok(rendSrc.includes("chip.style.backgroundColor = 'transparent'") &&
