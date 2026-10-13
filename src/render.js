@@ -20,6 +20,7 @@
  *   стабильные ссылки; изменяемое (state, карта свёрнутых)
  *   только через геттеры. L/INDENT_STEP фиксируются в init.
  */
+(function () {
 'use strict';
 
 function el(id) { return document.getElementById(id); }

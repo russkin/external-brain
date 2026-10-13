@@ -23,6 +23,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Syntax check all scripts
+        run: |
+          for f in app.js store.js sync.js sw.js src/*.js; do node --check "$f" || exit 1; done
       - run: node --test tests/logic.test.js tests/ios.test.js tests/sync.test.js tests/sync-devices.test.js
 
   build:

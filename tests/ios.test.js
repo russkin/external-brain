@@ -1043,6 +1043,13 @@ describe('PWA-оболочка', () => {
       assert.ok(html.includes(s), 'нет ' + s + ' в index.html');
     }
   });
+  it('все модули грузятся в Node (синтаксис браузерных скриптов)', () => {
+    /* v154: правка комментария снесла `(function () {` в render.js —
+     * строковые тесты зелёные, а приложение белый экран. require ловит. */
+    for (const m of ['logic', 'search', 'diag', 'settings', 'history', 'triggers', 'gestures', 'render']) {
+      assert.ok(require('../src/' + m + '.js'), 'не грузится src/' + m + '.js');
+    }
+  });
   it('токен живёт только в настройках', () => {
     assert.ok(!/type="password"/.test(html), 'постоянное поле пароля в html');
     assert.ok(settingsSrc.includes('tokenInput'), 'нет tokenInput');
