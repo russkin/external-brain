@@ -650,8 +650,8 @@ describe('логика вызывается с state.tasks', () => {
     var cssD = iCss === -1 ? '' : html.slice(iCss, iCss + 320);
     assert.ok(cssD.includes('position: absolute'), 'метка не наложением на поле задачи');
     assert.ok(cssD.includes('background: transparent'), 'фон метки не прозрачный');
-    assert.ok(cssD.includes('right: 8px') && cssD.includes('bottom: 5px'),
-      'метка не в правом нижнем углу поля');
+    assert.ok(cssD.includes('right: 8px') && cssD.includes('bottom: -18px'),
+      'метка не опущена под поле (эксперимент v155)');
     var iMk = rendSrc.indexOf('function makeLine');
     var mkBlock = rendSrc.slice(iMk, rendSrc.indexOf('function autosize'));
     assert.ok(mkBlock.includes('durchip'), 'строка не рисует метку времени');
@@ -702,8 +702,8 @@ describe('логика вызывается с state.tasks', () => {
       'замер-перекраска фона метки не выкинут');
     assert.ok(!rendSrc.includes('backgroundColor') && !appSrc.includes('chipResizeT'),
       'остатки непрозрачного фона / ресайз-пересчёта метки');
-    assert.ok(html.includes('background: transparent'), 'фон метки не прозрачный всегда');
-  });
+        assert.ok(html.includes('background: transparent'), 'фон метки не прозрачный всегда');
+    assert.ok(html.includes('bottom: -18px'), 'метка не опущена под поле');  });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
   });
