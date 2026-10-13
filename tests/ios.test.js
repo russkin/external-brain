@@ -651,13 +651,9 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(cssD.includes('position: absolute'), 'метка не наложением на поле задачи');
     assert.ok(cssD.includes('background: transparent'), 'фон метки не прозрачный');
     assert.ok(cssD.includes('right: 8px') && cssD.includes('bottom: 5px'),
-      'метка не прислонена к нижнему краю поля (v156)');
-    assert.ok(html.includes('.tline.has-chip .tinput') && html.includes('padding-bottom: 32px'),
-      'нет полосы под текстом у строк с меткой');
+      'метка не в правом нижнем углу поля');
     var iMk = rendSrc.indexOf('function makeLine');
     var mkBlock = rendSrc.slice(iMk, rendSrc.indexOf('function autosize'));
-    assert.ok(mkBlock.includes("classList.add('has-chip')"),
-      'строка не помечает наличие метки');
     assert.ok(mkBlock.includes('durchip'), 'строка не рисует метку времени');
     assert.ok(mkBlock.includes('L.fmtDur(opts.estMin)'), 'метка без формата из логики');
     assert.ok(mkBlock.includes('openDuration(id)'), 'тап по метке не открывает модалку');
@@ -702,10 +698,16 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('function wireDurBtn') && appSrc.includes('pointerup') &&
       appSrc.includes('pointercancel'),
       'стрелки слушают только click — первый тап после жеста съедается');
-    assert.ok(!rendSrc.includes('function updateDurchip') && !rendSrc.includes('function refreshDurchips'),
-      'замер-перекраска фона метки не выкинут');
-    assert.ok(!rendSrc.includes('backgroundColor') && !appSrc.includes('chipResizeT'),
-      'остатки непрозрачного фона / ресайз-пересчёта метки');
+    assert.ok(rendSrc.includes('function updateDurchip') && rendSrc.includes('function refreshDurchips'),
+      'нет пересчёта фона метки по тексту поля');
+    assert.ok(rendSrc.includes("chip.style.backgroundColor = 'transparent'") &&
+      rendSrc.includes("bg !== 'transparent'"),
+      'фон метки не переключается прозрачный/непрозрачный');
+    assert.ok(rendSrc.includes('refreshDurchips(box)') &&
+      appSrc.includes('if (chipN) updateDurchip(inp, chipN)'),
+      'рендер/набор текста не пересчитывают фон метки');
+    assert.ok(appSrc.includes("refreshDurchips(el('lines'))"),
+      'ресайз (клавиатура/поворот) не пересчитывает фон метки');
   });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
@@ -965,7 +967,7 @@ describe('синк: триггеры и протокол', () => {
   });
   it('отрисовка — модуль src/render.js (этап 7, без черновика)', () => {
     for (const fn of ['render', 'renderLines', 'renderStatus', 'makeLine', 'makeGrip',
-      'autosize', 'lineEstMin', 'expandForAnchor',
+      'autosize', 'updateDurchip', 'refreshDurchips', 'lineEstMin', 'expandForAnchor',
       'init']) {
       assert.ok(rendSrc.includes('function ' + fn), 'нет ' + fn + ' в src/render.js');
     }
@@ -975,7 +977,9 @@ describe('синк: триггеры и протокол', () => {
       appSrc.includes('window.EBRender.renderStatus()') &&
       !appSrc.includes('window.EBRender.focusTrailing()') &&
       appSrc.includes('window.EBRender.expandForAnchor(anchorId, indent)') &&
-      appSrc.includes('window.EBRender.autosize(ta)'),
+      appSrc.includes('window.EBRender.autosize(ta)') &&
+      appSrc.includes('window.EBRender.updateDurchip(inp, chip)') &&
+      appSrc.includes('window.EBRender.refreshDurchips(box)'),
       'app.js не ходит в отрисовку через тонкие алиасы (вынос нечистый)');
     assert.ok(!rendSrc.includes('function focusTrailing') &&
       !rendSrc.includes('function wireLineInput') &&

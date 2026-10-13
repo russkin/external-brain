@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v156';
+  var APP_VERSION = 'v157';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -274,6 +274,12 @@
   }
   function autosize(ta) {
     if (window.EBRender) window.EBRender.autosize(ta);
+  }
+  function updateDurchip(inp, chip) {
+    if (window.EBRender) window.EBRender.updateDurchip(inp, chip);
+  }
+  function refreshDurchips(box) {
+    if (window.EBRender) window.EBRender.refreshDurchips(box);
   }
 
   /* --- Стартовый экран: строки «grip 6 точек + поле ввода» --- */
@@ -682,6 +688,8 @@
     inp.addEventListener('input', function () {
       if (inputClosed) return;
       autosize(inp);
+      var chipN = div.querySelector ? div.querySelector('.durchip') : null;
+      if (chipN) updateDurchip(inp, chipN);
       if (!taskId) return;
       if (saveTimer) clearTimeout(saveTimer);
       saveTimer = setTimeout(function () {
@@ -1160,6 +1168,16 @@
 
   function boot() {
     wire();
+    /* Клавиатура/поворот меняют ширину поля: перенос строк другой —
+     * пересчитываем, накрыт ли текст меткой времени. */
+    var chipResizeT = null;
+    window.addEventListener('resize', function () {
+      if (chipResizeT) clearTimeout(chipResizeT);
+      chipResizeT = setTimeout(function () {
+        chipResizeT = null;
+        refreshDurchips(el('lines'));
+      }, 120);
+    });
     loadCollapsed();
     loadDoneHidden();
     /* Журнал — модуль (этап 2); метки движка забирает модуль триггеров. */
