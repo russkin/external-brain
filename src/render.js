@@ -257,14 +257,17 @@ function makeLine(taskId, value, indent, opts) {
     div.appendChild(del);
   }
   C.wireLineSwipe(div, taskId);
-  /* Метка времени — под полем задачи справа (v155, эксперимент):
-   * висит в межстрочном зазоре, текст не перекрывает. Тап — та же
-   * модалка, что свайп вправо. Фон всегда прозрачный. Пустое
-   * время (estMin=0) — метки нет, угол поля свободен. */
+  /* Метка времени — в правом нижнем углу ПОЛЯ (v156): под последней
+   * строкой текста пустая полоса (класс has-chip → padding-bottom),
+   * метка прислонена к нижнему краю. Тап — та же модалка, что свайп
+   * вправо. Фон всегда прозрачный. Пустое время (estMin=0) — метки нет,
+   * полосы нет, угол поля свободен. */
   if (taskId && opts.estMin > 0) {
     var chip = document.createElement('button');
     chip.className = 'durchip';
     chip.type = 'button';
+    /* Полоса под текстом (v156): строка с меткой выше на padding. */
+    div.classList.add('has-chip');
     chip.textContent = L.fmtDur(opts.estMin);
     chip.setAttribute('aria-label', 'Время задачи: ' + L.fmtDur(opts.estMin));
     (function (id, c) {
