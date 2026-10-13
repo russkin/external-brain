@@ -11,7 +11,7 @@
  * UMD: браузер (window.EBGestures) + Node (module.exports) для тестов.
  *
  * Контекст ctx: L, getState, render, save, mutate, lineIndent, lineTasks,
- *   getCollapsed, saveCollapsed, hasKidsFull, toggleCollapse, toggleDoneNow,
+ *   getCollapsed, saveCollapsed, hasLiveKids, toggleCollapse, toggleDoneNow,
  *   openDuration, snapFull, snapTasks, pushUndo, updateHistoryButtons,
  *   INDENT_STEP, LINES_GAP —
  *   стабильные ссылки; изменяемое (state, черновик, карта свёрнутых)
@@ -811,7 +811,7 @@ function wireLineDrag(div, grip, inp) {
       var tapped = myTask();
       /* Выполненные не сворачиваем: их записи в карте всё равно никто
        * не читает, а мусор копился бы и путал обходы. */
-      if (tapped && tapped.status !== 'done' && C.hasKidsFull(tapped.id)) {
+      if (tapped && tapped.status !== 'done' && C.hasLiveKids(tapped.id)) {
         C.toggleCollapse(tapped.id);
         return;
       }

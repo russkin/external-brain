@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v157';
+  var APP_VERSION = 'v158';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -158,7 +158,7 @@
     /* Родитель: метка — авто-сумма, но флаг можно снять и поставить время
      * вручную (свайп вправо и тап по метке ведут сюда). Листу флаг
      * не показываем — суммировать нечего. */
-    var parent = hasKidsFull(taskId);
+    var parent = hasLiveKids(taskId);
     var sum = parent ? task.sumKids !== false : false;
     var cur = (!parent || task.sumKids === false) ? (task.estMin || 0) : 0;
     askDuration(cur, parent, sum).then(function (res) {
@@ -305,14 +305,16 @@
     return L.normalizeTasks(state.tasks).filter(function (t) { return !t.deleted; });
   }
 
-  /* Есть ли вложенные у id в ПОЛНОМ порядке: тап по точкам и «свернуть
-   * все» должны работать, даже если дети уже выполнены — они живут в
-   * отдельной секции и должны прятаться вместе с группой. */
-  function hasKidsFull(id) {
+  /* Есть ли у id ЖИВЫЕ вложенные (v158): треугольник, тап по точкам
+   * и «свернуть все» смотрят только на живых — выполненные дети живут
+   * в своей секции, группу не показывают (иначе пустой треугольник,
+   * который нечего разворачивать). Свёрнутые живые в lineTasks есть,
+   * так что свёрнутая группа треугольник не теряет. */
+  function hasLiveKids(id) {
     if (!id) return false;
-    var full = fullList();
-    for (var i = 0; i < full.length; i++) {
-      if (full[i].id === id) return L.hasKids(full, i);
+    var live = lineTasks();
+    for (var i = 0; i < live.length; i++) {
+      if (live[i].id === id) return L.hasKids(live, i);
     }
     return false;
   }
@@ -380,7 +382,7 @@
     if (all && state) {
       var tasks = lineTasks();
       for (var i = 0; i < tasks.length; i++) {
-        if (hasKidsFull(tasks[i].id)) collapsed[tasks[i].id] = true;
+        if (hasLiveKids(tasks[i].id)) collapsed[tasks[i].id] = true;
       }
     }
     saveCollapsed();
@@ -1108,7 +1110,7 @@
       lineTasks: lineTasks,
       getCollapsed: function () { return collapsed; },
       saveCollapsed: saveCollapsed,
-      hasKidsFull: hasKidsFull,
+      hasLiveKids: hasLiveKids,
       toggleCollapse: toggleCollapse,
       toggleDoneNow: toggleDoneNow,
       openDuration: openDuration,
@@ -1133,6 +1135,7 @@
       lineTasks: lineTasks,
       fullList: fullList,
       lineIndent: lineIndent,
+      hasLiveKids: hasLiveKids,
       getCollapsed: function () { return collapsed; },
       isDoneHidden: function () { return doneHidden; },
       toggleDoneHidden: toggleDoneHidden,

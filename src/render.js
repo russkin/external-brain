@@ -16,7 +16,7 @@
  *   getLastAction, getBoot, updateHistoryButtons, lineTasks, fullList,
  *   lineIndent, getCollapsed, isDoneHidden, toggleDoneHidden, snapFull,
  *   pushUndo, wireLineInput, deleteEmptyTask, openDuration, toggleDoneSlide,
- *   wireLineSwipe, wireLineDrag, INDENT_STEP —
+ *   wireLineSwipe, wireLineDrag, hasLiveKids, INDENT_STEP —
  *   стабильные ссылки; изменяемое (state, черновик, карта свёрнутых)
  *   только через геттеры. L/INDENT_STEP фиксируются в init.
  */
@@ -362,7 +362,9 @@ function renderLines() {
   var fullIdx = {};
   for (var fi = 0; fi < full.length; fi++) fullIdx[full[fi].id] = fi;
   function taskRow(t, i) {
-    var kids = L.hasKids(full, fullIdx[t.id]);
+    /* Треугольник — только по живым детям (v158): выполненные живут
+     * в своей секции и пустой треугольник не дают. */
+    var kids = C.hasLiveKids(t.id);
     return makeLine(t.id, t.title, C.lineIndent(t), {
       doneShown: L.isDoneShown(full, fullIdx[t.id]),
       hidden: L.isHiddenByCollapse(tasks, i, collapsed),

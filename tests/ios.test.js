@@ -413,15 +413,15 @@ describe('логика вызывается с state.tasks', () => {
       'пустая строка не удаляется');
   });
   it('Сворачивание: выполненные дети прячутся, точки и 📁 смотрят в полном порядке', () => {
-    assert.ok(appSrc.includes('function hasKidsFull'), 'нет проверки детей в полном порядке');
+    assert.ok(appSrc.includes('function hasLiveKids'), 'нет проверки живых детей');
     assert.ok(appSrc.includes('function fullList'), 'нет полного списка задач');
     var iF = gestSrc.indexOf('function finish(e)');
     var fBody = gestSrc.slice(iF, iF + 2600);
-    assert.ok(fBody.includes('hasKidsFull(tapped.id)'),
+    assert.ok(fBody.includes('hasLiveKids(tapped.id)'),
       'тап по точкам смотрит только на живых детей');
     var iS = appSrc.indexOf('function setAllCollapsed');
     var sBody = appSrc.slice(iS, iS + 450);
-    assert.ok(sBody.includes('hasKidsFull(tasks[i].id)'),
+    assert.ok(sBody.includes('hasLiveKids(tasks[i].id)'),
       'свернуть все смотрит только на живых детей');
     assert.ok(rendSrc.includes('function makeGrip(arrow)') &&
       rendSrc.includes("g.textContent = arrow") &&
@@ -430,6 +430,9 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(rendSrc.includes("arrow: !kids ? null : (collapsed[t.id] ? '▶' : '▼')") &&
       rendSrc.includes('makeGrip(opts.arrow)'),
       'треугольники ставятся не по состоянию группы (▶/▼)');
+    assert.ok(rendSrc.includes('C.hasLiveKids(t.id)') &&
+      appSrc.includes('hasLiveKids: hasLiveKids'),
+      'треугольник смотрит и на выполненных детей (пустой треугольник)');
     assert.ok(html.includes('.grip.arrow'),
       'нет стиля треугольника');
     var iD = rendSrc.indexOf('Выполненные — под полем добавления');
@@ -663,7 +666,7 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(swBlock.includes('C.openDuration(taskId)'), 'свайп вправо не открывает время');
     assert.ok(swBlock.includes('swHadFlag = true') && swBlock.includes('!swHadFlag'),
       'возврат из-под раскрытого флага не глушит открытие времени');
-    assert.ok(appSrc.includes('var parent = hasKidsFull(taskId)') &&
+    assert.ok(appSrc.includes('var parent = hasLiveKids(taskId)') &&
       appSrc.includes('task.sumKids === false'),
       'родителю не открыта установка времени при снятом флаге суммы');
     assert.ok(rendSrc.includes('function lineEstMin') && rendSrc.includes('estMin: lineEstMin(t)'),
