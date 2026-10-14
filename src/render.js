@@ -299,6 +299,8 @@ function autosize(ta) {
 function updateDurchip(inp, chip) {
   if (!inp || !chip || !chip.style) return;
   chip.style.backgroundColor = 'transparent';
+  chip.style.right = '';
+  chip.style.bottom = '';
   var text = inp.value || '';
   if (!text) return;
   var m = document.createElement('div');
@@ -333,6 +335,11 @@ function updateDurchip(inp, chip) {
       var bg = cs.getPropertyValue('background-color') || '';
       chip.style.backgroundColor =
         (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') ? bg : '#fff';
+      /* В момент непрозрачности отъезжаем на 2px внутрь (v162): иначе
+       * метка закрашивает рамку поля и граница выглядит тонкой, а рядом
+       * у свободных меток — толстая. Рамка поля видна всегда одинаково. */
+      chip.style.right = '2px';
+      chip.style.bottom = '2px';
     }
   } catch (x) {} finally {
     if (m.parentNode) m.parentNode.removeChild(m);

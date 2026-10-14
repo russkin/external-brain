@@ -708,6 +708,9 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(rendSrc.includes("chip.style.backgroundColor = 'transparent'") &&
       rendSrc.includes("bg !== 'transparent'"),
       'фон метки не переключается прозрачный/непрозрачный');
+    assert.ok(rendSrc.includes("chip.style.right = '2px'") &&
+      rendSrc.includes("chip.style.bottom = '2px'"),
+      'метка не отъезжает внутрь при непрозрачности (тонкая граница)');
     assert.ok(rendSrc.includes('refreshDurchips(box)') &&
       appSrc.includes('if (chipN) updateDurchip(inp, chipN)'),
       'рендер/набор текста не пересчитывают фон метки');
