@@ -207,7 +207,7 @@ function diagText() {
   var lines = [
     'Внешний мозг ' + C.getVersion(),
     'Задач: ' + alive + ' · готово ' + (st.done || 0),
-    'Размер: ' + recs + ' записей (живых ' + liveN + ' · мёртвых ' + deadN +
+    'Размер: ' + recs + ' записей (живых ' + liveN + ' · удалённых ' + deadN +
       ' (с текстом ' + deadFull + ' · сжатых ' + deadMin + ')) · ' +
       (bytes < 1024 ? bytes + ' Б' : (bytes / 1024).toFixed(1) + ' КБ'),
     'Синк: ' + (sy.status || '—') + (sy.at ? ' (в ' + fmtDT(sy.at) + ')' : '')

@@ -862,13 +862,15 @@ describe('логика вызывается с state.tasks', () => {
       'чистка идёт не через логику с историей');
     var iP = appSrc.indexOf('function askPurgeTombs');
     var pBody = appSrc.slice(iP, iP + 1600);
-    assert.ok(pBody.includes('Мёртвых записей нет — сжимать нечего'),
+    assert.ok(pBody.includes('Все удалённые уже сжаты — сжимать нечего'),
       'нет честного «нечего сжимать»');
-    assert.ok(diagSrc.includes('(живых ') && diagSrc.includes('· мёртвых '),
-      'диагностика не показывает расклад живых/мёртвых');
+    assert.ok(appSrc.includes('t.min !== true'),
+      'сжатые маркеры считаются кандидатами (пустой прогон с синком)');
+    assert.ok(diagSrc.includes('(живых ') && diagSrc.includes('· удалённых '),
+      'диагностика не показывает расклад живых/удалённых');
     assert.ok(diagSrc.includes('с текстом') && diagSrc.includes('сжатых'),
-      'диагностика не расшивает мёртвых: с текстом и сжатых');
-    assert.ok(pBody.includes('сжато мёртвых: '),
+      'диагностика не расшивает удалённых: с текстом и сжатых');
+    assert.ok(pBody.includes('сжато удалённых: '),
       'сжатие не сообщает счётчик результата');
     assert.ok(pBody.indexOf('askConfirm(') !== -1 &&
       pBody.indexOf('askConfirm(', pBody.indexOf('askConfirm(') + 1) !== -1,

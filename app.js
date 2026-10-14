@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v168';
+  var APP_VERSION = 'v169';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -892,20 +892,22 @@
     var n = 0;
     for (var i = 0; i < state.tasks.length; i++) {
       var t = state.tasks[i];
-      if (t && t.deleted) n++;
+      /* Кандидаты — только несжатые (v169): маркеры с min уже сжаты,
+       * повторный прогон по ним лишь освежил бы метки и дёрнул синк. */
+      if (t && t.deleted && t.min !== true) n++;
     }
     if (!n) {
-      askText('Мёртвых записей нет — сжимать нечего', '', false).then(function () {});
+      askText('Все удалённые уже сжаты — сжимать нечего', '', false).then(function () {});
       return;
     }
-    askConfirm('Сжать ' + n + ' мёртвых записей? Текст удалённых сотрётся, останутся короткие метки, файл похудеет. Живые и выполненные не тронутся, отмена ↩ вернёт всё обратно. Продолжить?').then(function (ok) {
+    askConfirm('Сжать ' + n + ' удалённых записей? Текст удалённых сотрётся, останутся короткие метки, файл похудеет. Живые и выполненные не тронутся, отмена ↩ вернёт всё обратно. Продолжить?').then(function (ok) {
       if (!ok || !state) return;
       askConfirm('Точно сжать? Лучше сначала синкнуть ВСЕ устройства, включая забытые, — тогда чистка разлетится сразу. Забытые воскресить удалённое не смогут (метки свежее их копий). Сжимаем?').then(function (ok2) {
         if (!ok2 || !state) return;
         /* mutate возвращает результат fn — число сжатых (v167): видно,
          * что чистка реально сделала, а не просто «сжаты». */
         var squeezed = mutate(function () { return L.purgeTombstones(state.tasks, Date.now()); });
-        lastAction = 'сжато мёртвых: ' + (squeezed || 0);
+        lastAction = 'сжато удалённых: ' + (squeezed || 0);
         renderStatus();
       });
     });
