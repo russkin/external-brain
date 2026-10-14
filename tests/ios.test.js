@@ -653,8 +653,10 @@ describe('логика вызывается с state.tasks', () => {
     var cssD = iCss === -1 ? '' : html.slice(iCss, iCss + 320);
     assert.ok(cssD.includes('position: absolute'), 'метка не наложением на поле задачи');
     assert.ok(cssD.includes('background: transparent'), 'фон метки не прозрачный');
-    assert.ok(cssD.includes('right: 0') && cssD.includes('bottom: 0'),
-      'метка не прижата к правому и нижнему краю (v161)');
+    assert.ok(cssD.includes('right: 2px') && cssD.includes('bottom: 2px'),
+      'метка не с отступом 2px от краёв (v164)');
+    assert.ok(!rendSrc.includes("chip.style.right") && !rendSrc.includes("chip.style.bottom"),
+      'позиция метки дёргается из JS (размещение неодинаковое)');
     assert.ok(cssD.includes('align-items: center'),
       'цифры метки не по центру по вертикали');
     var iMk = rendSrc.indexOf('function makeLine');
@@ -708,9 +710,8 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(rendSrc.includes("chip.style.backgroundColor = 'transparent'") &&
       rendSrc.includes("bg !== 'transparent'"),
       'фон метки не переключается прозрачный/непрозрачный');
-    assert.ok(rendSrc.includes("chip.style.right = '2px'") &&
-      rendSrc.includes("chip.style.bottom = '2px'"),
-      'метка не отъезжает внутрь при непрозрачности (тонкая граница)');
+    assert.ok(!rendSrc.includes("chip.style.right") && !rendSrc.includes("chip.style.bottom"),
+      'позиция метки дёргается из JS (v162 откачен)');
     assert.ok(rendSrc.includes('refreshDurchips(box)') &&
       appSrc.includes('if (chipN) updateDurchip(inp, chipN)'),
       'рендер/набор текста не пересчитывают фон метки');
