@@ -1022,6 +1022,8 @@ describe('синк: триггеры и протокол', () => {
       'дотяжка в оттяжке-резинке не гасится (шапка улетает в середину списка)');
     assert.ok(rendSrc.includes('lastGoodOff') && rendSrc.includes('> 160'),
       'всплески offsetTop не отсекаются (шапка улетает в середине списка)');
+    assert.ok(rendSrc.includes('touchDown') && rendSrc.includes('touchcancel'),
+      'дотяжка не замораживается под пальцем (резинка уносит шапку)');
   });
   it('активная строка — в центр видимого места', () => {
     assert.ok(rendSrc.includes('function centerActiveLine'), 'нет центрирования активной строки');

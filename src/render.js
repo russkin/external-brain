@@ -433,10 +433,16 @@ var lastHeadLift = null;
 /* Последний принятый сдвиг (v160): всплески offsetTop в резинке/флике
  * отбрасываем сравнением с ним, а не с нулём. */
 var lastGoodOff = null;
+/* Палец на экране (v162): пока идёт касание, дотяжку не трогаем вовсе.
+ * Резинка существует только под пальцем; честные события (анимация
+ * клавиатуры, фокус, скролл по инерции после отпускания) приходят без
+ * касания и дотягиваются как раньше. Счётчик, а не флаг — мультитач. */
+var touchDown = 0;
 function syncHeaderLift() {
   var h = null;
   try { h = document.querySelector('header'); } catch (x) { h = null; }
   if (!h || !h.style) return;
+  if (touchDown > 0) return;
   var off = 0;
   try {
     var ae = document.activeElement;
@@ -564,6 +570,24 @@ function init(ctx) {
     document.addEventListener('focusin', syncHeaderLift);
     document.addEventListener('focusout', syncHeaderLift);
     document.addEventListener('focusin', centerActiveLine);
+    /* Счётчик касаний (v162): только считаем, ничего не отменяем —
+     * passive, скролл не трогаем. touchcancel обязательно, иначе
+     * прерванный жест заморозит дотяжку навсегда. */
+    try {
+      document.addEventListener('touchstart', function () { touchDown++; }, { passive: true });
+    } catch (x) {
+      try { document.addEventListener('touchstart', function () { touchDown++; }); } catch (e2) {}
+    }
+    function touchUp() { if (touchDown > 0) touchDown--; }
+    try {
+      document.addEventListener('touchend', touchUp, { passive: true });
+      document.addEventListener('touchcancel', touchUp, { passive: true });
+    } catch (x) {
+      try {
+        document.addEventListener('touchend', touchUp);
+        document.addEventListener('touchcancel', touchUp);
+      } catch (e2) {}
+    }
   } catch (x) {}
 }
 
