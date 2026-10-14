@@ -295,18 +295,20 @@ function autosize(ta) {
  * если последняя строка текста доезжает до метки — непрозрачный (цвета
  * поля), иначе два текста слипаются. Замер зеркалом поля (как в
  * getCaretCoordinates): браузер сам переносит строки, берём X конца
- * текста и сравниваем с левым краем метки. */
+ * текста и сравниваем с левым краем метки. Возвращает true, если текст
+ * доехал (v166: тогда вызывающий даёт полосу справа). */
 function updateDurchip(inp, chip) {
-  if (!inp || !chip || !chip.style) return;
+  if (!inp || !chip || !chip.style) return false;
   chip.style.backgroundColor = 'transparent';
   var text = inp.value || '';
-  if (!text) return;
+  if (!text) return false;
   var m = document.createElement('div');
+  var reached = false;
   try {
     var ir = inp.getBoundingClientRect();
     var cr = chip.getBoundingClientRect();
     /* Нет вёрстки (jsdom, скрытая строка) — остаёмся прозрачными. */
-    if (!ir.width || !cr.width) return;
+    if (!ir.width || !cr.width) return false;
     var cs = window.getComputedStyle(inp);
     var props = ['font-family', 'font-size', 'font-weight', 'font-style',
       'line-height', 'letter-spacing', 'word-spacing', 'text-indent',
@@ -335,10 +337,12 @@ function updateDurchip(inp, chip) {
         (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') ? bg : '#fff';
       /* Позицию не трогаем (v164): отступ 2px задан в CSS всем меткам —
        * размещение одинаковое и у свободных, и у накрытых. */
+      reached = true;
     }
   } catch (x) {} finally {
     if (m.parentNode) m.parentNode.removeChild(m);
   }
+  return reached;
 }
 
 /* Пересчитать метки внутри списка: после рендера, набора и ресайза. */
@@ -412,20 +416,24 @@ function renderLines() {
       }
     }
   }
-  /* Полоса справа под метку (v165): у строк С меткой правый паддинг поля
-   * равен ширине метки + зазор — текст не заезжает под неё никогда.
-   * Без метки — как было (паддинг из CSS). Замер после вставки в поток,
-   * иначе offsetWidth нулевой. Ставится ДО autosize: паддинг меняет
-   * переносы, высота считается уже с ним. Зеркалу updateDurchip новый
-   * паддинг виден (computed), замер честный. */
+  /* Полоса справа под метку (v166): ТОЛЬКО если текст реально заходит
+   * под неё (замер updateDurchip) — иначе поле как было. Порядок важен:
+   * замер без полосы → полоса по ширине метки → высота заново, т.к.
+   * переносы меняются → фон сбросить в прозрачный (накрытия больше нет).
+   * Набор текста и ресайз полосу не трогают (только фон): раскладка —
+   * дело рендера, иначе каретка прыгала бы при каждой букве. */
   var rowsQ = box.querySelectorAll ? box.querySelectorAll('.tline') : [];
   for (var qi = 0; qi < rowsQ.length; qi++) {
     var chipQ = rowsQ[qi].querySelector ? rowsQ[qi].querySelector('.durchip') : null;
     var inpQ = rowsQ[qi].querySelector ? rowsQ[qi].querySelector('.tinput') : null;
-    if (chipQ && inpQ) {
+    if (chipQ && inpQ && updateDurchip(inpQ, chipQ)) {
       var cw = 0;
       try { cw = chipQ.offsetWidth || 0; } catch (x) { cw = 0; }
-      if (cw > 0) inpQ.style.paddingRight = (cw + 12) + 'px';
+      if (cw > 0) {
+        inpQ.style.paddingRight = (cw + 12) + 'px';
+        autosize(inpQ);
+      }
+      chipQ.style.backgroundColor = 'transparent';
     }
   }
   /* Раскрыть многострочные по содержимому (в потоке, после вставки). */

@@ -661,6 +661,8 @@ describe('логика вызывается с state.tasks', () => {
       'цифры метки не по центру по вертикали');
     assert.ok(rendSrc.includes('paddingRight') && rendSrc.includes('offsetWidth'),
       'нет полосы справа под метку (текст заезжает под неё)');
+    assert.ok(rendSrc.includes('updateDurchip(inpQ, chipQ)'),
+      'полоса ставится без замера накрытия (всем подряд)');
     var iMk = rendSrc.indexOf('function makeLine');
     var mkBlock = rendSrc.slice(iMk, rendSrc.indexOf('function autosize'));
     assert.ok(mkBlock.includes('durchip'), 'строка не рисует метку времени');
