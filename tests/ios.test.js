@@ -1013,6 +1013,8 @@ describe('синк: триггеры и протокол', () => {
     assert.ok(rendSrc.includes("addEventListener('resize', syncHeaderLift") &&
       rendSrc.includes("addEventListener('scroll', syncHeaderLift"),
       'панелирование клавиатуры не слушается');
+    assert.ok(rendSrc.includes('pageYOffset < 0'),
+      'дотяжка в оттяжке-резинке не гасится (шапка улетает в середину списка)');
   });
   it('активная строка — в центр видимого места', () => {
     assert.ok(rendSrc.includes('function centerActiveLine'), 'нет центрирования активной строки');

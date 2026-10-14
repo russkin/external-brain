@@ -436,6 +436,18 @@ function syncHeaderLift() {
     }
   } catch (x) { off = 0; }
   var lift = off ? 'translateY(' + off + 'px)' : '';
+  /* Оттяжка-резинка (v159, iPhone Safari): в момент pull-down layout
+   * уезжает в минус, а visualViewport.offsetTop врёт выбросом на сотни
+   * px — шапка улетала в середину списка. Пока страница в оттяжке
+   * (pageYOffset < 0), дотяжку не трогаем: после отпускания прилетит
+   * scroll/resize и всё пересчитается само. Потолка нет специально:
+   * при глубоком скролле с клавиатурой честный сдвиг больше высоты
+   * шапки, потолок сломал бы нормальное слежение. */
+  try {
+    var sy = 0;
+    try { sy = window.pageYOffset || 0; } catch (e2) { sy = 0; }
+    if (sy < 0) return;
+  } catch (x) {}
   if (lift === lastHeadLift) return;
   lastHeadLift = lift;
   h.style.transform = lift;
