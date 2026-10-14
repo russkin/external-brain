@@ -625,8 +625,23 @@ describe('сжатие могил (purgeTombstones)', () => {
     assert.equal(n[0].deleted, true);
     assert.equal(n[0].ts, 500);
     assert.equal(n[0].min, true, 'флаг сжатия потерян нормализацией');
+    assert.equal('title' in n[0], false, 'нормализация раздула маркер полями');
     assert.equal(L.purgeTombstones(null), 0);
     assert.equal(L.purgeTombstones([]), 0);
+  });
+  it('сжатие не расползается обратно (v171)', () => {
+    const t = [{ id: 'a', title: 'Жива', status: 'todo', ts: 100, createdAt: 100, updatedAt: 100 },
+      { id: 'c', title: 'Мусор', status: 'todo', ts: 200, createdAt: 200, updatedAt: 200, deleted: true }];
+    assert.equal(L.purgeTombstones(t, 500), 1);
+    const before = JSON.stringify(L.getTask(t, 'c')).length;
+    const afterLoad = L.normalizeTasks(JSON.parse(JSON.stringify(t)));
+    const afterMerge = L.mergeTasks(afterLoad, []);
+    const ml = L.getTask(afterLoad, 'c');
+    const mc = L.getTask(afterMerge, 'c');
+    assert.ok(JSON.stringify(ml).length <= before, 'загрузка раздула маркеры');
+    assert.ok(JSON.stringify(mc).length <= before, 'слияние раздуло маркеры');
+    assert.equal(mc.min, true);
+    assert.equal('title' in mc, false);
   });
   it('флаг min: только у маркеров, обычным не пишется', () => {
     const n = L.normalizeTask({ id: 'a', title: 'Жива', status: 'todo' });

@@ -443,6 +443,15 @@ function normalizeTask(t) {
   if (!t || typeof t !== 'object') return null;
   var id = String(t.id || '');
   if (!id) return null;
+  /* Сжатая могила — форму НЕ раздуваем (v171): иначе каждая загрузка
+   * и каждое слияние превращали маркер ~100 Б в полную могилу ~200 Б,
+   * и файл рос обратно сразу после сжатия (91.6 КБ при всех сжатых).
+   * Возвращаем канонический минимум; ts/updatedAt страхуют друг друга. */
+  if (t.min === true && t.deleted) {
+    var mts = toInt(t.ts, toInt(t.updatedAt, 0));
+    return { id: id.slice(0, 64), deleted: true, ts: mts,
+      updatedAt: toInt(t.updatedAt, mts), min: true };
+  }
   /* Живой статус один — 'todo' (T-cleanup-inbox-next): 'done' остаётся,
    * всё остальное ('inbox', 'next', 'waiting', 'someday', мусор) — в 'todo'.
    * Старые устройства пишут 'inbox'/'next' — после обновления читаются
@@ -520,6 +529,12 @@ function normalizeTasks(tasks) {
 /* --- Позадачное слияние LWW --- */
 
 function cloneTask(t) {
+  /* Маркер копируем минимумом (v171, та же причина, что в normalizeTask). */
+  if (t.min === true && t.deleted) {
+    var mts = toInt(t.ts, toInt(t.updatedAt, 0));
+    return { id: t.id, deleted: true, ts: mts,
+      updatedAt: toInt(t.updatedAt, mts), min: true };
+  }
   var c = {
     id: t.id, title: t.title, status: t.status, indent: normIndent(t.indent),
     estMin: normEst(t.estMin), sumKids: t.sumKids !== false,
