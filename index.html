@@ -88,11 +88,12 @@
       user-select: text; -webkit-user-select: text; touch-action: pan-y; }
     .tinput::placeholder { color: #aaa; }
     .tinput.is-done { text-decoration: line-through; color: #888; }
-    /* Метка времени — наложение в правом нижнем углу ПОЛЯ задачи.
-     * Фон по умолчанию прозрачный; если текст доезжает до метки,
-     * app.js (updateDurchip) делает его непрозрачным — цвета поля. */
-    .durchip { position: absolute; right: 8px; bottom: 5px; z-index: 1;
-      padding: 4px 9px; font-size: 12px; line-height: 1.1; color: #2c6cb0;
+    /* Метка времени — в правом нижнем углу поля впритык (v161):
+     * границы к правому и нижнему краю задачи, цифры по центру
+     * по вертикали (inline-flex + align-items). */
+    .durchip { position: absolute; right: 0; bottom: 0; z-index: 1;
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 24px; padding: 0 9px; font-size: 12px; line-height: 1; color: #2c6cb0;
       background: transparent; border: 1px solid #4a90e2; border-radius: 999px;
       white-space: nowrap; }
     #durCtl { display: none; flex-direction: column; gap: 10px; margin-bottom: 12px; }

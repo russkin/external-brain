@@ -653,8 +653,10 @@ describe('логика вызывается с state.tasks', () => {
     var cssD = iCss === -1 ? '' : html.slice(iCss, iCss + 320);
     assert.ok(cssD.includes('position: absolute'), 'метка не наложением на поле задачи');
     assert.ok(cssD.includes('background: transparent'), 'фон метки не прозрачный');
-    assert.ok(cssD.includes('right: 8px') && cssD.includes('bottom: 5px'),
-      'метка не в правом нижнем углу поля');
+    assert.ok(cssD.includes('right: 0') && cssD.includes('bottom: 0'),
+      'метка не прижата к правому и нижнему краю (v161)');
+    assert.ok(cssD.includes('align-items: center'),
+      'цифры метки не по центру по вертикали');
     var iMk = rendSrc.indexOf('function makeLine');
     var mkBlock = rendSrc.slice(iMk, rendSrc.indexOf('function autosize'));
     assert.ok(mkBlock.includes('durchip'), 'строка не рисует метку времени');
