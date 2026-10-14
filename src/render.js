@@ -136,23 +136,26 @@ function makeGrip(arrow) {
  * без детей задача снова показывает своё время. Появление метки у родителя
  * — только если сумма > 0 (хотя бы у одной задачи первого вложения
  * задано время).
- * Флаг «Суммировать из вложенных» снят (sumKids === false) — родитель
- * показывает своё estMin вручную, как лист, поддерево не считается. */
+ * Обход — по ЖИВОМУ порядку (v173), как hasLiveKids: выполненные живут
+ * в отдельной секции, но в полном порядке лежат на своих createdAt —
+ * такая строка между родителем и живыми детьми рвала обход (break)
+ * и гасила сумму, хотя на экране ветка цела. Флаг «Суммировать
+ * из вложенных» снят (sumKids === false) — родитель показывает своё
+ * estMin вручную, как лист, поддерево не считается. */
 function lineEstMin(t) {
   if (!t) return 0;
-  var full = C.fullList();
+  var live = C.lineTasks();
   var pi = -1;
-  for (var i = 0; i < full.length; i++) {
-    if (full[i].id === t.id) { pi = i; break; }
+  for (var i = 0; i < live.length; i++) {
+    if (live[i].id === t.id) { pi = i; break; }
   }
-  if (pi === -1 || !L.hasKids(full, pi) || t.sumKids === false) return t.estMin || 0;
-  var pin = C.lineIndent(full[pi]);
+  if (pi === -1 || !L.hasKids(live, pi) || t.sumKids === false) return t.estMin || 0;
+  var pin = C.lineIndent(live[pi]);
   var sum = 0;
-  for (var j = pi + 1; j < full.length; j++) {
-    var ij = C.lineIndent(full[j]);
+  for (var j = pi + 1; j < live.length; j++) {
+    var ij = C.lineIndent(live[j]);
     if (ij <= pin) break;
-    if (full[j].status === 'done') continue;
-    if (ij === pin + 1) sum += lineEstMin(full[j]);
+    if (ij === pin + 1) sum += lineEstMin(live[j]);
   }
   return sum;
 }

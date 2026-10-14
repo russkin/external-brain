@@ -687,11 +687,13 @@ describe('логика вызывается с state.tasks', () => {
       'родителю не открыта установка времени при снятом флаге суммы');
     assert.ok(rendSrc.includes('function lineEstMin') && rendSrc.includes('estMin: lineEstMin(t)'),
       'метка родителя не считается автоматически');
-    assert.ok(rendSrc.includes('sum += lineEstMin(full[j])') && rendSrc.includes('ij === pin + 1'),
+    assert.ok(rendSrc.includes('sum += lineEstMin(live[j])') && rendSrc.includes('ij === pin + 1'),
       'сумма идёт не по первому вложению');
-    /* v71: выполненные вложения не входят в авто-сумму родителя. */
-    assert.ok(rendSrc.includes("if (full[j].status === 'done') continue;"),
-      'выполненные вложения считаются в метке времени родителя');
+    /* v71: выполненные вложения не входят в авто-сумму родителя — теперь
+     * структурно: сумма идёт по живому порядку, выполненных там нет. */
+    assert.ok(rendSrc.includes('var live = C.lineTasks()') &&
+      !rendSrc.includes('lineEstMin(full[j])'),
+      'сумма идёт по полному порядку — done-строка между рвала ветку (v173)');
     assert.ok(swBlock.includes('_swBlockUntil'), 'клик после свайпа не заглушен (двойная модалка/фокус)');
     assert.ok(swBlock.includes('div._swRArm = false'), 'отменённый свайп не оставляет флаг');
     assert.ok(appSrc.includes('function askDuration'), 'нет модалки времени');
