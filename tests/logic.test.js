@@ -606,8 +606,8 @@ describe('сжатие могил (purgeTombstones)', () => {
     assert.equal(L.purgeTombstones(t, 500), 2, 'сжаты все могилы, не только с текстом');
     assert.equal(t[0].title, 'Жива', 'живая тронута');
     assert.equal(t[1].status, 'done', 'выполненная тронута');
-    assert.deepEqual(t[2], { id: 'c', deleted: true, ts: 500, updatedAt: 500 });
-    assert.deepEqual(t[3], { id: 'd', deleted: true, ts: 500, updatedAt: 500 });
+    assert.deepEqual(t[2], { id: 'c', deleted: true, ts: 500, updatedAt: 500, min: true });
+    assert.deepEqual(t[3], { id: 'd', deleted: true, ts: 500, updatedAt: 500, min: true });
   });
   it('метка свежее (max) — забытое устройство не воскресит', () => {
     const t = [tomb('c', 'Мусор', 900)];
@@ -618,13 +618,23 @@ describe('сжатие могил (purgeTombstones)', () => {
     assert.equal(m[0].deleted, true, 'живая копия с забытого устройства воскресла');
   });
   it('маркер переживает нормализацию и слияние', () => {
-    const t = [{ id: 'c', deleted: true, ts: 500, updatedAt: 500 }];
+    const t = [{ id: 'c', deleted: true, ts: 500, updatedAt: 500, min: true }];
     const n = L.normalizeTasks(t);
     assert.equal(n.length, 1);
     assert.equal(n[0].deleted, true);
     assert.equal(n[0].ts, 500);
+    assert.equal(n[0].min, true, 'флаг сжатия потерян нормализацией');
     assert.equal(L.purgeTombstones(null), 0);
     assert.equal(L.purgeTombstones([]), 0);
+  });
+  it('флаг min: только у маркеров, обычным не пишется', () => {
+    const n = L.normalizeTask({ id: 'a', title: 'Жива', status: 'inbox' });
+    assert.equal('min' in n, false, 'обычной задаче дописан лишний ключ');
+    assert.equal(L.normalizeTask({ id: 'c', deleted: true, ts: 1, updatedAt: 1 }).min, undefined);
+    const c = L.mergeTasks(
+      [{ id: 'c', title: 'Мусор', status: 'inbox', ts: 100, createdAt: 100, updatedAt: 100 }],
+      [{ id: 'c', deleted: true, ts: 500, updatedAt: 500, min: true }]);
+    assert.equal(c[0].min, true, 'флаг не пережил слияние');
   });
 });
 

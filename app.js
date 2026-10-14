@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v166';
+  var APP_VERSION = 'v167';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -902,8 +902,10 @@
       if (!ok || !state) return;
       askConfirm('Точно сжать? Лучше сначала синкнуть ВСЕ устройства, включая забытые, — тогда чистка разлетится сразу. Забытые воскресить удалённое не смогут (метки свежее их копий). Сжимаем?').then(function (ok2) {
         if (!ok2 || !state) return;
-        mutate(function () { L.purgeTombstones(state.tasks, Date.now()); });
-        lastAction = 'могилы сжаты';
+        /* mutate возвращает результат fn — число сжатых (v167): видно,
+         * что чистка реально сделала, а не просто «сжаты». */
+        var squeezed = mutate(function () { return L.purgeTombstones(state.tasks, Date.now()); });
+        lastAction = 'сжато мёртвых: ' + (squeezed || 0);
         renderStatus();
       });
     });

@@ -211,7 +211,9 @@ function removeTask(tasks, id, nowMs) {
 }
 
 /* Сжатие могил: tombstone заменяется минимальным маркером
- * {id, deleted, ts/updatedAt} — вес файла составляют могилы (текст
+ * {id, deleted, ts/updatedAt, min:true} (флаг — чтобы диагностика
+ * отличала сжатые от полных; whitelist его хранит, старые версии
+ * вычищают) — вес файла составляют могилы (текст
  * и поля), поэтому сжимаются ВСЕ могилы, а не только с текстом: иначе
  * счёт «живые + сжатие» не сходится с размером файла и путает.
  * Маркер свежее (ts = max(now, старая)): забытое устройство с живой копией
@@ -226,7 +228,7 @@ function purgeTombstones(tasks, nowMs) {
     if (!t || !t.id || !t.deleted) continue;
     var ts = toInt(t.ts, 0);
     if (now > ts) ts = now;
-    tasks[i] = { id: String(t.id).slice(0, 64), deleted: true, ts: ts, updatedAt: ts };
+    tasks[i] = { id: String(t.id).slice(0, 64), deleted: true, ts: ts, updatedAt: ts, min: true };
     n++;
   }
   return n;
@@ -454,7 +456,7 @@ function normalizeTask(t) {
   var doneAt = (status === 'done') ? toInt(t.doneAt, updatedAt) : 0;
   var ts = toInt(t.ts, updatedAt);
   var indent = normIndent(t.indent);
-  return {
+  var n = {
     id: id.slice(0, 64),
     title: normTitle(t.title),
     status: status,
@@ -467,6 +469,12 @@ function normalizeTask(t) {
     ts: ts,
     deleted: !!t.deleted
   };
+  /* Флаг сжатой могилы (v167): только если стоит — обычным задачам
+   * и полным могилам лишнего ключа не пишем (файл не пухнет, тесты
+   * с deepEqual целы). Старые версии флаг вычищают — их сжатые могилы
+   * считаются полными, лечится повторным сжатием на новой версии. */
+  if (t.min === true) n.min = true;
+  return n;
 }
 
 /* Восстановление из копии: пропавшие живые задачи хоронятся tombstone'ом
@@ -515,12 +523,14 @@ function normalizeTasks(tasks) {
 /* --- Позадачное слияние LWW --- */
 
 function cloneTask(t) {
-  return {
+  var c = {
     id: t.id, title: t.title, status: t.status, indent: normIndent(t.indent),
     estMin: normEst(t.estMin), sumKids: t.sumKids !== false,
     createdAt: t.createdAt,
     updatedAt: t.updatedAt, doneAt: t.doneAt, ts: t.ts || 0, deleted: !!t.deleted
   };
+  if (t.min === true) c.min = true;
+  return c;
 }
 
 /* Для каждой задачи побеждает свежая ts; при равных — локальная. */

@@ -866,6 +866,10 @@ describe('логика вызывается с state.tasks', () => {
       'нет честного «нечего сжимать»');
     assert.ok(diagSrc.includes('(живых ') && diagSrc.includes('· мёртвых '),
       'диагностика не показывает расклад живых/мёртвых');
+    assert.ok(diagSrc.includes('с текстом') && diagSrc.includes('сжатых'),
+      'диагностика не расшивает мёртвых: с текстом и сжатых');
+    assert.ok(pBody.includes('сжато мёртвых: '),
+      'сжатие не сообщает счётчик результата');
     assert.ok(pBody.indexOf('askConfirm(') !== -1 &&
       pBody.indexOf('askConfirm(', pBody.indexOf('askConfirm(') + 1) !== -1,
       'нет двойного предупреждения');
