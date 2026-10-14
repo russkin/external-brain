@@ -449,19 +449,16 @@ function renderLines() {
  * (фокус в поле), дотягиваем шапку вниз на величину сдвига; без клавиатуры
  * и вне набора — без transform. Как searchLift в src/search.js. */
 var lastHeadLift = null;
-/* Последний принятый сдвиг (v160): всплески offsetTop в резинке/флике
- * отбрасываем сравнением с ним, а не с нулём. */
-var lastGoodOff = null;
-/* Палец на экране (v162): пока идёт касание, дотяжку не трогаем вовсе.
- * Резинка существует только под пальцем; честные события (анимация
- * клавиатуры, фокус, скролл по инерции после отпускания) приходят без
- * касания и дотягиваются как раньше. Счётчик, а не флаг — мультитач. */
-var touchDown = 0;
+/* Снапшот вместо живого трекинга (v170, ветка fix/header-focus-snapshot):
+ * замер offsetTop — один раз после фокуса (клавиатура ~250мс) и сброс
+ * после потери фокуса (~150мс). Подписок на scroll/resize вьюпорта НЕТ:
+ * их события опаздывают и врут в резинке/momentum — резинке тогда
+ * нечего читать, шапка стоит как вкопаная. */
+var focusTimer = null;
 function syncHeaderLift() {
   var h = null;
   try { h = document.querySelector('header'); } catch (x) { h = null; }
   if (!h || !h.style) return;
-  if (touchDown > 0) return;
   var off = 0;
   try {
     var ae = document.activeElement;
@@ -470,30 +467,18 @@ function syncHeaderLift() {
       if (!(off > 1)) off = 0;
     }
   } catch (x) { off = 0; }
-  if (off > 0) {
-    /* Оттяжка-резинка (v159): в момент pull-down layout уезжает в минус —
-     * тогда дотяжку не трогаем вовсе. */
-    try {
-      var sy = 0;
-      try { sy = window.pageYOffset || 0; } catch (e2) { sy = 0; }
-      if (sy < 0) return;
-    } catch (x) {}
-    /* Всплеск (v160): одиночный прыжок offsetTop на сотни px за одно
-     * событие — это резинка/флик, а не честный сдвиг (честные идут
-     * потоком мелких шагов: анимация клавиатуры, скролл). Такой прыжок
-     * игнорируем, ждём settled-события — оно вернётся около lastGoodOff
-     * и шапка встанет сама. Порог 160: кадровый сдвиг даже лютого флика
-     * меньше, а шапка ~110. Потолка нет специально: честный сдвиг при
-     * глубоком скролле больше высоты шапки. */
-    if (lastGoodOff !== null && Math.abs(off - lastGoodOff) > 160) return;
-    lastGoodOff = off;
-  } else {
-    lastGoodOff = null;
-  }
   var lift = off ? 'translateY(' + off + 'px)' : '';
   if (lift === lastHeadLift) return;
   lastHeadLift = lift;
   h.style.transform = lift;
+}
+function snapHeaderSoon() {
+  if (focusTimer) { try { clearTimeout(focusTimer); } catch (x) {} focusTimer = null; }
+  try { focusTimer = setTimeout(syncHeaderLift, 250); } catch (x) {}
+}
+function resetHeaderSoon() {
+  if (focusTimer) { try { clearTimeout(focusTimer); } catch (x) {} focusTimer = null; }
+  try { focusTimer = setTimeout(syncHeaderLift, 150); } catch (x) {}
 }
 
 /* Активная строка — в центр видимого места: браузер подвозит поле минимумом,
@@ -579,34 +564,13 @@ function init(ctx) {
   C = ctx;
   L = ctx.L;
   INDENT_STEP = ctx.INDENT_STEP;
-  /* Клавиатура/панелирование: везём шапку за визуальным вьюпортом,
-   * только пока идёт набор. Прямые подписки (как в жестах): id нет. */
+  /* Снапшот шапки (v170): замер один раз после фокуса, сброс после
+   * потери фокуса. Подписок на scroll/resize вьюпорта НЕТ (см. выше).
+   * Центровка активной строки — сразу, без задержки. */
   try {
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', syncHeaderLift);
-      window.visualViewport.addEventListener('scroll', syncHeaderLift);
-    }
-    document.addEventListener('focusin', syncHeaderLift);
-    document.addEventListener('focusout', syncHeaderLift);
+    document.addEventListener('focusin', snapHeaderSoon);
+    document.addEventListener('focusout', resetHeaderSoon);
     document.addEventListener('focusin', centerActiveLine);
-    /* Счётчик касаний (v162): только считаем, ничего не отменяем —
-     * passive, скролл не трогаем. touchcancel обязательно, иначе
-     * прерванный жест заморозит дотяжку навсегда. */
-    try {
-      document.addEventListener('touchstart', function () { touchDown++; }, { passive: true });
-    } catch (x) {
-      try { document.addEventListener('touchstart', function () { touchDown++; }); } catch (e2) {}
-    }
-    function touchUp() { if (touchDown > 0) touchDown--; }
-    try {
-      document.addEventListener('touchend', touchUp, { passive: true });
-      document.addEventListener('touchcancel', touchUp, { passive: true });
-    } catch (x) {
-      try {
-        document.addEventListener('touchend', touchUp);
-        document.addEventListener('touchcancel', touchUp);
-      } catch (e2) {}
-    }
   } catch (x) {}
 }
 
