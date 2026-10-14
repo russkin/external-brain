@@ -412,6 +412,22 @@ function renderLines() {
       }
     }
   }
+  /* Полоса справа под метку (v165): у строк С меткой правый паддинг поля
+   * равен ширине метки + зазор — текст не заезжает под неё никогда.
+   * Без метки — как было (паддинг из CSS). Замер после вставки в поток,
+   * иначе offsetWidth нулевой. Ставится ДО autosize: паддинг меняет
+   * переносы, высота считается уже с ним. Зеркалу updateDurchip новый
+   * паддинг виден (computed), замер честный. */
+  var rowsQ = box.querySelectorAll ? box.querySelectorAll('.tline') : [];
+  for (var qi = 0; qi < rowsQ.length; qi++) {
+    var chipQ = rowsQ[qi].querySelector ? rowsQ[qi].querySelector('.durchip') : null;
+    var inpQ = rowsQ[qi].querySelector ? rowsQ[qi].querySelector('.tinput') : null;
+    if (chipQ && inpQ) {
+      var cw = 0;
+      try { cw = chipQ.offsetWidth || 0; } catch (x) { cw = 0; }
+      if (cw > 0) inpQ.style.paddingRight = (cw + 12) + 'px';
+    }
+  }
   /* Раскрыть многострочные по содержимому (в потоке, после вставки). */
   var areas = box.querySelectorAll ? box.querySelectorAll('.tinput') : [];
   for (var q = 0; q < areas.length; q++) autosize(areas[q]);

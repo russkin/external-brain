@@ -434,14 +434,14 @@ function tokenWarnLevel(exp, nowMs) {
   return 0;
 }
 
-/* Метка времени для строки: 0 → '', 30 → '30 м', 60 → '1ч', 90 → '1ч 30м'. */
+/* Метка времени для строки: 0 → '', 30 → '30м', 60 → '1ч', 90 → '1ч 30м'. */
 function fmtDur(mins) {
   var m = toInt(mins, 0);
   if (m <= 0) return '';
   var h = Math.floor(m / 60), r = m % 60;
   if (h && r) return h + 'ч ' + r + 'м';
   if (h) return h + 'ч';
-  return r + ' м';
+  return r + 'м';
 }
 
 function normalizeTask(t) {

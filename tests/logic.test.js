@@ -366,7 +366,7 @@ describe('нормализация', () => {
     assert.equal(L.fmtDur(0), '');
     assert.equal(L.fmtDur(undefined), '');
     assert.equal(L.fmtDur(-10), '');
-    assert.equal(L.fmtDur(30), '30 м');
+    assert.equal(L.fmtDur(30), '30м');
     assert.equal(L.fmtDur(60), '1ч');
     assert.equal(L.fmtDur(90), '1ч 30м');
     assert.equal(L.fmtDur(600), '10ч');

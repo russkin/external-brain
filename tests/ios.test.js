@@ -659,6 +659,8 @@ describe('логика вызывается с state.tasks', () => {
       'позиция метки дёргается из JS (размещение неодинаковое)');
     assert.ok(cssD.includes('align-items: center'),
       'цифры метки не по центру по вертикали');
+    assert.ok(rendSrc.includes('paddingRight') && rendSrc.includes('offsetWidth'),
+      'нет полосы справа под метку (текст заезжает под неё)');
     var iMk = rendSrc.indexOf('function makeLine');
     var mkBlock = rendSrc.slice(iMk, rendSrc.indexOf('function autosize'));
     assert.ok(mkBlock.includes('durchip'), 'строка не рисует метку времени');
