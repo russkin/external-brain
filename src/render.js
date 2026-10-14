@@ -423,6 +423,9 @@ function renderLines() {
  * (фокус в поле), дотягиваем шапку вниз на величину сдвига; без клавиатуры
  * и вне набора — без transform. Как searchLift в src/search.js. */
 var lastHeadLift = null;
+/* Последний принятый сдвиг (v160): всплески offsetTop в резинке/флике
+ * отбрасываем сравнением с ним, а не с нулём. */
+var lastGoodOff = null;
 function syncHeaderLift() {
   var h = null;
   try { h = document.querySelector('header'); } catch (x) { h = null; }
@@ -435,19 +438,27 @@ function syncHeaderLift() {
       if (!(off > 1)) off = 0;
     }
   } catch (x) { off = 0; }
+  if (off > 0) {
+    /* Оттяжка-резинка (v159): в момент pull-down layout уезжает в минус —
+     * тогда дотяжку не трогаем вовсе. */
+    try {
+      var sy = 0;
+      try { sy = window.pageYOffset || 0; } catch (e2) { sy = 0; }
+      if (sy < 0) return;
+    } catch (x) {}
+    /* Всплеск (v160): одиночный прыжок offsetTop на сотни px за одно
+     * событие — это резинка/флик, а не честный сдвиг (честные идут
+     * потоком мелких шагов: анимация клавиатуры, скролл). Такой прыжок
+     * игнорируем, ждём settled-события — оно вернётся около lastGoodOff
+     * и шапка встанет сама. Порог 160: кадровый сдвиг даже лютого флика
+     * меньше, а шапка ~110. Потолка нет специально: честный сдвиг при
+     * глубоком скролле больше высоты шапки. */
+    if (lastGoodOff !== null && Math.abs(off - lastGoodOff) > 160) return;
+    lastGoodOff = off;
+  } else {
+    lastGoodOff = null;
+  }
   var lift = off ? 'translateY(' + off + 'px)' : '';
-  /* Оттяжка-резинка (v159, iPhone Safari): в момент pull-down layout
-   * уезжает в минус, а visualViewport.offsetTop врёт выбросом на сотни
-   * px — шапка улетала в середину списка. Пока страница в оттяжке
-   * (pageYOffset < 0), дотяжку не трогаем: после отпускания прилетит
-   * scroll/resize и всё пересчитается само. Потолка нет специально:
-   * при глубоком скролле с клавиатурой честный сдвиг больше высоты
-   * шапки, потолок сломал бы нормальное слежение. */
-  try {
-    var sy = 0;
-    try { sy = window.pageYOffset || 0; } catch (e2) { sy = 0; }
-    if (sy < 0) return;
-  } catch (x) {}
   if (lift === lastHeadLift) return;
   lastHeadLift = lift;
   h.style.transform = lift;

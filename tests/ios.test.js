@@ -1013,8 +1013,10 @@ describe('синк: триггеры и протокол', () => {
     assert.ok(rendSrc.includes("addEventListener('resize', syncHeaderLift") &&
       rendSrc.includes("addEventListener('scroll', syncHeaderLift"),
       'панелирование клавиатуры не слушается');
-    assert.ok(rendSrc.includes('pageYOffset < 0'),
+    assert.ok(rendSrc.includes('sy < 0'),
       'дотяжка в оттяжке-резинке не гасится (шапка улетает в середину списка)');
+    assert.ok(rendSrc.includes('lastGoodOff') && rendSrc.includes('> 160'),
+      'всплески offsetTop не отсекаются (шапка улетает в середине списка)');
   });
   it('активная строка — в центр видимого места', () => {
     assert.ok(rendSrc.includes('function centerActiveLine'), 'нет центрирования активной строки');
