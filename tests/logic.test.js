@@ -1,5 +1,5 @@
 'use strict';
-/* Unit-тесты чистой логики (src/logic.js): входящие, правка полей, слияние. */
+/* Unit-тесты чистой логики (src/logic.js): живые, правка полей, слияние. */
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -11,13 +11,13 @@ function mk(tasks, title, now, opts) {
   return L.createTask(tasks, title, now, opts);
 }
 
-describe('создание и инбокс', () => {
-  it('новое падает в инбокс', () => {
+describe('создание и живые', () => {
+  it('новое падает в живые (todo)', () => {
     const t = L.blankTasks();
     const task = mk(t, 'Купить хлеб', 1000, { id: 'a1' });
-    assert.equal(task.status, 'inbox');
+    assert.equal(task.status, 'todo');
     assert.equal(task.title, 'Купить хлеб');
-    assert.equal(L.inboxCount(t), 1);
+    assert.equal(L.todoCount(t), 1);
   });
   it('пустой заголовок — null, массив не растёт', () => {
     const t = L.blankTasks();
@@ -55,10 +55,10 @@ describe('создание и инбокс', () => {
 });
 
 describe('правка полей (clarify)', () => {
-  it('раскладывает инбокс по статусам', () => {
+  it('раскладывает по статусам', () => {
     const t = L.blankTasks();
     mk(t, 'Дело', 1000, { id: 'a' });
-    for (const s of ['next', 'done']) {
+    for (const s of ['todo', 'done']) {
       L.clarifyTask(t, 'a', { status: s }, 2000);
       assert.equal(L.getTask(t, 'a').status, s);
     }
@@ -66,15 +66,15 @@ describe('правка полей (clarify)', () => {
   it('невалидный статус игнорируется', () => {
     const t = L.blankTasks();
     mk(t, 'Дело', 1000, { id: 'a' });
-    L.clarifyTask(t, 'a', { status: 'todo' }, 2000);
-    assert.equal(L.getTask(t, 'a').status, 'inbox');
+    L.clarifyTask(t, 'a', { status: 'someday' }, 2000);
+    assert.equal(L.getTask(t, 'a').status, 'todo');
   });
   it('done ставит doneAt, уход из done сбрасывает', () => {
     const t = L.blankTasks();
     mk(t, 'Дело', 1000, { id: 'a' });
     L.clarifyTask(t, 'a', { status: 'done' }, 2000);
     assert.equal(L.getTask(t, 'a').doneAt, 2000);
-    L.clarifyTask(t, 'a', { status: 'next' }, 3000);
+    L.clarifyTask(t, 'a', { status: 'todo' }, 3000);
     assert.equal(L.getTask(t, 'a').doneAt, 0);
   });
   it('переименование; поля project, frog и slicesTotal выпилены', () => {
@@ -97,9 +97,9 @@ describe('правка полей (clarify)', () => {
   it('чужая и удалённая задачи — null', () => {
     const t = L.blankTasks();
     mk(t, 'Дело', 1000, { id: 'a' });
-    assert.equal(L.clarifyTask(t, 'zzz', { status: 'next' }, 2000), null);
+    assert.equal(L.clarifyTask(t, 'zzz', { status: 'todo' }, 2000), null);
     L.removeTask(t, 'a', 2000);
-    assert.equal(L.clarifyTask(t, 'a', { status: 'next' }, 3000), null);
+    assert.equal(L.clarifyTask(t, 'a', { status: 'todo' }, 3000), null);
   });
   it('estMin: ставится через patch, клампится 0..59999, метки обновляются', () => {
     const t = L.blankTasks();
@@ -135,24 +135,24 @@ describe('готово / вернуть / удалить', () => {
     assert.equal(L.getTask(t, 'a').status, 'done');
     assert.equal(L.doneList(t).length, 1);
     L.reopenTask(t, 'a', 3000);
-    assert.equal(L.getTask(t, 'a').status, 'next');
+    assert.equal(L.getTask(t, 'a').status, 'todo');
     assert.equal(L.getTask(t, 'a').doneAt, 0);
   });
   it('reopen не-done возвращает как есть', () => {
     const t = L.blankTasks();
     mk(t, 'Дело', 1000, { id: 'a' });
     const r = L.reopenTask(t, 'a', 2000);
-    assert.equal(r.status, 'inbox');
+    assert.equal(r.status, 'todo');
   });
   it('удаление — tombstone, списки его не видят', () => {
     const t = L.blankTasks();
     mk(t, 'Дело', 1000, { id: 'a' });
-    L.clarifyTask(t, 'a', { status: 'next' }, 1500);
+    L.clarifyTask(t, 'a', { status: 'todo' }, 1500);
     L.removeTask(t, 'a', 2000);
     const g = L.getTask(t, 'a');
     assert.equal(g.deleted, true);
-    assert.equal(L.nextList(t).length, 0);
-    assert.equal(L.inboxCount(t), 0);
+    assert.equal(L.todoList(t).length, 0);
+    assert.equal(L.todoCount(t), 0);
   });
   it('операции над чужими — null', () => {
     const t = L.blankTasks();
@@ -176,24 +176,24 @@ describe('выпиленное: фокус и нарезка', () => {
     assert.equal(L.setFrog, undefined);
     assert.equal(typeof L.setFrog, 'undefined');
   });
-  it('next: frog не пишется и не влияет на порядок', () => {
+  it('todo: frog не пишется и не влияет на порядок', () => {
     const t = L.blankTasks();
     mk(t, 'Обычное', 1000, { id: 'a' });
     mk(t, 'Второе', 2000, { id: 'b' });
-    L.clarifyTask(t, 'a', { status: 'next', frog: true }, 3000);
-    L.clarifyTask(t, 'b', { status: 'next' }, 3000);
+    L.clarifyTask(t, 'a', { status: 'todo', frog: true }, 3000);
+    L.clarifyTask(t, 'b', { status: 'todo' }, 3000);
     assert.equal(L.getTask(t, 'a').frog, undefined);
-    const nx = L.nextList(t);
+    const nx = L.todoList(t);
     assert.equal(nx[0].id, 'a');
     assert.equal(nx[1].id, 'b');
   });
-  it('порядок следующих — по времени создания', () => {
+  it('порядок живых — по времени создания', () => {
     const t = L.blankTasks();
     mk(t, 'Второе', 2000, { id: 'b' });
     mk(t, 'Первое', 1000, { id: 'a' });
-    L.clarifyTask(t, 'a', { status: 'next' }, 3000);
-    L.clarifyTask(t, 'b', { status: 'next' }, 3000);
-    const nx = L.nextList(t);
+    L.clarifyTask(t, 'a', { status: 'todo' }, 3000);
+    L.clarifyTask(t, 'b', { status: 'todo' }, 3000);
+    const nx = L.todoList(t);
     assert.equal(nx[0].id, 'a');
     assert.equal(nx[1].id, 'b');
   });
@@ -208,19 +208,18 @@ describe('выпиленное: фокус и нарезка', () => {
 });
 
 describe('списки и фокус', () => {
-  it('списки по статусам, инбокс по времени', () => {
+  it('списки по статусам, живые по времени', () => {
     const t = L.blankTasks();
     mk(t, 'Позже', 2000, { id: 'b' });
     mk(t, 'Раньше', 1000, { id: 'a' });
-    const ib = L.inboxList(t);
+    const ib = L.todoList(t);
     assert.equal(ib[0].id, 'a');
-    L.clarifyTask(t, 'a', { status: 'next' }, 3000);
-    assert.equal(L.nextList(t).length, 1);
-    L.clarifyTask(t, 'b', { status: 'done' }, 3000);
+    L.clarifyTask(t, 'a', { status: 'done' }, 3000);
+    assert.equal(L.todoList(t).length, 1);
     assert.equal(L.doneList(t).length, 1);
-    assert.equal(L.inboxCount(t), 0);
-    t.push({ id: 'z', title: '', status: 'inbox', indent: 0, createdAt: 0, updatedAt: 3000, ts: 3000, deleted: false });
-    assert.equal(L.inboxCount(t), 0, 'задача без текста не считается в инбоксе');
+    assert.equal(L.todoCount(t), 1);
+    t.push({ id: 'z', title: '', status: 'todo', indent: 0, createdAt: 0, updatedAt: 3000, ts: 3000, deleted: false });
+    assert.equal(L.todoCount(t), 1, 'задача без текста не считается живой');
   });
   it('done сортируется свежими первыми', () => {
     const t = L.blankTasks();
@@ -235,29 +234,31 @@ describe('списки и фокус', () => {
     assert.equal(L.somedayList, undefined);
     assert.equal(L.focusTask, undefined);
     const n = L.normalizeTask({ id: 'x', title: 'Старая', status: 'waiting', project: 'Дом' });
-    assert.equal(n.status, 'inbox', 'старый waiting гасится в inbox');
+    assert.equal(n.status, 'todo', 'старый waiting гасится в todo');
     assert.equal(n.project, undefined);
+    assert.equal(L.normalizeTask({ id: 'i', title: 'С', status: 'inbox' }).status, 'todo', 'старый inbox маппится в todo');
+    assert.equal(L.normalizeTask({ id: 'n', title: 'С', status: 'next' }).status, 'todo', 'старый next маппится в todo');
     const t = L.blankTasks();
     mk(t, 'Дело', 1000, { id: 'a' });
     L.clarifyTask(t, 'a', { status: 'someday' }, 2000);
-    assert.equal(L.getTask(t, 'a').status, 'inbox', 'someday игнорируется');
+    assert.equal(L.getTask(t, 'a').status, 'todo', 'someday игнорируется');
   });
   it('stats считает всё', () => {
     const t = L.blankTasks();
     mk(t, 'I', 1000, { id: 'i' });
     mk(t, 'N', 1000, { id: 'n' });
     mk(t, 'D', 1000, { id: 'd' });
-    L.clarifyTask(t, 'n', { status: 'next' }, 2000);
+    L.clarifyTask(t, 'n', { status: 'todo' }, 2000);
     L.completeTask(t, 'd', 2000);
-    t.push({ id: 'z', title: '', status: 'inbox', indent: 0, createdAt: 5000, updatedAt: 1000, ts: 1000, deleted: false });
+    t.push({ id: 'z', title: '', status: 'todo', indent: 0, createdAt: 5000, updatedAt: 1000, ts: 1000, deleted: false });
     const st = L.stats(t);
-    assert.deepEqual(st, { inbox: 1, next: 1, done: 1 });
+    assert.deepEqual(st, { todo: 2, done: 1 });
   });
   it('shareText: пусто и с данными', () => {
     assert.equal(L.shareText(L.blankTasks()), '');
     const t = L.blankTasks();
     mk(t, 'Дело', 1000, { id: 'f' });
-    L.clarifyTask(t, 'f', { status: 'next' }, 2000);
+    L.clarifyTask(t, 'f', { status: 'todo' }, 2000);
     const txt = L.shareText(t);
     assert.equal(txt, '- Дело');
   });
@@ -313,7 +314,7 @@ describe('поиск', () => {
 
 describe('восстановление с tombstone', () => {
   function task(id, title, ts) {
-    return { id: id, title: title, status: 'inbox', indent: 0, createdAt: ts, updatedAt: ts, ts: ts, deleted: false };
+    return { id: id, title: title, status: 'todo', indent: 0, createdAt: ts, updatedAt: ts, ts: ts, deleted: false };
   }
   it('пропавшие хоронятся со свежей меткой', () => {
     const cur = [task('a', 'A', 100), task('b', 'B', 200)];
@@ -324,7 +325,7 @@ describe('восстановление с tombstone', () => {
     assert.equal(tomb.ts, 9000);
   });
   it('присутствующие едут как есть, удалённые не дублируются', () => {
-    const cur = [task('a', 'A', 100), { id: 'z', title: '', status: 'inbox', indent: 0, createdAt: 50, updatedAt: 50, ts: 50, deleted: true }];
+    const cur = [task('a', 'A', 100), { id: 'z', title: '', status: 'todo', indent: 0, createdAt: 50, updatedAt: 50, ts: 50, deleted: true }];
     const out = L.restoreWithTombstones(cur, [task('a', 'A!', 300)], 9000);
     assert.equal(out.length, 2);
     assert.equal(out.filter((t) => t.id === 'a')[0].title, 'A!');
@@ -345,7 +346,7 @@ describe('нормализация', () => {
   it('битые поля приводятся к форме', () => {
     const n = L.normalizeTask({ id: 'a', title: 123, status: 'todo', slicesTotal: 'x', slicesDone: 99, frog: 1 });
     assert.equal(n.title, '123');
-    assert.equal(n.status, 'inbox');
+    assert.equal(n.status, 'todo');
     assert.equal(n.slicesTotal, undefined);
     assert.equal(n.slicesDone, undefined);
     assert.equal(n.frog, undefined);
@@ -375,7 +376,7 @@ describe('нормализация', () => {
   it('done без doneAt берёт updatedAt, не-done обнуляет', () => {
     const d = L.normalizeTask({ id: 'a', title: 'T', status: 'done', updatedAt: 500 });
     assert.equal(d.doneAt, 500);
-    const n = L.normalizeTask({ id: 'b', title: 'T', status: 'next', doneAt: 500 });
+    const n = L.normalizeTask({ id: 'b', title: 'T', status: 'todo', doneAt: 500 });
     assert.equal(n.doneAt, 0);
   });
   it('normalizeTasks: не-массив, дубли, сортировка', () => {
@@ -420,8 +421,8 @@ describe('слияние LWW', () => {
       { id: 'a', title: 'R', ts: 2, sumKids: false }).sumKids, false, 'победа remote с отказом');
   });
   it('mergeTasks объединяет наборы', () => {
-    const a = [{ id: 'x', title: 'X', status: 'inbox', ts: 100, createdAt: 100, updatedAt: 100 }];
-    const b = [{ id: 'y', title: 'Y', status: 'next', ts: 100, createdAt: 200, updatedAt: 100 }];
+    const a = [{ id: 'x', title: 'X', status: 'todo', ts: 100, createdAt: 100, updatedAt: 100 }];
+    const b = [{ id: 'y', title: 'Y', status: 'todo', ts: 100, createdAt: 200, updatedAt: 100 }];
     const m = L.mergeTasks(a, b);
     assert.equal(m.length, 2);
     assert.equal(m[0].id, 'x');
@@ -504,7 +505,7 @@ describe('отступ (группы)', () => {
     mk(t, 'Q', 4000, { id: 'q' });
     const order = [L.getTask(t, 'p'), L.getTask(t, 'k1'), L.getTask(t, 'k2'), L.getTask(t, 'q')];
     assert.deepEqual(L.completeBranch(order, 'p', 9000), ['p', 'k1', 'k2']);
-    assert.equal(L.getTask(t, 'q').status, 'inbox');
+    assert.equal(L.getTask(t, 'q').status, 'todo');
     assert.ok(L.getTask(t, 'p').doneAt > L.getTask(t, 'k1').doneAt);
     assert.ok(L.getTask(t, 'k1').doneAt > L.getTask(t, 'k2').doneAt);
     assert.equal(L.completeBranch(order, 'nope', 9000).length, 0);
@@ -519,10 +520,10 @@ describe('отступ (группы)', () => {
     const order = [L.getTask(t, 'p'), L.getTask(t, 'k1'), L.getTask(t, 'k2'), L.getTask(t, 'q')];
     L.completeBranch(order, 'p', 9000);
     assert.deepEqual(L.reopenBranch(t, 'p', 9500), ['p', 'k1', 'k2']);
-    assert.equal(L.getTask(t, 'p').status, 'next');
-    assert.equal(L.getTask(t, 'k1').status, 'next');
-    assert.equal(L.getTask(t, 'k2').status, 'next');
-    assert.equal(L.getTask(t, 'q').status, 'inbox');
+    assert.equal(L.getTask(t, 'p').status, 'todo');
+    assert.equal(L.getTask(t, 'k1').status, 'todo');
+    assert.equal(L.getTask(t, 'k2').status, 'todo');
+    assert.equal(L.getTask(t, 'q').status, 'todo');
     assert.equal(L.getTask(t, 'p').doneAt, 0);
   });
   it('reopenBranch останавливается на соседе, живых пропускает', () => {
@@ -541,7 +542,7 @@ describe('отступ (группы)', () => {
     mk(u, 'K', 2000, { id: 'k', indent: 1 });
     L.getTask(u, 'p').status = 'done';
     assert.deepEqual(L.reopenBranch(u, 'p', 9999), ['p']);
-    assert.equal(L.getTask(u, 'k').status, 'inbox');
+    assert.equal(L.getTask(u, 'k').status, 'todo');
     assert.deepEqual(L.reopenBranch(u, 'nope', 1), []);
     assert.deepEqual(L.reopenBranch(null, 'p', 1), []);
   });
@@ -566,9 +567,9 @@ describe('отступ (группы)', () => {
   it('isDoneShown наследует done родителя, но не соседей', () => {
     const arr = [
       { id: 'p', title: 'P', status: 'done', indent: 0 },
-      { id: 'a', title: 'A', status: 'inbox', indent: 1 },
-      { id: 'q', title: 'Q', status: 'inbox', indent: 0 },
-      { id: 'b', title: 'B', status: 'inbox', indent: 1 }
+      { id: 'a', title: 'A', status: 'todo', indent: 1 },
+      { id: 'q', title: 'Q', status: 'todo', indent: 0 },
+      { id: 'b', title: 'B', status: 'todo', indent: 1 }
     ];
     assert.equal(L.isDoneShown(arr, 0), true);
     assert.equal(L.isDoneShown(arr, 1), true);
@@ -593,12 +594,12 @@ describe('отступ (группы)', () => {
 
 describe('сжатие могил (purgeTombstones)', () => {
   function tomb(id, title, ts) {
-    return { id: id, title: title, status: 'inbox', estMin: 0, sumKids: true,
+    return { id: id, title: title, status: 'todo', estMin: 0, sumKids: true,
       indent: 0, createdAt: ts, updatedAt: ts, doneAt: 0, ts: ts, deleted: true };
   }
   it('все могилы сжимаются в маркеры, остальные целы', () => {
     const t = [
-      { id: 'a', title: 'Жива', status: 'inbox', ts: 100, createdAt: 100, updatedAt: 100 },
+      { id: 'a', title: 'Жива', status: 'todo', ts: 100, createdAt: 100, updatedAt: 100 },
       { id: 'b', title: 'Готово', status: 'done', ts: 100, createdAt: 101, updatedAt: 100 },
       tomb('c', 'Мусор', 200),
       tomb('d', '', 200)
@@ -613,7 +614,7 @@ describe('сжатие могил (purgeTombstones)', () => {
     const t = [tomb('c', 'Мусор', 900)];
     L.purgeTombstones(t, 500);
     assert.equal(t[0].ts, 900, 'старая метка не занижается');
-    const stale = [{ id: 'c', title: 'Мусор', status: 'inbox', ts: 800, createdAt: 100, updatedAt: 800 }];
+    const stale = [{ id: 'c', title: 'Мусор', status: 'todo', ts: 800, createdAt: 100, updatedAt: 800 }];
     const m = L.mergeTasks(stale, t);
     assert.equal(m[0].deleted, true, 'живая копия с забытого устройства воскресла');
   });
@@ -628,11 +629,11 @@ describe('сжатие могил (purgeTombstones)', () => {
     assert.equal(L.purgeTombstones([]), 0);
   });
   it('флаг min: только у маркеров, обычным не пишется', () => {
-    const n = L.normalizeTask({ id: 'a', title: 'Жива', status: 'inbox' });
+    const n = L.normalizeTask({ id: 'a', title: 'Жива', status: 'todo' });
     assert.equal('min' in n, false, 'обычной задаче дописан лишний ключ');
     assert.equal(L.normalizeTask({ id: 'c', deleted: true, ts: 1, updatedAt: 1 }).min, undefined);
     const c = L.mergeTasks(
-      [{ id: 'c', title: 'Мусор', status: 'inbox', ts: 100, createdAt: 100, updatedAt: 100 }],
+      [{ id: 'c', title: 'Мусор', status: 'todo', ts: 100, createdAt: 100, updatedAt: 100 }],
       [{ id: 'c', deleted: true, ts: 500, updatedAt: 500, min: true }]);
     assert.equal(c[0].min, true, 'флаг не пережил слияние');
   });

@@ -1,4 +1,4 @@
-const CACHE = 'extbrain-v167';
+const CACHE = 'extbrain-v168';
 const ASSETS = [
   './',
   './index.html',

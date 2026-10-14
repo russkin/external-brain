@@ -548,7 +548,7 @@ function renderStatus() {
   if (!s || !state) return;
   var st = L.stats(state.tasks);
   var parts = [
-    'Задач: ' + ((st.inbox || 0) + (st.next || 0)),
+    'Задач: ' + (st.todo || 0),
     'выполненных: ' + (st.done || 0),
     'синхр: ' + (C.getSyncInfo().status || '—')
   ];

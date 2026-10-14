@@ -1,8 +1,8 @@
 # AGENTS.md — Внешний мозг (external-brain)
 
 Простое PWA для списка дел: строки с отступами (группы), выполнение, время
-задачи, история ↩↪, копии, офлайн-синк через GitHub. Модель: статусы `inbox/next/done` живут в `src/logic.js` и синке
-(`waiting`/`someday`, поле `project`, `focusTask` удалены в v76, нарезка —
+задачи, история ↩↪, копии, офлайн-синк через GitHub. Модель: статусы `todo/done` живут в `src/logic.js` и синке
+(`inbox`/`next` слиты в `todo` в ветке `cleanup/inbox-next`; `waiting`/`someday`, поле `project`, `focusTask` удалены в v76, нарезка —
 в v77; в живых задачах не использовались).
 Репозиторий: `git@github.com:russkin/external-brain.git`, ветка `main`.
 Прод: https://russkin.github.io/external-brain/ (GitHub Pages, source = GitHub Actions).
@@ -13,7 +13,7 @@
 не в russkin/external-brain. Код по умолчанию смотрит в
 russkin/external-brain — дефолты в коде не менять. Репозиторий переключается
 настройкой repo в приложении.
-Текущая версия: v167 (октябрь 2026). Тестов: 184 (`logic` + `ios` + `sync` + `sync-devices`).
+Текущая версия: v168 (октябрь 2026, ветка `cleanup/inbox-next`). Тестов: 184 (`logic` + `ios` + `sync` + `sync-devices`).
 Тестовые платформы: смартфон Honor 400 Pro, Android 16 + iPhone, Safari 15
 (хозяин репозитория тестирует на iPhone). Планшет НЕ используется.
 
@@ -600,6 +600,9 @@ Docs-only правки версию НЕ bump'ят. Есть регресс-те
   иначе поле как было);
   v167 флаг сжатия `min` у маркеров + расклад мёртвых в диагностике
   (с текстом/сжатых) + счётчик результата сжатия.
+- Ветка `cleanup/inbox-next` (T-cleanup-inbox-next, H-29 Б): статусы
+  `inbox`/`next` слиты в `todo` (`STATUSES=[todo,done]`, normalize маппит
+  старое в живое, reopen → `todo`, `stats → {todo,done}`). В main НЕ влито.
 - Планирование (пауза): приняты ВСЕ рекомендации PM (H-18…H-29 = А:
   дочка последней, суффикс « (до ДД.ММ.ГГГГ)», кламп с якорем, пропал
   родитель → верхний уровень, свёрнутого развернуть, тихо, без пустых,

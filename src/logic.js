@@ -1,17 +1,17 @@
 /* logic.js — чистая логика «Внешнего мозга» без DOM.
  * Совместимость: ES2017 без optional chaining, работает в Node и в браузере.
- * Модель (плоский список, как задачи в Google Keep): лишние статусы и поле
- *   'project' УДАЛЕНЫ (H-07, в живых задачах не использовались); старые
- *   данные с ними нормализация молча приводит к 'inbox'/без проекта.
+ * Модель (плоский список, как задачи в Google Keep): статусы 'inbox'/'next'
+ *   УДАЛЕНЫ (T-cleanup-inbox-next, в UI не различались — всё живое теперь
+ *   'todo'); старые данные с ними нормализация молча приводит к 'todo'.
  *   task = { id, title, status, estMin, sumKids,
  *            indent, createdAt, updatedAt, doneAt, ts, deleted }
  *   sumKids: у родителя — считать ли метку авто-суммой вложенных (по
  *            умолчанию true; false — своё estMin вручную, как у листа).
- *   status: 'inbox' (новые) | 'next' (в работе) | 'done' (готово)
+ *   status: 'todo' (живая) | 'done' (готово)
  *   indent: уровень отступа 0..8 — задача с отступом входит в группу задачи
  *           без отступа (или с меньшим отступом) сверху.
  * Правила:
- *   - всё новое падает в инбокс (входящие), цель — пустой инбокс;
+ *   - всё новое падает в список живых, цель — пустой список;
  *   - правка полей задачи — через clarifyTask;
  *   - нарезка (slicesTotal/slicesDone) УДАЛЕНА в v77 — из UI не управлялась,
  *     в живых задачах не использовалась;
@@ -19,7 +19,7 @@
  */
 'use strict';
 
-var STATUSES = ['inbox', 'next', 'done'];
+var STATUSES = ['todo', 'done'];
 
 var _counter = 0;
 
@@ -64,7 +64,7 @@ function getTask(tasks, id) {
   return null;
 }
 
-/* Создать задачу в инбоксе. Пустой заголовок — вернуть null, ничего не трогать. */
+/* Создать живую задачу. Пустой заголовок — вернуть null, ничего не трогать. */
 function createTask(tasks, title, nowMs, opts) {
   opts = opts || {};
   var t = normTitle(title);
@@ -73,7 +73,7 @@ function createTask(tasks, title, nowMs, opts) {
   var task = {
     id: opts.id ? String(opts.id) : makeId(now),
     title: t,
-    status: 'inbox',
+    status: 'todo',
     estMin: normEst(opts.estMin),
     sumKids: true,
     indent: normIndent(opts.indent),
@@ -153,7 +153,7 @@ function reopenTask(tasks, id, nowMs) {
   if (!task || task.deleted) return null;
   var now = toInt(nowMs, Date.now());
   if (task.status !== 'done') return task;
-  task.status = 'next';
+  task.status = 'todo';
   task.doneAt = 0;
   task.updatedAt = now;
   task.ts = now;
@@ -190,7 +190,7 @@ function reopenBranch(tasks, id, nowMs) {
     if (!t || t.deleted) continue;
     if (j > idx && normIndent(t.indent) <= base) break;
     if (t.status !== 'done') continue;
-    t.status = 'next';
+    t.status = 'todo';
     t.doneAt = 0;
     t.updatedAt = now;
     t.ts = now;
@@ -317,23 +317,18 @@ function byStatus(tasks, status) {
   return tasks.filter(function (t) { return isAlive(t) && t.status === status; });
 }
 
-function inboxList(tasks) {
-  return byStatus(tasks, 'inbox').sort(function (a, b) { return a.createdAt - b.createdAt; });
-}
-
-/* Следующие: по времени создания. */
-function nextList(tasks) {
-  return byStatus(tasks, 'next').sort(function (a, b) {
-    return a.createdAt - b.createdAt;
-  });
+/* Живые задачи по времени создания (T-cleanup-inbox-next: inbox/next
+ * слиты в todo — списков по ним больше нет). */
+function todoList(tasks) {
+  return byStatus(tasks, 'todo').sort(function (a, b) { return a.createdAt - b.createdAt; });
 }
 
 function doneList(tasks) {
   return byStatus(tasks, 'done').sort(function (a, b) { return b.doneAt - a.doneAt; });
 }
 
-function inboxCount(tasks) {
-  return inboxList(tasks).filter(function (t) { return !!t.title; }).length;
+function todoCount(tasks) {
+  return todoList(tasks).filter(function (t) { return !!t.title; }).length;
 }
 
 function stats(tasks) {
@@ -342,10 +337,8 @@ function stats(tasks) {
     var t = tasks[i];
     if (t && !t.deleted && t.title) tl.push(t);
   }
-  var nx = nextList(tl);
   return {
-    inbox: inboxList(tl).length,
-    next: nx.length,
+    todo: todoList(tl).length,
     done: doneList(tl).length
   };
 }
@@ -450,7 +443,11 @@ function normalizeTask(t) {
   if (!t || typeof t !== 'object') return null;
   var id = String(t.id || '');
   if (!id) return null;
-  var status = isStatus(t.status) ? t.status : 'inbox';
+  /* Живой статус один — 'todo' (T-cleanup-inbox-next): 'done' остаётся,
+   * всё остальное ('inbox', 'next', 'waiting', 'someday', мусор) — в 'todo'.
+   * Старые устройства пишут 'inbox'/'next' — после обновления читаются
+   * как живые, данные не теряются. */
+  var status = (t.status === 'done') ? 'done' : 'todo';
   var createdAt = toInt(t.createdAt, 0);
   var updatedAt = toInt(t.updatedAt, 0);
   var doneAt = (status === 'done') ? toInt(t.doneAt, updatedAt) : 0;
@@ -495,7 +492,7 @@ function restoreWithTombstones(currentTasks, incomingTasks, nowMs) {
     if (t.deleted) { out.push(t); continue; }
     out.push({
       id: String(t.id).slice(0, 64),
-      title: '', status: 'inbox', estMin: 0, indent: 0,
+      title: '', status: 'todo', estMin: 0, indent: 0,
       createdAt: 0, updatedAt: now, doneAt: 0, ts: now, deleted: true
     });
   }
@@ -606,10 +603,9 @@ var api = {
   hasKids: hasKids,
   isDoneShown: isDoneShown,
   isHiddenByCollapse: isHiddenByCollapse,
-  inboxList: inboxList,
-  nextList: nextList,
+  todoList: todoList,
   doneList: doneList,
-  inboxCount: inboxCount,
+  todoCount: todoCount,
   stats: stats,
   shareText: shareText,
   searchTasks: searchTasks,

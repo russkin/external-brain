@@ -183,8 +183,8 @@ function diagText() {
   var state = C.getState();
   var sy = C.getSync();
   var st = state ? C.L.stats(state.tasks)
-    : { inbox: 0, next: 0, done: 0 };
-  var alive = (st.inbox || 0) + (st.next || 0);
+    : { todo: 0, done: 0 };
+  var alive = (st.todo || 0);
   var recs = 0, bytes = 0, liveN = 0, deadN = 0, deadFull = 0, deadMin = 0;
   try {
     recs = state ? state.tasks.length : 0;

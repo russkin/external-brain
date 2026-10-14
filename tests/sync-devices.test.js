@@ -73,7 +73,7 @@ describe('два устройства', () => {
     await a.api.syncNow(a.state);
     const b = device(srv, 100);
     await b.api.syncNow(b.state);
-    L.clarifyTask(a.state.tasks, 't', { title: 'Ранняя', status: 'next' }, 200);
+    L.clarifyTask(a.state.tasks, 't', { title: 'Ранняя', status: 'todo' }, 200);
     a.state.updatedAt = 200;
     L.clarifyTask(b.state.tasks, 't', { title: 'Поздняя', status: 'done' }, 300);
     b.state.updatedAt = 300;
@@ -99,6 +99,6 @@ describe('два устройства', () => {
     const rb = await b.api.syncNow(b.state);
     assert.ok(rb.status === 'pulled' || rb.status === 'merged');
     assert.equal(L.getTask(b.state.tasks, 't').deleted, true);
-    assert.equal(L.nextList(b.state.tasks).length, 0);
+    assert.equal(L.todoList(b.state.tasks).length, 0);
   });
 });

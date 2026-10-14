@@ -88,12 +88,12 @@ describe('syncNow: базовые исходы', () => {
     });
     const api = factory(L, fetch);
     const local = stateWith(demoTasks(200), 200);
-    L.clarifyTask(local.tasks, 'a', { status: 'next' }, 200);
+    L.clarifyTask(local.tasks, 'a', { status: 'todo' }, 200);
     const res = await api.syncNow(local);
     assert.equal(res.status, 'pushed');
     assert.equal(JSON.parse(fetch.calls[1].opts.body).sha, 'AAA');
     const sent = decodePut(fetch.calls[1]).state;
-    assert.equal(sent.tasks[0].status, 'next');
+    assert.equal(sent.tasks[0].status, 'todo');
   });
 
   it('одинаковые — in-sync без PUT', async () => {
@@ -109,7 +109,7 @@ describe('syncNow: базовые исходы', () => {
     const base = demoTasks(100);
     L.createTask(base, 'Общая', 100, { id: 'shared' });
     const remoteTasks = L.normalizeTasks(base);
-    L.clarifyTask(remoteTasks, 'shared', { status: 'next' }, 200);
+    L.clarifyTask(remoteTasks, 'shared', { status: 'todo' }, 200);
     const remote = { tasks: remoteTasks, updatedAt: 200 };
     const fetch = stubFetch(async (url, opts) => {
       if (opts.method === 'PUT') return { status: 201, ok: true, json: async () => ({}) };
@@ -139,7 +139,7 @@ describe('syncNow: конфликты и ошибки', () => {
     });
     const api = factory(L, fetch, { sleep: async () => {}, jitterMs: 0 });
     const local = stateWith(demoTasks(200), 200);
-    L.clarifyTask(local.tasks, 'a', { status: 'next' }, 200);
+    L.clarifyTask(local.tasks, 'a', { status: 'todo' }, 200);
     const res = await api.syncNow(local);
     assert.equal(res.status, 'pushed');
     assert.equal(puts, 2);
@@ -153,7 +153,7 @@ describe('syncNow: конфликты и ошибки', () => {
     });
     const api = factory(L, fetch, { sleep: async () => {}, jitterMs: 0, maxRetries: 2 });
     const local = stateWith(demoTasks(200), 200);
-    L.clarifyTask(local.tasks, 'a', { status: 'next' }, 200);
+    L.clarifyTask(local.tasks, 'a', { status: 'todo' }, 200);
     const res = await api.syncNow(local);
     assert.equal(res.status, 'error');
     assert.ok(/github-put 422/.test(res.error));
@@ -167,7 +167,7 @@ describe('syncNow: конфликты и ошибки', () => {
     });
     const api = factory(L, fetch, { sleep: async () => {} });
     const local = stateWith(demoTasks(200), 200);
-    L.clarifyTask(local.tasks, 'a', { status: 'next' }, 200);
+    L.clarifyTask(local.tasks, 'a', { status: 'todo' }, 200);
     const res = await api.syncNow(local);
     assert.equal(res.status, 'error');
     assert.ok(/github-put 500/.test(res.error));
@@ -218,7 +218,7 @@ describe('syncNow: конфликты и ошибки', () => {
     });
     const api = factory(L, fetch, { baseMs: 10, capMs: 20, jitterMs: 0 });
     const local = stateWith(demoTasks(200), 200);
-    L.clarifyTask(local.tasks, 'a', { status: 'next' }, 200);
+    L.clarifyTask(local.tasks, 'a', { status: 'todo' }, 200);
     const res = await api.syncNow(local);
     assert.equal(res.status, 'pushed');
     assert.equal(puts, 2);
