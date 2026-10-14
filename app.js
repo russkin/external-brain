@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v171';
+  var APP_VERSION = 'v172';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -81,6 +81,31 @@
       }
       ok.onclick = function () { done(true); };
       cancel.onclick = function () { done(false); };
+    });
+  }
+
+  /* Информационное окно (v172): только текст и одна кнопка OK — без
+   * поля ввода (незачем фокус и клавиатура) и без Отмены (выбора нет).
+   * Скрытую Отмену возвращаем при закрытии, иначе следующий askConfirm
+   * останется без неё. */
+  function askInfo(title) {
+    return new Promise(function (resolve) {
+      var back = el('modalBack'), text = el('modalText'), input = el('modalInput');
+      var ok = el('modalOk'), cancel = el('modalCancel'), clearBtn = el('modalClear');
+      if (!back || !ok) { resolve(null); return; }
+      text.textContent = title;
+      if (input) input.style.display = 'none';
+      if (clearBtn) clearBtn.style.display = 'none';
+      if (cancel) cancel.style.display = 'none';
+      back.classList.add('open');
+      function done() {
+        back.classList.remove('open');
+        ok.onclick = null;
+        if (cancel) { cancel.onclick = null; cancel.style.display = ''; }
+        resolve(null);
+      }
+      ok.onclick = done;
+      if (cancel) cancel.onclick = done;
     });
   }
 
@@ -897,7 +922,7 @@
       if (t && t.deleted && t.min !== true) n++;
     }
     if (!n) {
-      askText('Все удалённые уже сжаты — сжимать нечего', '', false).then(function () {});
+      askInfo('Все удалённые уже сжаты — сжимать нечего').then(function () {});
       return;
     }
     askConfirm('Сжать ' + n + ' удалённых записей? Текст удалённых сотрётся, останутся короткие метки, файл похудеет. Живые и выполненные не тронутся, отмена ↩ вернёт всё обратно. Продолжить?').then(function (ok) {
@@ -1037,7 +1062,7 @@
       if (!state) return;
       var info = window.EBStore.backupInfo ? window.EBStore.backupInfo() : null;
       if (!info) {
-        askText('Локальная копия пока не создавалась', '', false).then(function () {});
+        askInfo('Локальная копия пока не создавалась').then(function () {});
         return;
       }
       askConfirm('Заменить текущие задачи локальной копией (состояние до последнего сохранения)? Отменить можно стрелкой ↩.')
@@ -1071,8 +1096,8 @@
       if (!state) return;
       var info = window.EBStore.pinInfo ? window.EBStore.pinInfo() : null;
       if (!info) {
-        askText('Постоянная копия не создавалась (кнопка «Сделать постоянную копию» ' +
-          'или автокопия при обновлении приложения)', '', false).then(function () {});
+        askInfo('Постоянная копия не создавалась (кнопка «Сделать постоянную копию» ' +
+          'или автокопия при обновлении приложения)').then(function () {});
         return;
       }
       askConfirm('Заменить текущие задачи постоянной копией от ' + fmtWhen(info.savedAt) + '? Отменить можно стрелкой ↩.')

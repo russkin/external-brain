@@ -83,6 +83,14 @@ describe('без системных диалогов (iOS)', () => {
     assert.ok(appSrc.includes('modalBack'), 'нет modalBack');
     assert.ok(appSrc.includes('askText'), 'нет askText');
     assert.ok(appSrc.includes('askConfirm'), 'нет askConfirm');
+    assert.ok(appSrc.includes('function askInfo'), 'нет инфо-окна без поля ввода');
+    assert.ok(appSrc.includes("askInfo('Все удалённые уже сжаты") &&
+      appSrc.includes("askInfo('Локальная копия пока не создавалась") &&
+      appSrc.includes("askInfo('Постоянная копия не создавалась"),
+      'инфо-поводы идут через askText с полем ввода');
+    assert.ok(/function askInfo[\s\S]{0,1200}cancel\.style\.display = 'none'/.test(appSrc) &&
+      /function askInfo[\s\S]{0,1200}cancel\.style\.display = ''/.test(appSrc),
+      'инфо-окно не прячет/возвращает Отмену');
   });
 });
 
