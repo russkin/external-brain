@@ -281,6 +281,8 @@ function diagText() {
           (be.mw != null ? ' mw=' + be.mw + ' cw=' + be.cw : '') +
           ' chipW=' + be.chipW + ' pad=' + (be.pad || '—') +
           (be.chip ? " chip='" + be.chip + "'" : '') +
+          (be.w ? ' w=' + be.w : '') +
+          (be.tail ? " tail='" + String(be.tail).replace(/\n/g, '⏎').slice(0, 34) + "'" : '') +
           (be.id ? ' #' + be.id : '');
         brows.push(bcell);
       }

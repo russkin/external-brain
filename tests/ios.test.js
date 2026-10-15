@@ -758,6 +758,8 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(diagSrc.includes('external-brain-chipblur-v1') &&
       diagSrc.includes('Метка-фокус: '),
       'диагностика не показывает замороженный снапшот (v182)');
+    assert.ok(rendSrc.includes('raw.slice(-30)') && diagSrc.includes("tail='"),
+      'снапшот без хвоста текста и ширины — переносы не воспроизвести на стенде (v183)');
   });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');

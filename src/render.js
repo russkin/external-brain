@@ -449,9 +449,16 @@ function snapChipBlur(e) {
     try { pad = t.style ? String(t.style.paddingRight || '') : ''; } catch (x) { pad = ''; }
     var chipTx = '';
     try { chipTx = String(chip.textContent || '').slice(0, 12); } catch (x) { chipTx = ''; }
+    /* Хвост текста и ширина поля (v183, временно): без них стенд не
+     * воспроизведёт переносы — нужен ТОТ ЖЕ текст на ТОЙ ЖЕ ширине.
+     * Хвост (конец), а не начало: вердикт решает последняя строка. */
+    var tail = '';
+    try { tail = raw.slice(-30); } catch (x) { tail = ''; }
+    var fw = 0;
+    try { var rr = t.getBoundingClientRect(); fw = Math.round(rr.width || 0); } catch (x) { fw = 0; }
     var snap = { t: Date.now(), raw: raw.length, trim: trim.length,
       reached: (verdict === true) ? 1 : (verdict === false ? 0 : String(verdict).slice(0, 40)),
-      chipW: chipW, pad: pad, chip: chipTx };
+      chipW: chipW, pad: pad, chip: chipTx, w: fw, tail: tail };
     if (rowId) snap.id = String(rowId).slice(-6);
     if (xy) { snap.mw = xy.mw; snap.cw = xy.cw; }
     chipBlurLog.push(snap);
