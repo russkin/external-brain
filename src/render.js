@@ -460,27 +460,46 @@ var lastGoodOff = null;
  * Снапшот v170 так не умел: без подписок шапке было нечем лечиться
  * во время скролла. Счётчик, а не флаг — мультитач. */
 var touchDown = 0;
+/* Телеметрия дотяжки (v175): кольцо последних 15 замеров + причина решения.
+ * Пишется в localStorage (переживает перезагрузку) и показывается
+ * в диагностике («Шапка:») — по ней видно, что Safari/Chrome отдавали
+ * в момент улёта, без устройства не разобраться (урок v159–v163).
+ * Дёшево: запись в память всегда, в localStorage не чаще раза в 2 сек. */
+var HEADLOG_KEY = 'external-brain-headlift-v1';
+var headLog = [];
+var headLogSaved = 0;
+function headDbg(off, sy, how) {
+  try {
+    headLog.push({ t: Date.now(), off: off, sy: sy, touch: touchDown, how: how });
+    if (headLog.length > 15) headLog.shift();
+    var now = Date.now();
+    if (now - headLogSaved > 2000) {
+      headLogSaved = now;
+      try { localStorage.setItem(HEADLOG_KEY, JSON.stringify(headLog)); } catch (x) {}
+    }
+  } catch (x) {}
+}
 function syncHeaderLift() {
   var h = null;
   try { h = document.querySelector('header'); } catch (x) { h = null; }
   if (!h || !h.style) return;
-  if (touchDown > 0) return;
   var off = 0;
+  var sy = 0;
   try {
     var ae = document.activeElement;
     if (ae && (ae.tagName === 'TEXTAREA' || ae.tagName === 'INPUT') && window.visualViewport) {
       off = Math.round(window.visualViewport.offsetTop || 0);
       if (!(off > 1)) off = 0;
     }
+    try { sy = window.pageYOffset || 0; } catch (e2) { sy = 0; }
   } catch (x) { off = 0; }
+  /* Заморозка под пальцем — ПОСЛЕ замера, чтобы в журнале было видно,
+   * какое значение отбросили. */
+  if (touchDown > 0) { headDbg(off, sy, 'touch'); return; }
   if (off > 0) {
     /* Оттяжка-резинка (v159): в момент pull-down layout уезжает в минус —
      * тогда дотяжку не трогаем вовсе. */
-    try {
-      var sy = 0;
-      try { sy = window.pageYOffset || 0; } catch (e2) { sy = 0; }
-      if (sy < 0) return;
-    } catch (x) {}
+    if (sy < 0) { headDbg(off, sy, 'overscroll'); return; }
     /* Всплеск (v160): одиночный прыжок offsetTop на сотни px за одно
      * событие — это резинка/флик, а не честный сдвиг (честные идут
      * потоком мелких шагов: анимация клавиатуры, скролл). Такой прыжок
@@ -488,15 +507,19 @@ function syncHeaderLift() {
      * и шапка встанет сама. Порог 160: кадровый сдвиг даже лютого флика
      * меньше, а шапка ~110. Потолка нет специально: честный сдвиг при
      * глубоком скролле больше высоты шапки. */
-    if (lastGoodOff !== null && Math.abs(off - lastGoodOff) > 160) return;
+    if (lastGoodOff !== null && Math.abs(off - lastGoodOff) > 160) {
+      headDbg(off, sy, 'spike');
+      return;
+    }
     lastGoodOff = off;
   } else {
     lastGoodOff = null;
   }
   var lift = off ? 'translateY(' + off + 'px)' : '';
-  if (lift === lastHeadLift) return;
+  if (lift === lastHeadLift) { headDbg(off, sy, 'same'); return; }
   lastHeadLift = lift;
   h.style.transform = lift;
+  headDbg(off, sy, off ? 'apply' : 'reset');
 }
 
 /* Активная строка — в центр видимого места: браузер подвозит поле минимумом,

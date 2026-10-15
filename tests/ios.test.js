@@ -1045,6 +1045,10 @@ describe('синк: триггеры и протокол', () => {
       'всплески offsetTop не отсекаются (шапка улетает в середине списка)');
     assert.ok(rendSrc.includes('touchDown') && rendSrc.includes('touchcancel'),
       'дотяжка не замораживается под пальцем (резинка уносит шапку)');
+    assert.ok(rendSrc.includes('headDbg') && rendSrc.includes('external-brain-headlift-v1'),
+      'нет телеметрии дотяжки для разбора улётов');
+    assert.ok(diagSrc.includes('external-brain-headlift-v1') && diagSrc.includes('Шапка: '),
+      'телеметрия дотяжки не видна в диагностике');
     assert.ok(!rendSrc.includes('snapHeaderSoon') && !rendSrc.includes('focusTimer'),
       'мёртвый код снапшота v170 не вычищен');
   });
