@@ -661,8 +661,8 @@ describe('логика вызывается с state.tasks', () => {
     var cssD = iCss === -1 ? '' : html.slice(iCss, iCss + 320);
     assert.ok(cssD.includes('position: absolute'), 'метка не наложением на поле задачи');
     assert.ok(cssD.includes('background: transparent'), 'фон метки не прозрачный');
-    assert.ok(cssD.includes('right: 2px') && cssD.includes('bottom: 2px'),
-      'метка не с отступом 2px от краёв (v164)');
+    assert.ok(cssD.includes('right: 2px') && cssD.includes('bottom: 6px'),
+      'метка не отцентрована на нижнюю строку (v187: bottom 6px = середина 24px метки на середине строки)');
     assert.ok(!rendSrc.includes("chip.style.right") && !rendSrc.includes("chip.style.bottom"),
       'позиция метки дёргается из JS (размещение неодинаковое)');
     assert.ok(cssD.includes('align-items: center'),
