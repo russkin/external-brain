@@ -254,6 +254,7 @@ function diagText() {
         var cell = ch + ':' + cm + ':' + cs2 + ' len=' + ce.len +
           (ce.tlen != null && ce.tlen !== ce.len ? '/' + ce.tlen : '') +
           ' reached=' + ce.reached + ' pad=' + ce.pad +
+          (ce.dh ? ' dh=+' + ce.dh : '') +
           (ce.src ? ' ' + ce.src : '') + (ce.id ? ' #' + ce.id : '');
         if (ce.mw != null) cell += ' mw=' + ce.mw + ' cw=' + ce.cw;
         crows.push(cell);
@@ -278,7 +279,9 @@ function diagText() {
         var bs = (bd.getSeconds() < 10 ? '0' : '') + bd.getSeconds();
         var bcell = bh + ':' + bm + ':' + bs + ' raw=' + be.raw + ' trim=' + be.trim +
           ' reached=' + be.reached +
+          (be.e != null ? ' e=' + be.e : '') +
           (be.mw != null ? ' mw=' + be.mw + ' cw=' + be.cw : '') +
+          (be.dh ? ' dh=+' + be.dh : '') +
           ' chipW=' + be.chipW + ' pad=' + (be.pad || '—') +
           (be.chip ? " chip='" + be.chip + "'" : '') +
           (be.w ? ' w=' + be.w : '') +

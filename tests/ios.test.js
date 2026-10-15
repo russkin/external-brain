@@ -760,6 +760,9 @@ describe('логика вызывается с state.tasks', () => {
       'диагностика не показывает замороженный снапшот (v182)');
     assert.ok(rendSrc.includes('raw.slice(-30)') && diagSrc.includes("tail='"),
       'снапшот без хвоста текста и ширины — переносы не воспроизвести на стенде (v183)');
+    assert.ok(rendSrc.includes('inpQ.scrollHeight') && rendSrc.includes('h1 - h0') &&
+      diagSrc.includes('dh=+'),
+      'вердикт полосы через зеркало — на Honor Sans врёт на слово (v184: дельта scrollHeight)');
   });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');

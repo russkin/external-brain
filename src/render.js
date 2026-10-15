@@ -356,9 +356,16 @@ function updateDurchip(inp, chip) {
   return reached;
 }
 
-/* Полоса справа под метку для одной строки (v178, см. вызовы выше):
- * замер без полосы → полоса по ширине метки → высота заново, т.к.
- * переносы меняются → фон сбросить в прозрачный (накрытия больше нет).
+/* Полоса справа под метку для одной строки (v178, при вводе; v184:
+ * вердикт — БЕЗ зеркала: высота контента самого поля без полосы (h0)
+ * против высоты с полосой метки (h1). Пользовалось текстом зону метки —
+ * полоса добавляет строку (h1 > h0), вердикт шрифто-независим: тот же
+ * элемент, тот же шрифт, тот же движок. Зеркало-div (updateDurchip)
+ * врало на Honor Sans: при той же ширине 276 и том же тексте его
+ * последняя строка короче реальной на слово (mw 184 против наезда
+ * глазами) — 4px рамки, не скопированные в зеркало, перевернули слово
+ * «поводу» между строками. Мерцания нет: вердикт детерминирован
+ * содержимым, за один вызов переключения туда-сюда нет.
  * Возвращает, ставилась ли полоса. Каретку не трогает (позиция
  * по символам переживает reflow). */
 function fitChipRow(div, src) {
@@ -372,16 +379,34 @@ function fitChipRow(div, src) {
   var tlen = 0;
   try { len = String(inpQ.value || '').length; } catch (x) { len = 0; }
   try { tlen = String(inpQ.value || '').trim().length; } catch (x) { tlen = 0; }
-  var r = updateDurchip(inpQ, chipQ);
-  if (r !== true) { chipDbg(len, tlen, r === false ? false : r, 0, src, rowId); return false; }
   var cw = 0;
   try { cw = chipQ.offsetWidth || 0; } catch (x) { cw = 0; }
-  if (!(cw > 0)) { chipDbg(len, tlen, true, 0, src, rowId); return false; }
-  inpQ.style.paddingRight = (cw + 12) + 'px';
-  autosize(inpQ);
-  chipQ.style.backgroundColor = 'transparent';
-  chipDbg(len, tlen, true, cw + 12, src, rowId);
-  return true;
+  if (!(cw > 0)) { chipDbg(len, tlen, true, 0, 0, src, rowId); return false; }
+  var pad = cw + 12;
+  var h0 = 0, h1 = 0;
+  try {
+    inpQ.style.height = 'auto';
+    h0 = inpQ.scrollHeight || 0;
+    inpQ.style.paddingRight = pad + 'px';
+    inpQ.style.height = 'auto';
+    h1 = inpQ.scrollHeight || 0;
+  } catch (x) { h0 = 0; h1 = 0; }
+  var dh = h1 - h0;
+  if (dh > 0) {
+    try {
+      inpQ.style.height = h1 + 'px';
+      chipQ.style.backgroundColor = 'transparent';
+    } catch (x) {}
+    chipDbg(len, tlen, true, pad, dh, src, rowId);
+    return true;
+  }
+  try {
+    inpQ.style.paddingRight = '';
+    inpQ.style.height = 'auto';
+    inpQ.style.height = inpQ.scrollHeight + 'px';
+  } catch (x) {}
+  chipDbg(len, tlen, false, 0, dh, src, rowId);
+  return false;
 }
 
 /* Пересчитать метки внутри списка: после рендера, набора и ресайза. */
@@ -403,12 +428,16 @@ var lastDurchipXY = null;
  * (фокус уходит редко), в диагностике — строка «Метка-фокус:». */
 var CHIPBLUR_KEY = 'external-brain-chipblur-v1';
 var chipBlurLog = [];
-function chipDbg(len, tlen, reached, pad, src, rowId) {
+function chipDbg(len, tlen, reached, pad, dh, src, rowId) {
   try {
     var e = { t: Date.now(), len: len, reached: (reached === true) ? 1 : (reached === false ? 0 : String(reached).slice(0, 40)), pad: pad, src: src || '' };
     try {
       var tl = parseInt(tlen, 10);
       if (tl >= 0 && tl !== len) e.tlen = tl;
+    } catch (x) {}
+    try {
+      var d = parseInt(dh, 10);
+      if (d) e.dh = d;
     } catch (x) {}
     if (rowId) e.id = String(rowId).slice(-6);
     if (!reached && len > 30 && lastDurchipXY) {
@@ -445,6 +474,24 @@ function snapChipBlur(e) {
     var xy = lastDurchipXY;
     var chipW = 0;
     try { chipW = chip.offsetWidth || 0; } catch (x) { chipW = 0; }
+    /* E-замер тут же (v184): та же дельта scrollHeight, что в fitChipRow,
+     * но неразрушающе — исходные paddingRight/height возвращаем синхронно,
+     * кадра между нет. Зеркальный reached выше может врать на устройстве
+     * (см. fitChipRow), а e/dh — честные для этого шрифта. */
+    var edh = 0;
+    try {
+      var origPad = t.style ? String(t.style.paddingRight || '') : '';
+      var origH = t.style ? String(t.style.height || '') : '';
+      t.style.height = 'auto';
+      var eh0 = t.scrollHeight || 0;
+      t.style.paddingRight = ((chipW || 0) + 12) + 'px';
+      t.style.height = 'auto';
+      var eh1 = t.scrollHeight || 0;
+      edh = eh1 - eh0;
+      t.style.paddingRight = origPad;
+      t.style.height = 'auto';
+      t.style.height = origH || (t.scrollHeight + 'px');
+    } catch (x) { edh = 0; }
     var pad = '';
     try { pad = t.style ? String(t.style.paddingRight || '') : ''; } catch (x) { pad = ''; }
     var chipTx = '';
@@ -458,6 +505,7 @@ function snapChipBlur(e) {
     try { var rr = t.getBoundingClientRect(); fw = Math.round(rr.width || 0); } catch (x) { fw = 0; }
     var snap = { t: Date.now(), raw: raw.length, trim: trim.length,
       reached: (verdict === true) ? 1 : (verdict === false ? 0 : String(verdict).slice(0, 40)),
+      e: edh > 0 ? 1 : 0, dh: edh,
       chipW: chipW, pad: pad, chip: chipTx, w: fw, tail: tail };
     if (rowId) snap.id = String(rowId).slice(-6);
     if (xy) { snap.mw = xy.mw; snap.cw = xy.cw; }
