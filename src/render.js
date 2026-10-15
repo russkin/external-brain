@@ -385,6 +385,11 @@ function fitChipRow(div, src) {
   var pad = cw + 12;
   var h0 = 0, h1 = 0;
   try {
+    /* Сброс старой полосы ПЕРЕД h0 (v185): иначе h0 читается поверх
+     * вчерашнего paddingRight и вердикт инвертируется каждый ввод
+     * (чётные буквы — 5 строк, нечётные — 4, как на фото). Всё синхронно,
+     * кадра между нет — сброса не видно. */
+    inpQ.style.paddingRight = '';
     inpQ.style.height = 'auto';
     h0 = inpQ.scrollHeight || 0;
     inpQ.style.paddingRight = pad + 'px';
@@ -482,6 +487,8 @@ function snapChipBlur(e) {
     try {
       var origPad = t.style ? String(t.style.paddingRight || '') : '';
       var origH = t.style ? String(t.style.height || '') : '';
+      /* Тот же сброс, что в fitChipRow (v185): eh0 — строго без полосы. */
+      t.style.paddingRight = '';
       t.style.height = 'auto';
       var eh0 = t.scrollHeight || 0;
       t.style.paddingRight = ((chipW || 0) + 12) + 'px';

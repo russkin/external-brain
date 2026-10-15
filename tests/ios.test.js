@@ -763,6 +763,11 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(rendSrc.includes('inpQ.scrollHeight') && rendSrc.includes('h1 - h0') &&
       diagSrc.includes('dh=+'),
       'вердикт полосы через зеркало — на Honor Sans врёт на слово (v184: дельта scrollHeight)');
+    var iFit = rendSrc.indexOf('function fitChipRow');
+    var fitBlock = rendSrc.slice(iFit, rendSrc.indexOf('function chipDbg'));
+    assert.ok(fitBlock.indexOf("paddingRight = ''") !== -1 &&
+      fitBlock.indexOf("paddingRight = ''") < fitBlock.indexOf('scrollHeight'),
+      'h0 меряется поверх старой полосы — вердикт инвертируется каждый ввод (v185)');
   });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
