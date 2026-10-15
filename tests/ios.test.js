@@ -669,8 +669,10 @@ describe('логика вызывается с state.tasks', () => {
       'цифры метки не по центру по вертикали');
     assert.ok(rendSrc.includes('paddingRight') && rendSrc.includes('offsetWidth'),
       'нет полосы справа под метку (текст заезжает под неё)');
-    assert.ok(rendSrc.includes('updateDurchip(inpQ, chipQ)'),
-      'полоса ставится без замера накрытия (всем подряд)');
+    assert.ok(rendSrc.includes('function fitChipRow') &&
+      rendSrc.includes('fitChipRow(rowsQ[qi])') &&
+      appSrc.includes('function fitChipRow(div)'),
+      'нет подгонки полосы под метку при вводе');
     var iMk = rendSrc.indexOf('function makeLine');
     var mkBlock = rendSrc.slice(iMk, rendSrc.indexOf('function autosize'));
     assert.ok(mkBlock.includes('durchip'), 'строка не рисует метку времени');
@@ -727,7 +729,7 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(!rendSrc.includes("chip.style.right") && !rendSrc.includes("chip.style.bottom"),
       'позиция метки дёргается из JS (v162 откачен)');
     assert.ok(rendSrc.includes('refreshDurchips(box)') &&
-      appSrc.includes('if (chipN) updateDurchip(inp, chipN)'),
+      appSrc.includes('fitChipRow(div)'),
       'рендер/набор текста не пересчитывают фон метки');
     assert.ok(appSrc.includes("refreshDurchips(el('lines'))"),
       'ресайз (клавиатура/поворот) не пересчитывает фон метки');
@@ -996,7 +998,7 @@ describe('синк: триггеры и протокол', () => {
   });
   it('отрисовка — модуль src/render.js (этап 7, без черновика)', () => {
     for (const fn of ['render', 'renderLines', 'renderStatus', 'makeLine', 'makeGrip',
-      'autosize', 'updateDurchip', 'refreshDurchips', 'lineEstMin', 'expandForAnchor',
+      'autosize', 'fitChipRow', 'updateDurchip', 'refreshDurchips', 'lineEstMin', 'expandForAnchor',
       'init']) {
       assert.ok(rendSrc.includes('function ' + fn), 'нет ' + fn + ' в src/render.js');
     }
@@ -1007,6 +1009,7 @@ describe('синк: триггеры и протокол', () => {
       !appSrc.includes('window.EBRender.focusTrailing()') &&
       appSrc.includes('window.EBRender.expandForAnchor(anchorId, indent)') &&
       appSrc.includes('window.EBRender.autosize(ta)') &&
+      appSrc.includes('window.EBRender.fitChipRow(div)') &&
       appSrc.includes('window.EBRender.updateDurchip(inp, chip)') &&
       appSrc.includes('window.EBRender.refreshDurchips(box)'),
       'app.js не ходит в отрисовку через тонкие алиасы (вынос нечистый)');

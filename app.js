@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v177';
+  var APP_VERSION = 'v178';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -299,6 +299,9 @@
   }
   function autosize(ta) {
     if (window.EBRender) window.EBRender.autosize(ta);
+  }
+  function fitChipRow(div) {
+    if (window.EBRender && window.EBRender.fitChipRow) window.EBRender.fitChipRow(div);
   }
   function updateDurchip(inp, chip) {
     if (window.EBRender) window.EBRender.updateDurchip(inp, chip);
@@ -715,8 +718,11 @@
     inp.addEventListener('input', function () {
       if (inputClosed) return;
       autosize(inp);
-      var chipN = div.querySelector ? div.querySelector('.durchip') : null;
-      if (chipN) updateDurchip(inp, chipN);
+      /* Полоса под метку сразу при вводе (v178): текст только что мог
+       * заехать под неё — замер внутри fitChipRow, без накрытия ничего
+       * не трогает. Старый вызов updateDurchip здесь заменён: он лишь
+       * красил фон, а полосу не ставил. */
+      fitChipRow(div);
       if (!taskId) return;
       if (saveTimer) clearTimeout(saveTimer);
       saveTimer = setTimeout(function () {

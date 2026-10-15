@@ -348,6 +348,26 @@ function updateDurchip(inp, chip) {
   return reached;
 }
 
+/* Полоса справа под метку для одной строки (v178, см. вызовы выше):
+ * замер без полосы → полоса по ширине метки → высота заново, т.к.
+ * переносы меняются → фон сбросить в прозрачный (накрытия больше нет).
+ * Возвращает, ставилась ли полоса. Каретку не трогает (позиция
+ * по символам переживает reflow). */
+function fitChipRow(div) {
+  if (!div || !div.querySelector) return false;
+  var chipQ = div.querySelector('.durchip');
+  var inpQ = div.querySelector('.tinput');
+  if (!chipQ || !inpQ) return false;
+  if (!updateDurchip(inpQ, chipQ)) return false;
+  var cw = 0;
+  try { cw = chipQ.offsetWidth || 0; } catch (x) { cw = 0; }
+  if (!(cw > 0)) return false;
+  inpQ.style.paddingRight = (cw + 12) + 'px';
+  autosize(inpQ);
+  chipQ.style.backgroundColor = 'transparent';
+  return true;
+}
+
 /* Пересчитать метки внутри списка: после рендера, набора и ресайза. */
 function refreshDurchips(box) {
   if (!box || !box.querySelectorAll) return;
@@ -419,26 +439,15 @@ function renderLines() {
       }
     }
   }
-  /* Полоса справа под метку (v166): ТОЛЬКО если текст реально заходит
-   * под неё (замер updateDurchip) — иначе поле как было. Порядок важен:
-   * замер без полосы → полоса по ширине метки → высота заново, т.к.
-   * переносы меняются → фон сбросить в прозрачный (накрытия больше нет).
-   * Набор текста и ресайз полосу не трогают (только фон): раскладка —
-   * дело рендера, иначе каретка прыгала бы при каждой букве. */
+  /* Полоса справа под метку (v166, при вводе — v178): ТОЛЬКО если текст
+   * реально заходит под неё (замер updateDurchip) — иначе поле как было.
+   * Вынесено в fitChipRow: renderLines зовёт для всех строк, обработчик
+   * ввода — для текущей (иначе полоса появлялась лишь на следующем
+   * рендере). Снимается полоса только пересборкой строк (свежие узлы),
+   * при вводе — только ставится: иначе печать на границе давала бы
+   * мерцание раскладки туда-сюда. */
   var rowsQ = box.querySelectorAll ? box.querySelectorAll('.tline') : [];
-  for (var qi = 0; qi < rowsQ.length; qi++) {
-    var chipQ = rowsQ[qi].querySelector ? rowsQ[qi].querySelector('.durchip') : null;
-    var inpQ = rowsQ[qi].querySelector ? rowsQ[qi].querySelector('.tinput') : null;
-    if (chipQ && inpQ && updateDurchip(inpQ, chipQ)) {
-      var cw = 0;
-      try { cw = chipQ.offsetWidth || 0; } catch (x) { cw = 0; }
-      if (cw > 0) {
-        inpQ.style.paddingRight = (cw + 12) + 'px';
-        autosize(inpQ);
-      }
-      chipQ.style.backgroundColor = 'transparent';
-    }
-  }
+  for (var qi = 0; qi < rowsQ.length; qi++) fitChipRow(rowsQ[qi]);
   /* Раскрыть многострочные по содержимому (в потоке, после вставки). */
   var areas = box.querySelectorAll ? box.querySelectorAll('.tinput') : [];
   for (var q = 0; q < areas.length; q++) autosize(areas[q]);
@@ -701,6 +710,7 @@ var api = {
   renderStatus: renderStatus,
   expandForAnchor: expandForAnchor,
   autosize: autosize,
+  fitChipRow: fitChipRow,
   updateDurchip: updateDurchip,
   refreshDurchips: refreshDurchips
 };
