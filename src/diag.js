@@ -252,7 +252,8 @@ function diagText() {
         var cm = (cd.getMinutes() < 10 ? '0' : '') + cd.getMinutes();
         var cs2 = (cd.getSeconds() < 10 ? '0' : '') + cd.getSeconds();
         var cell = ch + ':' + cm + ':' + cs2 + ' len=' + ce.len +
-          ' reached=' + ce.reached + ' pad=' + ce.pad;
+          ' reached=' + ce.reached + ' pad=' + ce.pad +
+          (ce.src ? ' ' + ce.src : '');
         if (ce.mw != null) cell += ' mw=' + ce.mw + ' cw=' + ce.cw;
         crows.push(cell);
       }

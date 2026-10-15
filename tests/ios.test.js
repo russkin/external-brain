@@ -670,8 +670,8 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(rendSrc.includes('paddingRight') && rendSrc.includes('offsetWidth'),
       'нет полосы справа под метку (текст заезжает под неё)');
     assert.ok(rendSrc.includes('function fitChipRow') &&
-      rendSrc.includes('fitChipRow(rowsQ[qi])') &&
-      appSrc.includes('function fitChipRow(div)'),
+      rendSrc.includes("fitChipRow(rowsQ[qi], 'render')") &&
+      appSrc.includes('function fitChipRow(div, src)'),
       'нет подгонки полосы под метку при вводе');
     assert.ok(rendSrc.includes('chipDbg') && rendSrc.includes('external-brain-chipfit-v1') &&
       diagSrc.includes('external-brain-chipfit-v1') && diagSrc.includes('Метка: '),
@@ -732,8 +732,13 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(!rendSrc.includes("chip.style.right") && !rendSrc.includes("chip.style.bottom"),
       'позиция метки дёргается из JS (v162 откачен)');
     assert.ok(rendSrc.includes('refreshDurchips(box)') &&
-      appSrc.includes('fitChipRow(div)'),
+      appSrc.includes("fitChipRow(div, 'input')"),
       'рендер/набор текста не пересчитывают фон метки');
+    assert.ok(appSrc.includes("fitChipRow(div, 'change')") &&
+      appSrc.includes("addEventListener('compositionend'"),
+      'подстраховки change/compositionend нет (v180)');
+    assert.ok(rendSrc.includes("return 'err:'") && rendSrc.includes('lastDurchipXY'),
+      'замер не различает «свободно» и «упал» (v180)');
     assert.ok(appSrc.includes("refreshDurchips(el('lines'))"),
       'ресайз (клавиатура/поворот) не пересчитывает фон метки');
   });
@@ -1012,7 +1017,7 @@ describe('синк: триггеры и протокол', () => {
       !appSrc.includes('window.EBRender.focusTrailing()') &&
       appSrc.includes('window.EBRender.expandForAnchor(anchorId, indent)') &&
       appSrc.includes('window.EBRender.autosize(ta)') &&
-      appSrc.includes('window.EBRender.fitChipRow(div)') &&
+      appSrc.includes('window.EBRender.fitChipRow(div, src)') &&
       appSrc.includes('window.EBRender.updateDurchip(inp, chip)') &&
       appSrc.includes('window.EBRender.refreshDurchips(box)'),
       'app.js не ходит в отрисовку через тонкие алиасы (вынос нечистый)');

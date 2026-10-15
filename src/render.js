@@ -308,6 +308,7 @@ function updateDurchip(inp, chip) {
   if (!text) return false;
   var m = document.createElement('div');
   var reached = false;
+  var derr = null;
   try {
     var ir = inp.getBoundingClientRect();
     var cr = chip.getBoundingClientRect();
@@ -345,9 +346,13 @@ function updateDurchip(inp, chip) {
        * размещение одинаковое и у свободных, и у накрытых. */
       reached = true;
     }
-  } catch (x) {} finally {
+  } catch (x) { derr = String((x && x.message) || x).slice(0, 60); } finally {
     if (m.parentNode) m.parentNode.removeChild(m);
   }
+  /* Возврат тройной (v180, для телеметрии): true — накрытие, false —
+   * свободно, строка 'err:...' — замер упал с исключением (раньше это
+   * молча выглядело как «свободно»). */
+  if (derr) return 'err:' + derr;
   return reached;
 }
 
@@ -356,21 +361,22 @@ function updateDurchip(inp, chip) {
  * переносы меняются → фон сбросить в прозрачный (накрытия больше нет).
  * Возвращает, ставилась ли полоса. Каретку не трогает (позиция
  * по символам переживает reflow). */
-function fitChipRow(div) {
+function fitChipRow(div, src) {
   if (!div || !div.querySelector) return false;
   var chipQ = div.querySelector('.durchip');
   var inpQ = div.querySelector('.tinput');
   if (!chipQ || !inpQ) return false;
   var len = 0;
   try { len = String(inpQ.value || '').length; } catch (x) { len = 0; }
-  if (!updateDurchip(inpQ, chipQ)) { chipDbg(len, false, 0); return false; }
+  var r = updateDurchip(inpQ, chipQ);
+  if (r !== true) { chipDbg(len, r === false ? false : r, 0, src); return false; }
   var cw = 0;
   try { cw = chipQ.offsetWidth || 0; } catch (x) { cw = 0; }
-  if (!(cw > 0)) { chipDbg(len, true, 0); return false; }
+  if (!(cw > 0)) { chipDbg(len, true, 0, src); return false; }
   inpQ.style.paddingRight = (cw + 12) + 'px';
   autosize(inpQ);
   chipQ.style.backgroundColor = 'transparent';
-  chipDbg(len, true, cw + 12);
+  chipDbg(len, true, cw + 12, src);
   return true;
 }
 
@@ -385,9 +391,9 @@ var CHIPLOG_KEY = 'external-brain-chipfit-v1';
 var chipLog = [];
 var chipLogSaved = 0;
 var lastDurchipXY = null;
-function chipDbg(len, reached, pad) {
+function chipDbg(len, reached, pad, src) {
   try {
-    var e = { t: Date.now(), len: len, reached: reached ? 1 : 0, pad: pad };
+    var e = { t: Date.now(), len: len, reached: (reached === true) ? 1 : (reached === false ? 0 : String(reached).slice(0, 40)), pad: pad, src: src || '' };
     if (!reached && len > 30 && lastDurchipXY) {
       e.mw = lastDurchipXY.mw;
       e.cw = lastDurchipXY.cw;
@@ -479,7 +485,7 @@ function renderLines() {
    * при вводе — только ставится: иначе печать на границе давала бы
    * мерцание раскладки туда-сюда. */
   var rowsQ = box.querySelectorAll ? box.querySelectorAll('.tline') : [];
-  for (var qi = 0; qi < rowsQ.length; qi++) fitChipRow(rowsQ[qi]);
+  for (var qi = 0; qi < rowsQ.length; qi++) fitChipRow(rowsQ[qi], 'render');
   /* Раскрыть многострочные по содержимому (в потоке, после вставки). */
   var areas = box.querySelectorAll ? box.querySelectorAll('.tinput') : [];
   for (var q = 0; q < areas.length; q++) autosize(areas[q]);
