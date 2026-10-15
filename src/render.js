@@ -455,12 +455,13 @@ var lastHeadLift = null;
 /* Последний принятый сдвиг (v160): всплески offsetTop в резинке/флике
  * отбрасываем сравнением с ним, а не с нулём. */
 var lastGoodOff = null;
-/* Палец на экране (v162, возврат в v174): пока идёт касание, дотяжку
- * не трогаем вовсе — живой трекинг (ниже) лечит всё на settled-событиях.
- * Снапшот v170 так не умел: без подписок шапке было нечем лечиться
- * во время скролла. Счётчик, а не флаг — мультитач. */
+/* Палец на экране (v162, смягчён в v177): счётчик только для телеметрии
+ * (видно, было ли касание в момент замера). Заморозку по нему УБРАЛИ:
+ * телеметрия v176 показала, что на Android скролл с клавиатурой панорамит
+ * визуальный вьюпорт при замороженной раскладке — заморозка оставляла
+ * шапку позади на весь жест. Счётчик, а не флаг — мультитач. */
 var touchDown = 0;
-/* Телеметрия дотяжки (v175): кольцо последних 15 замеров + причина решения.
+/* Телеметрия дотяжки (v175): кольцо последних 30 замеров + причина решения.
  * Пишется в localStorage (переживает перезагрузку) и показывается
  * в диагностике («Шапка:») — по ней видно, что Safari/Chrome отдавали
  * в момент улёта, без устройства не разобраться (урок v159–v163).
@@ -516,13 +517,26 @@ function syncHeaderLift() {
     }
     try { sy = window.pageYOffset || 0; } catch (e2) { sy = 0; }
   } catch (x) { off = 0; }
-  /* Заморозка под пальцем — ПОСЛЕ замера, чтобы в журнале было видно,
-   * какое значение отбросили. */
-  if (touchDown > 0) { headDbg(off, sy, 'touch'); return; }
   if (off > 0) {
     /* Оттяжка-резинка (v159): в момент pull-down layout уезжает в минус —
      * тогда дотяжку не трогаем вовсе. */
     if (sy < 0) { headDbg(off, sy, 'overscroll'); return; }
+    /* За краем раскладки (v177): визуальный вьюпорт выехал за границы
+     * документа (резинка сверху/снизу) — offsetTop там врёт, а нативная
+     * резинка сама везёт содержимое вместе с шапкой. Проверяем по
+     * visualViewport.pageTop: норма — [0, высотаДокумента - высотаВида].
+     * Это замена заморозке v174: та слепила и честный скролл под пальцем
+     * (телеметрия v176: off 91→283 честно рос, sy стоял — панорама вида
+     * при замороженной раскладке). Нет данных — пропускаем проверку. */
+    try {
+      if (window.visualViewport && typeof window.visualViewport.pageTop === 'number' &&
+          typeof window.visualViewport.height === 'number' && window.visualViewport.height > 0) {
+        var de = document.documentElement;
+        var maxTop = Math.max(0, (de ? de.scrollHeight : 0) - window.visualViewport.height);
+        var vvt = window.visualViewport.pageTop;
+        if (vvt < 0 || vvt > maxTop) { headDbg(off, sy, 'edge'); return; }
+      }
+    } catch (x) {}
     /* Всплеск (v160): одиночный прыжок offsetTop на сотни px за одно
      * событие — это резинка/флик, а не честный сдвиг (честные идут
      * потоком мелких шагов: анимация клавиатуры, скролл). Такой прыжок
@@ -638,17 +652,15 @@ function init(ctx) {
     document.addEventListener('focusin', syncHeaderLift);
     document.addEventListener('focusout', syncHeaderLift);
     document.addEventListener('focusin', centerActiveLine);
-    /* Счётчик касаний (v162): только считаем, ничего не отменяем —
-     * passive, скролл не трогаем. touchcancel обязательно, иначе
-     * прерванный жест заморозит дотяжку навсегда. */
+    /* Счётчик касаний: только для телеметрии (видно, было ли касание
+     * в момент замера) — на дотяжку не влияет с v177. Passive. */
     try {
       document.addEventListener('touchstart', function () { touchDown++; }, { passive: true });
     } catch (x) {
       try { document.addEventListener('touchstart', function () { touchDown++; }); } catch (e2) {}
     }
-    /* Пересчёт при отпускании (v176): settled-события иногда не приходят
-     * вовсе — тогда заморозка strands шапку навсегда; принудительный
-     * пересчёт на touchend лечит без ожидания событий. */
+    /* Пересчёт при отпускании: settled-события иногда не приходят вовсе —
+     * принудительный пересчёт на touchend лечит без ожидания событий. */
     function touchUp() {
       if (touchDown > 0) touchDown--;
       try { syncHeaderLift(); } catch (x) {}

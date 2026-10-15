@@ -1043,8 +1043,11 @@ describe('синк: триггеры и протокол', () => {
       'дотяжка в оттяжке-резинке не гасится (шапка улетает в середину списка)');
     assert.ok(rendSrc.includes('lastGoodOff') && rendSrc.includes('> 160'),
       'всплески offsetTop не отсекаются (шапка улетает в середине списка)');
-    assert.ok(rendSrc.includes('touchDown') && rendSrc.includes('touchcancel'),
-      'дотяжка не замораживается под пальцем (резинка уносит шапку)');
+    assert.ok(rendSrc.includes('pageTop') && rendSrc.includes('scrollHeight') &&
+      rendSrc.includes("'edge'"),
+      'выезд вида за края не отсекается (резинка уносит шапку)');
+    assert.ok(!rendSrc.includes('if (touchDown > 0) return'),
+      'заморозка под пальцем осталась (шапка отстаёт весь скролл)');
     assert.ok(rendSrc.includes('headDbg') && rendSrc.includes('external-brain-headlift-v1'),
       'нет телеметрии дотяжки для разбора улётов');
     assert.ok(rendSrc.includes('headWatchStart') && rendSrc.includes('setInterval') &&
