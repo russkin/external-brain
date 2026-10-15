@@ -369,16 +369,18 @@ function fitChipRow(div, src) {
   var rowId = '';
   try { rowId = div.getAttribute ? (div.getAttribute('data-id') || '') : ''; } catch (x) { rowId = ''; }
   var len = 0;
+  var tlen = 0;
   try { len = String(inpQ.value || '').length; } catch (x) { len = 0; }
+  try { tlen = String(inpQ.value || '').trim().length; } catch (x) { tlen = 0; }
   var r = updateDurchip(inpQ, chipQ);
-  if (r !== true) { chipDbg(len, r === false ? false : r, 0, src, rowId); return false; }
+  if (r !== true) { chipDbg(len, tlen, r === false ? false : r, 0, src, rowId); return false; }
   var cw = 0;
   try { cw = chipQ.offsetWidth || 0; } catch (x) { cw = 0; }
-  if (!(cw > 0)) { chipDbg(len, true, 0, src, rowId); return false; }
+  if (!(cw > 0)) { chipDbg(len, tlen, true, 0, src, rowId); return false; }
   inpQ.style.paddingRight = (cw + 12) + 'px';
   autosize(inpQ);
   chipQ.style.backgroundColor = 'transparent';
-  chipDbg(len, true, cw + 12, src, rowId);
+  chipDbg(len, tlen, true, cw + 12, src, rowId);
   return true;
 }
 
@@ -393,9 +395,21 @@ var CHIPLOG_KEY = 'external-brain-chipfit-v1';
 var chipLog = [];
 var chipLogSaved = 0;
 var lastDurchipXY = null;
-function chipDbg(len, reached, pad, src, rowId) {
+/* Замороженный снапшот ухода фокуса (v182, вариант В): пишется на focusout
+ * в capture-фазе — ДО bubble-обработчиков change/commit/render, пока узлы
+ * живы, клавиатура и вёрстка ещё на месте. Один тап по любому месту (включая
+ * путь в ⚙ → ⓘ) сначала гасит фокус — и сам кладёт в localStorage парный
+ * захват «что видел замер в момент ухода». Кольцо 5, пишется всегда сразу
+ * (фокус уходит редко), в диагностике — строка «Метка-фокус:». */
+var CHIPBLUR_KEY = 'external-brain-chipblur-v1';
+var chipBlurLog = [];
+function chipDbg(len, tlen, reached, pad, src, rowId) {
   try {
     var e = { t: Date.now(), len: len, reached: (reached === true) ? 1 : (reached === false ? 0 : String(reached).slice(0, 40)), pad: pad, src: src || '' };
+    try {
+      var tl = parseInt(tlen, 10);
+      if (tl >= 0 && tl !== len) e.tlen = tl;
+    } catch (x) {}
     if (rowId) e.id = String(rowId).slice(-6);
     if (!reached && len > 30 && lastDurchipXY) {
       e.mw = lastDurchipXY.mw;
@@ -410,6 +424,39 @@ function chipDbg(len, reached, pad, src, rowId) {
       chipLogSaved = now;
       try { localStorage.setItem(CHIPLOG_KEY, JSON.stringify(chipLog)); } catch (x) {}
     }
+  } catch (x) {}
+}
+function snapChipBlur(e) {
+  try {
+    var t = (e && e.target) || null;
+    if (!t || !t.classList || !t.classList.contains('tinput')) return;
+    var div = null;
+    try { div = t.closest ? t.closest('.tline') : null; } catch (x) { div = null; }
+    var rowId = '';
+    try { rowId = div && div.getAttribute ? (div.getAttribute('data-id') || '') : ''; } catch (x) { rowId = ''; }
+    var raw = '';
+    try { raw = String(t.value == null ? '' : t.value); } catch (x) { raw = ''; }
+    var trim = '';
+    try { trim = raw.trim(); } catch (x) { trim = ''; }
+    var chip = null;
+    try { chip = div && div.querySelector ? div.querySelector('.durchip') : null; } catch (x) { chip = null; }
+    if (!chip) return;
+    var verdict = updateDurchip(t, chip);
+    var xy = lastDurchipXY;
+    var chipW = 0;
+    try { chipW = chip.offsetWidth || 0; } catch (x) { chipW = 0; }
+    var pad = '';
+    try { pad = t.style ? String(t.style.paddingRight || '') : ''; } catch (x) { pad = ''; }
+    var chipTx = '';
+    try { chipTx = String(chip.textContent || '').slice(0, 12); } catch (x) { chipTx = ''; }
+    var snap = { t: Date.now(), raw: raw.length, trim: trim.length,
+      reached: (verdict === true) ? 1 : (verdict === false ? 0 : String(verdict).slice(0, 40)),
+      chipW: chipW, pad: pad, chip: chipTx };
+    if (rowId) snap.id = String(rowId).slice(-6);
+    if (xy) { snap.mw = xy.mw; snap.cw = xy.cw; }
+    chipBlurLog.push(snap);
+    if (chipBlurLog.length > 5) chipBlurLog.shift();
+    try { localStorage.setItem(CHIPBLUR_KEY, JSON.stringify(chipBlurLog)); } catch (x) {}
   } catch (x) {}
 }
 function refreshDurchips(box) {
@@ -751,6 +798,14 @@ function init(ctx) {
       document.addEventListener('focusin', function () { headDbg(-1, -1, 'focus'); });
       document.addEventListener('focusout', function () { headDbg(-1, -1, 'blur'); });
     } catch (x) {}
+    /* Замороженный снапшот метки при уходе фокуса (v182, вариант В):
+     * capture-фаза — срабатывает ДО bubble-change/commit/render, узлы
+     * и вёрстка ещё живы. Старые браузеры третий аргумент-флаг понимают. */
+    try {
+      document.addEventListener('focusout', snapChipBlur, true);
+    } catch (x) {
+      try { document.addEventListener('focusout', snapChipBlur); } catch (e2) {}
+    }
     /* Сторож (v176): пока фокус в поле, раз в 500мс принудительно
      * пересчитываем дотяжку. Лечит любое залипание (непришедшие события,
      * пропущенный touchend): хуже не делает — без изменений dedup
@@ -773,6 +828,7 @@ var api = {
   autosize: autosize,
   fitChipRow: fitChipRow,
   updateDurchip: updateDurchip,
+  snapChipBlur: snapChipBlur,
   refreshDurchips: refreshDurchips
 };
 

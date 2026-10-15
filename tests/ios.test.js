@@ -747,6 +747,18 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes("refreshDurchips(el('lines'))"),
       'ресайз (клавиатура/поворот) не пересчитывает фон метки');
   });
+  it('Метка-фокус v182: focusout морозит замер до change/render + raw/trim', () => {
+    assert.ok(rendSrc.includes('external-brain-chipblur-v1') &&
+      rendSrc.includes('function snapChipBlur'),
+      'нет замороженного снапшота ухода фокуса (v182)');
+    assert.ok(rendSrc.includes("addEventListener('focusout', snapChipBlur, true)"),
+      'снапшот висит не в capture-фазе — change/render снесут узлы раньше (v182)');
+    assert.ok(rendSrc.includes('chipDbg(len, tlen,') && rendSrc.includes('e.tlen'),
+      'телеметрия не различает живую и тримленную длину (v182)');
+    assert.ok(diagSrc.includes('external-brain-chipblur-v1') &&
+      diagSrc.includes('Метка-фокус: '),
+      'диагностика не показывает замороженный снапшот (v182)');
+  });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');
   });

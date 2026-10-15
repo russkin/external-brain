@@ -252,12 +252,39 @@ function diagText() {
         var cm = (cd.getMinutes() < 10 ? '0' : '') + cd.getMinutes();
         var cs2 = (cd.getSeconds() < 10 ? '0' : '') + cd.getSeconds();
         var cell = ch + ':' + cm + ':' + cs2 + ' len=' + ce.len +
+          (ce.tlen != null && ce.tlen !== ce.len ? '/' + ce.tlen : '') +
           ' reached=' + ce.reached + ' pad=' + ce.pad +
           (ce.src ? ' ' + ce.src : '') + (ce.id ? ' #' + ce.id : '');
         if (ce.mw != null) cell += ' mw=' + ce.mw + ' cw=' + ce.cw;
         crows.push(cell);
       }
       lines.push('Метка: ' + crows.join(' | '));
+    }
+  } catch (x) {}
+  /* Замороженный снапшот ухода фокуса (v182, временный, выпилить вместе
+   * с телеметрией подгонки после поимки строки с фото): пишется на focusout
+   * в capture-фазе, переживает change/commit/render — в диагностике виден
+   * даже после пути через меню. */
+  try {
+    var braw = localStorage.getItem('external-brain-chipblur-v1');
+    var blog = braw ? JSON.parse(braw) : null;
+    if (blog && blog.length) {
+      var brows = [];
+      for (var bi = 0; bi < blog.length; bi++) {
+        var be = blog[bi];
+        var bd = new Date(be.t || 0);
+        var bh = (bd.getHours() < 10 ? '0' : '') + bd.getHours();
+        var bm = (bd.getMinutes() < 10 ? '0' : '') + bd.getMinutes();
+        var bs = (bd.getSeconds() < 10 ? '0' : '') + bd.getSeconds();
+        var bcell = bh + ':' + bm + ':' + bs + ' raw=' + be.raw + ' trim=' + be.trim +
+          ' reached=' + be.reached +
+          (be.mw != null ? ' mw=' + be.mw + ' cw=' + be.cw : '') +
+          ' chipW=' + be.chipW + ' pad=' + (be.pad || '—') +
+          (be.chip ? " chip='" + be.chip + "'" : '') +
+          (be.id ? ' #' + be.id : '');
+        brows.push(bcell);
+      }
+      lines.push('Метка-фокус: ' + brows.join(' | '));
     }
   } catch (x) {}
   var h = C.getHistoryCounts();
