@@ -676,6 +676,11 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(rendSrc.includes('chipDbg') && rendSrc.includes('external-brain-chipfit-v1') &&
       diagSrc.includes('external-brain-chipfit-v1') && diagSrc.includes('Метка: '),
       'нет временной телеметрии подгонки (v179)');
+    assert.ok(rendSrc.includes('blurTimer') && rendSrc.includes(', 300)') &&
+      rendSrc.includes('clearTimeout(blurTimer)'),
+      'сброс дотяжки мгновенный — тап при клавиатуре мажет мимо кнопки (v181)');
+    assert.ok(rendSrc.includes("getAttribute('data-id')") && rendSrc.includes('chipLog.length > 40'),
+      'замер не привязан к строке / кольцо вытесняет улики (v181)');
     var iMk = rendSrc.indexOf('function makeLine');
     var mkBlock = rendSrc.slice(iMk, rendSrc.indexOf('function autosize'));
     assert.ok(mkBlock.includes('durchip'), 'строка не рисует метку времени');

@@ -253,7 +253,7 @@ function diagText() {
         var cs2 = (cd.getSeconds() < 10 ? '0' : '') + cd.getSeconds();
         var cell = ch + ':' + cm + ':' + cs2 + ' len=' + ce.len +
           ' reached=' + ce.reached + ' pad=' + ce.pad +
-          (ce.src ? ' ' + ce.src : '');
+          (ce.src ? ' ' + ce.src : '') + (ce.id ? ' #' + ce.id : '');
         if (ce.mw != null) cell += ' mw=' + ce.mw + ' cw=' + ce.cw;
         crows.push(cell);
       }

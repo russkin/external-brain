@@ -366,17 +366,19 @@ function fitChipRow(div, src) {
   var chipQ = div.querySelector('.durchip');
   var inpQ = div.querySelector('.tinput');
   if (!chipQ || !inpQ) return false;
+  var rowId = '';
+  try { rowId = div.getAttribute ? (div.getAttribute('data-id') || '') : ''; } catch (x) { rowId = ''; }
   var len = 0;
   try { len = String(inpQ.value || '').length; } catch (x) { len = 0; }
   var r = updateDurchip(inpQ, chipQ);
-  if (r !== true) { chipDbg(len, r === false ? false : r, 0, src); return false; }
+  if (r !== true) { chipDbg(len, r === false ? false : r, 0, src, rowId); return false; }
   var cw = 0;
   try { cw = chipQ.offsetWidth || 0; } catch (x) { cw = 0; }
-  if (!(cw > 0)) { chipDbg(len, true, 0, src); return false; }
+  if (!(cw > 0)) { chipDbg(len, true, 0, src, rowId); return false; }
   inpQ.style.paddingRight = (cw + 12) + 'px';
   autosize(inpQ);
   chipQ.style.backgroundColor = 'transparent';
-  chipDbg(len, true, cw + 12, src);
+  chipDbg(len, true, cw + 12, src, rowId);
   return true;
 }
 
@@ -391,17 +393,20 @@ var CHIPLOG_KEY = 'external-brain-chipfit-v1';
 var chipLog = [];
 var chipLogSaved = 0;
 var lastDurchipXY = null;
-function chipDbg(len, reached, pad, src) {
+function chipDbg(len, reached, pad, src, rowId) {
   try {
     var e = { t: Date.now(), len: len, reached: (reached === true) ? 1 : (reached === false ? 0 : String(reached).slice(0, 40)), pad: pad, src: src || '' };
+    if (rowId) e.id = String(rowId).slice(-6);
     if (!reached && len > 30 && lastDurchipXY) {
       e.mw = lastDurchipXY.mw;
       e.cw = lastDurchipXY.cw;
     }
     chipLog.push(e);
-    if (chipLog.length > 15) chipLog.shift();
+    if (chipLog.length > 40) chipLog.shift();
     var now = Date.now();
-    if (now - chipLogSaved > 2000) {
+    /* Позитив пишем сразу (v181): иначе его вытесняют из кольца
+     * последующие события до открытия диагностики. */
+    if (reached === true || now - chipLogSaved > 2000) {
       chipLogSaved = now;
       try { localStorage.setItem(CHIPLOG_KEY, JSON.stringify(chipLog)); } catch (x) {}
     }
@@ -697,7 +702,25 @@ function init(ctx) {
       window.visualViewport.addEventListener('scroll', syncHeaderLift);
     }
     document.addEventListener('focusin', syncHeaderLift);
-    document.addEventListener('focusout', syncHeaderLift);
+    /* Отложенный сброс (v181): тап по кнопке при открытой клавиатуре
+     * сначала гасит фокус — и мгновенный сброс дотяжки дёргает шапку
+     * прямо из-под пальца (клик мажет мимо). Ждём 300мс: тап успевает
+     * долететь, клавиатура — начать закрываться; следующий фокус
+     * отменяет таймер и дотягивает сразу. */
+    var blurTimer = null;
+    document.addEventListener('focusout', function () {
+      if (blurTimer) { try { clearTimeout(blurTimer); } catch (x) {} }
+      blurTimer = null;
+      try {
+        blurTimer = setTimeout(function () {
+          blurTimer = null;
+          syncHeaderLift();
+        }, 300);
+      } catch (x) {}
+    });
+    document.addEventListener('focusin', function () {
+      if (blurTimer) { try { clearTimeout(blurTimer); } catch (x) {} blurTimer = null; }
+    });
     document.addEventListener('focusin', centerActiveLine);
     /* Счётчик касаний: только для телеметрии (видно, было ли касание
      * в момент замера) — на дотяжку не влияет с v177. Passive. */
