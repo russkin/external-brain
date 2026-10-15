@@ -237,6 +237,28 @@ function diagText() {
       lines.push('Шапка: ' + rows.join(' | '));
     }
   } catch (x) {}
+  /* Телеметрия подгонки под метку (v179, временная): длина текста,
+   * вердикт замера, поставленный отступ; при «не достаёт» у длинного —
+   * координаты маркера/метки. Когда строка с фото разберётся — выпилить. */
+  try {
+    var craw = localStorage.getItem('external-brain-chipfit-v1');
+    var clog = craw ? JSON.parse(craw) : null;
+    if (clog && clog.length) {
+      var crows = [];
+      for (var ci = 0; ci < clog.length; ci++) {
+        var ce = clog[ci];
+        var cd = new Date(ce.t || 0);
+        var ch = (cd.getHours() < 10 ? '0' : '') + cd.getHours();
+        var cm = (cd.getMinutes() < 10 ? '0' : '') + cd.getMinutes();
+        var cs2 = (cd.getSeconds() < 10 ? '0' : '') + cd.getSeconds();
+        var cell = ch + ':' + cm + ':' + cs2 + ' len=' + ce.len +
+          ' reached=' + ce.reached + ' pad=' + ce.pad;
+        if (ce.mw != null) cell += ' mw=' + ce.mw + ' cw=' + ce.cw;
+        crows.push(cell);
+      }
+      lines.push('Метка: ' + crows.join(' | '));
+    }
+  } catch (x) {}
   var h = C.getHistoryCounts();
   lines.push('История: ↩ ' + h.u + ' · ↪ ' + h.r);
   lines.push('Сеть: ' + connLine());

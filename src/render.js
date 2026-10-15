@@ -302,6 +302,7 @@ function autosize(ta) {
  * доехал (v166: тогда вызывающий даёт полосу справа). */
 function updateDurchip(inp, chip) {
   if (!inp || !chip || !chip.style) return false;
+  lastDurchipXY = null;
   chip.style.backgroundColor = 'transparent';
   var text = inp.value || '';
   if (!text) return false;
@@ -334,6 +335,8 @@ function updateDurchip(inp, chip) {
     m.appendChild(marker);
     document.body.appendChild(m);
     var mr = marker.getBoundingClientRect();
+    lastDurchipXY = { mw: Math.round((mr.left - ir.left) * 10) / 10,
+      cw: Math.round((cr.left - ir.left) * 10) / 10 };
     if (mr.left >= cr.left - 2) {
       var bg = cs.getPropertyValue('background-color') || '';
       chip.style.backgroundColor =
@@ -358,17 +361,46 @@ function fitChipRow(div) {
   var chipQ = div.querySelector('.durchip');
   var inpQ = div.querySelector('.tinput');
   if (!chipQ || !inpQ) return false;
-  if (!updateDurchip(inpQ, chipQ)) return false;
+  var len = 0;
+  try { len = String(inpQ.value || '').length; } catch (x) { len = 0; }
+  if (!updateDurchip(inpQ, chipQ)) { chipDbg(len, false, 0); return false; }
   var cw = 0;
   try { cw = chipQ.offsetWidth || 0; } catch (x) { cw = 0; }
-  if (!(cw > 0)) return false;
+  if (!(cw > 0)) { chipDbg(len, true, 0); return false; }
   inpQ.style.paddingRight = (cw + 12) + 'px';
   autosize(inpQ);
   chipQ.style.backgroundColor = 'transparent';
+  chipDbg(len, true, cw + 12);
   return true;
 }
 
 /* Пересчитать метки внутри списка: после рендера, набора и ресайза. */
+
+/* Телеметрия подгонки под метку (v179, временная): каждое решение
+ * fitChipRow — длина текста, вердикт замера, поставленный паддинг,
+ * а при «не достаёт» у длинного текста — и сами координаты (маркер/метка).
+ * Кольцо 15, в localStorage не чаще раза в 2 сек, в диагностике —
+ * строка «Метка:». Когда строка с фото разберётся — выпилить. */
+var CHIPLOG_KEY = 'external-brain-chipfit-v1';
+var chipLog = [];
+var chipLogSaved = 0;
+var lastDurchipXY = null;
+function chipDbg(len, reached, pad) {
+  try {
+    var e = { t: Date.now(), len: len, reached: reached ? 1 : 0, pad: pad };
+    if (!reached && len > 30 && lastDurchipXY) {
+      e.mw = lastDurchipXY.mw;
+      e.cw = lastDurchipXY.cw;
+    }
+    chipLog.push(e);
+    if (chipLog.length > 15) chipLog.shift();
+    var now = Date.now();
+    if (now - chipLogSaved > 2000) {
+      chipLogSaved = now;
+      try { localStorage.setItem(CHIPLOG_KEY, JSON.stringify(chipLog)); } catch (x) {}
+    }
+  } catch (x) {}
+}
 function refreshDurchips(box) {
   if (!box || !box.querySelectorAll) return;
   var chips = box.querySelectorAll('.durchip');

@@ -673,6 +673,9 @@ describe('логика вызывается с state.tasks', () => {
       rendSrc.includes('fitChipRow(rowsQ[qi])') &&
       appSrc.includes('function fitChipRow(div)'),
       'нет подгонки полосы под метку при вводе');
+    assert.ok(rendSrc.includes('chipDbg') && rendSrc.includes('external-brain-chipfit-v1') &&
+      diagSrc.includes('external-brain-chipfit-v1') && diagSrc.includes('Метка: '),
+      'нет временной телеметрии подгонки (v179)');
     var iMk = rendSrc.indexOf('function makeLine');
     var mkBlock = rendSrc.slice(iMk, rendSrc.indexOf('function autosize'));
     assert.ok(mkBlock.includes('durchip'), 'строка не рисует метку времени');
