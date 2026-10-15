@@ -231,7 +231,8 @@ function diagText() {
         var hm = (hd.getMinutes() < 10 ? '0' : '') + hd.getMinutes();
         var hs = (hd.getSeconds() < 10 ? '0' : '') + hd.getSeconds();
         rows.push(hh + ':' + hm + ':' + hs + ' off=' + he.off +
-          ' sy=' + he.sy + ' touch=' + he.touch + ' ' + he.how);
+          ' sy=' + he.sy + ' touch=' + he.touch + ' ' + he.how +
+          (he.same ? '(+' + he.same + ' так же)' : ''));
       }
       lines.push('Шапка: ' + rows.join(' | '));
     }

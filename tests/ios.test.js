@@ -1047,8 +1047,17 @@ describe('синк: триггеры и протокол', () => {
       'дотяжка не замораживается под пальцем (резинка уносит шапку)');
     assert.ok(rendSrc.includes('headDbg') && rendSrc.includes('external-brain-headlift-v1'),
       'нет телеметрии дотяжки для разбора улётов');
+    assert.ok(rendSrc.includes('headWatchStart') && rendSrc.includes('setInterval') &&
+      rendSrc.includes(', 500)'),
+      'нет сторожа пересчёта дотяжки (залипание нечем лечить)');
+    assert.ok(rendSrc.includes("headDbg(-1, -1, 'focus')") &&
+      rendSrc.includes("headDbg(-1, -1, 'blur')"),
+      'нет меток фокуса в телеметрии');
     assert.ok(diagSrc.includes('external-brain-headlift-v1') && diagSrc.includes('Шапка: '),
       'телеметрия дотяжки не видна в диагностике');
+    var iTu = rendSrc.indexOf('function touchUp');
+    assert.ok(iTu !== -1 && rendSrc.slice(iTu, iTu + 200).includes('syncHeaderLift()'),
+      'отпускание пальца не пересчитывает дотяжку');
     assert.ok(!rendSrc.includes('snapHeaderSoon') && !rendSrc.includes('focusTimer'),
       'мёртвый код снапшота v170 не вычищен');
   });

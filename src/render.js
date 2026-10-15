@@ -468,10 +468,33 @@ var touchDown = 0;
 var HEADLOG_KEY = 'external-brain-headlift-v1';
 var headLog = [];
 var headLogSaved = 0;
-function headDbg(off, sy, how) {
+var headSameN = 0;
+var headWatch = null;
+function headWatchStart() {
+  headWatchStop();
   try {
-    headLog.push({ t: Date.now(), off: off, sy: sy, touch: touchDown, how: how });
-    if (headLog.length > 15) headLog.shift();
+    headWatch = setInterval(function () {
+      try {
+        var ae = document.activeElement;
+        if (ae && (ae.tagName === 'TEXTAREA' || ae.tagName === 'INPUT')) syncHeaderLift();
+        else headWatchStop();
+      } catch (x) {}
+    }, 500);
+  } catch (x) {}
+}
+function headWatchStop() {
+  if (headWatch) { try { clearInterval(headWatch); } catch (x) {} headWatch = null; }
+}
+function headDbg(off, sy, how) {
+  /* Дубли-подтверждения ('same') не пишем каждый (v176): они съедали
+   * кольцо — в прошлый раз 5 из 15 записей были шумом, а начало жеста
+   * ушло. Считаем их счётчиком при следующей значимой записи: видно
+   * и тишину событий, и их наличие. */
+  if (how === 'same') { headSameN++; return; }
+  try {
+    headLog.push({ t: Date.now(), off: off, sy: sy, touch: touchDown, how: how, same: headSameN });
+    headSameN = 0;
+    if (headLog.length > 30) headLog.shift();
     var now = Date.now();
     if (now - headLogSaved > 2000) {
       headLogSaved = now;
@@ -623,7 +646,13 @@ function init(ctx) {
     } catch (x) {
       try { document.addEventListener('touchstart', function () { touchDown++; }); } catch (e2) {}
     }
-    function touchUp() { if (touchDown > 0) touchDown--; }
+    /* Пересчёт при отпускании (v176): settled-события иногда не приходят
+     * вовсе — тогда заморозка strands шапку навсегда; принудительный
+     * пересчёт на touchend лечит без ожидания событий. */
+    function touchUp() {
+      if (touchDown > 0) touchDown--;
+      try { syncHeaderLift(); } catch (x) {}
+    }
     try {
       document.addEventListener('touchend', touchUp, { passive: true });
       document.addEventListener('touchcancel', touchUp, { passive: true });
@@ -633,6 +662,24 @@ function init(ctx) {
         document.addEventListener('touchcancel', touchUp);
       } catch (e2) {}
     }
+    /* Метки фокуса для телеметрии (v176): по кольцу видно, когда фокус
+     * ушёл относительно жеста (в прошлый раз к моменту чтения фокуса
+     * уже не было — непонятно, когда именно). */
+    try {
+      document.addEventListener('focusin', function () { headDbg(-1, -1, 'focus'); });
+      document.addEventListener('focusout', function () { headDbg(-1, -1, 'blur'); });
+    } catch (x) {}
+    /* Сторож (v176): пока фокус в поле, раз в 500мс принудительно
+     * пересчитываем дотяжку. Лечит любое залипание (непришедшие события,
+     * пропущенный touchend): хуже не делает — без изменений dedup
+     * отбрасывает лишнее. Гасится потерей фокуса и скрытием вкладки. */
+    try {
+      document.addEventListener('focusin', headWatchStart);
+      document.addEventListener('focusout', headWatchStop);
+      document.addEventListener('visibilitychange', function () {
+        try { if (document.hidden) headWatchStop(); } catch (x) {}
+      });
+    } catch (x) {}
   } catch (x) {}
 }
 
