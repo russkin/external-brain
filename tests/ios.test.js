@@ -1036,15 +1036,17 @@ describe('синк: триггеры и протокол', () => {
     assert.ok(rendSrc.includes("tagName === 'TEXTAREA'") && rendSrc.includes('focusin') &&
       rendSrc.includes('focusout'),
       'шапка дотягивается не только пока идёт набор');
-    assert.ok(!rendSrc.includes("addEventListener('resize', syncHeaderLift") &&
-      !rendSrc.includes("addEventListener('scroll', syncHeaderLift"),
-      'живой трекинг вьюпорта не выкинут (резинке есть что читать)');
-    assert.ok(rendSrc.includes('snapHeaderSoon') && rendSrc.includes('resetHeaderSoon') &&
-      rendSrc.includes('setTimeout(syncHeaderLift, 250)') &&
-      rendSrc.includes('setTimeout(syncHeaderLift, 150)'),
-      'нет снапшота дотяжки по фокусу (250мс) со сбросом (150мс)');
-    assert.ok(!rendSrc.includes('lastGoodOff') && !rendSrc.includes('touchDown'),
-      'мёртвый код отсевa всплесков/заморозки не вычищен');
+    assert.ok(rendSrc.includes("addEventListener('resize', syncHeaderLift") &&
+      rendSrc.includes("addEventListener('scroll', syncHeaderLift"),
+      'панелирование клавиатуры не слушается');
+    assert.ok(rendSrc.includes('sy < 0'),
+      'дотяжка в оттяжке-резинке не гасится (шапка улетает в середину списка)');
+    assert.ok(rendSrc.includes('lastGoodOff') && rendSrc.includes('> 160'),
+      'всплески offsetTop не отсекаются (шапка улетает в середине списка)');
+    assert.ok(rendSrc.includes('touchDown') && rendSrc.includes('touchcancel'),
+      'дотяжка не замораживается под пальцем (резинка уносит шапку)');
+    assert.ok(!rendSrc.includes('snapHeaderSoon') && !rendSrc.includes('focusTimer'),
+      'мёртвый код снапшота v170 не вычищен');
   });
   it('активная строка — в центр видимого места', () => {
     assert.ok(rendSrc.includes('function centerActiveLine'), 'нет центрирования активной строки');
