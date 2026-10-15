@@ -673,14 +673,9 @@ describe('логика вызывается с state.tasks', () => {
       rendSrc.includes("fitChipRow(rowsQ[qi], 'render')") &&
       appSrc.includes('function fitChipRow(div, src)'),
       'нет подгонки полосы под метку при вводе');
-    assert.ok(rendSrc.includes('chipDbg') && rendSrc.includes('external-brain-chipfit-v1') &&
-      diagSrc.includes('external-brain-chipfit-v1') && diagSrc.includes('Метка: '),
-      'нет временной телеметрии подгонки (v179)');
     assert.ok(rendSrc.includes('blurTimer') && rendSrc.includes(', 300)') &&
       rendSrc.includes('clearTimeout(blurTimer)'),
       'сброс дотяжки мгновенный — тап при клавиатуре мажет мимо кнопки (v181)');
-    assert.ok(rendSrc.includes("getAttribute('data-id')") && rendSrc.includes('chipLog.length > 40'),
-      'замер не привязан к строке / кольцо вытесняет улики (v181)');
     var iMk = rendSrc.indexOf('function makeLine');
     var mkBlock = rendSrc.slice(iMk, rendSrc.indexOf('function autosize'));
     assert.ok(mkBlock.includes('durchip'), 'строка не рисует метку времени');
@@ -742,32 +737,22 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes("fitChipRow(div, 'change')") &&
       appSrc.includes("addEventListener('compositionend'"),
       'подстраховки change/compositionend нет (v180)');
-    assert.ok(rendSrc.includes("return 'err:'") && rendSrc.includes('lastDurchipXY'),
-      'замер не различает «свободно» и «упал» (v180)');
     assert.ok(appSrc.includes("refreshDurchips(el('lines'))"),
       'ресайз (клавиатура/поворот) не пересчитывает фон метки');
   });
-  it('Метка-фокус v182: focusout морозит замер до change/render + raw/trim', () => {
-    assert.ok(rendSrc.includes('external-brain-chipblur-v1') &&
-      rendSrc.includes('function snapChipBlur'),
-      'нет замороженного снапшота ухода фокуса (v182)');
-    assert.ok(rendSrc.includes("addEventListener('focusout', snapChipBlur, true)"),
-      'снапшот висит не в capture-фазе — change/render снесут узлы раньше (v182)');
-    assert.ok(rendSrc.includes('chipDbg(len, tlen,') && rendSrc.includes('e.tlen'),
-      'телеметрия не различает живую и тримленную длину (v182)');
-    assert.ok(diagSrc.includes('external-brain-chipblur-v1') &&
-      diagSrc.includes('Метка-фокус: '),
-      'диагностика не показывает замороженный снапшот (v182)');
-    assert.ok(rendSrc.includes('raw.slice(-30)') && diagSrc.includes("tail='"),
-      'снапшот без хвоста текста и ширины — переносы не воспроизвести на стенде (v183)');
-    assert.ok(rendSrc.includes('inpQ.scrollHeight') && rendSrc.includes('h1 - h0') &&
-      diagSrc.includes('dh=+'),
-      'вердикт полосы через зеркало — на Honor Sans врёт на слово (v184: дельта scrollHeight)');
+  it('Полоса под метку: вердикт высотой поля, замер без старой полосы', () => {
     var iFit = rendSrc.indexOf('function fitChipRow');
-    var fitBlock = rendSrc.slice(iFit, rendSrc.indexOf('function chipDbg'));
+    assert.ok(iFit !== -1, 'нет fitChipRow');
+    var fitBlock = rendSrc.slice(iFit, rendSrc.indexOf('function refreshDurchips'));
+    assert.ok(fitBlock.includes('scrollHeight') && fitBlock.includes('h1 - h0'),
+      'вердикт полосы через зеркало — на шрифте устройства врёт на слово (v184)');
     assert.ok(fitBlock.indexOf("paddingRight = ''") !== -1 &&
       fitBlock.indexOf("paddingRight = ''") < fitBlock.indexOf('scrollHeight'),
       'h0 меряется поверх старой полосы — вердикт инвертируется каждый ввод (v185)');
+    assert.ok(!rendSrc.includes('chipDbg') && !rendSrc.includes('chipfit') &&
+      !rendSrc.includes('snapChipBlur') && !diagSrc.includes('Метка: ') &&
+      !diagSrc.includes('Метка-фокус'),
+      'временная телеметрия метки не выпилена (v186)');
   });
   it('компактные строки: высота уменьшена', () => {
     assert.ok(html.includes('padding: 6px 12px'), 'поле ввода не ужато');

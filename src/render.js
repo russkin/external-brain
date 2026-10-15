@@ -302,13 +302,11 @@ function autosize(ta) {
  * доехал (v166: тогда вызывающий даёт полосу справа). */
 function updateDurchip(inp, chip) {
   if (!inp || !chip || !chip.style) return false;
-  lastDurchipXY = null;
   chip.style.backgroundColor = 'transparent';
   var text = inp.value || '';
   if (!text) return false;
   var m = document.createElement('div');
   var reached = false;
-  var derr = null;
   try {
     var ir = inp.getBoundingClientRect();
     var cr = chip.getBoundingClientRect();
@@ -336,8 +334,6 @@ function updateDurchip(inp, chip) {
     m.appendChild(marker);
     document.body.appendChild(m);
     var mr = marker.getBoundingClientRect();
-    lastDurchipXY = { mw: Math.round((mr.left - ir.left) * 10) / 10,
-      cw: Math.round((cr.left - ir.left) * 10) / 10 };
     if (mr.left >= cr.left - 2) {
       var bg = cs.getPropertyValue('background-color') || '';
       chip.style.backgroundColor =
@@ -346,13 +342,9 @@ function updateDurchip(inp, chip) {
        * размещение одинаковое и у свободных, и у накрытых. */
       reached = true;
     }
-  } catch (x) { derr = String((x && x.message) || x).slice(0, 60); } finally {
+  } catch (x) {} finally {
     if (m.parentNode) m.parentNode.removeChild(m);
   }
-  /* Возврат тройной (v180, для телеметрии): true — накрытие, false —
-   * свободно, строка 'err:...' — замер упал с исключением (раньше это
-   * молча выглядело как «свободно»). */
-  if (derr) return 'err:' + derr;
   return reached;
 }
 
@@ -368,20 +360,14 @@ function updateDurchip(inp, chip) {
  * содержимым, за один вызов переключения туда-сюда нет.
  * Возвращает, ставилась ли полоса. Каретку не трогает (позиция
  * по символам переживает reflow). */
-function fitChipRow(div, src) {
+function fitChipRow(div) {
   if (!div || !div.querySelector) return false;
   var chipQ = div.querySelector('.durchip');
   var inpQ = div.querySelector('.tinput');
   if (!chipQ || !inpQ) return false;
-  var rowId = '';
-  try { rowId = div.getAttribute ? (div.getAttribute('data-id') || '') : ''; } catch (x) { rowId = ''; }
-  var len = 0;
-  var tlen = 0;
-  try { len = String(inpQ.value || '').length; } catch (x) { len = 0; }
-  try { tlen = String(inpQ.value || '').trim().length; } catch (x) { tlen = 0; }
   var cw = 0;
   try { cw = chipQ.offsetWidth || 0; } catch (x) { cw = 0; }
-  if (!(cw > 0)) { chipDbg(len, tlen, true, 0, 0, src, rowId); return false; }
+  if (!(cw > 0)) return false;
   var pad = cw + 12;
   var h0 = 0, h1 = 0;
   try {
@@ -402,7 +388,6 @@ function fitChipRow(div, src) {
       inpQ.style.height = h1 + 'px';
       chipQ.style.backgroundColor = 'transparent';
     } catch (x) {}
-    chipDbg(len, tlen, true, pad, dh, src, rowId);
     return true;
   }
   try {
@@ -410,117 +395,10 @@ function fitChipRow(div, src) {
     inpQ.style.height = 'auto';
     inpQ.style.height = inpQ.scrollHeight + 'px';
   } catch (x) {}
-  chipDbg(len, tlen, false, 0, dh, src, rowId);
   return false;
 }
 
 /* Пересчитать метки внутри списка: после рендера, набора и ресайза. */
-
-/* Телеметрия подгонки под метку (v179, временная): каждое решение
- * fitChipRow — длина текста, вердикт замера, поставленный паддинг,
- * а при «не достаёт» у длинного текста — и сами координаты (маркер/метка).
- * Кольцо 15, в localStorage не чаще раза в 2 сек, в диагностике —
- * строка «Метка:». Когда строка с фото разберётся — выпилить. */
-var CHIPLOG_KEY = 'external-brain-chipfit-v1';
-var chipLog = [];
-var chipLogSaved = 0;
-var lastDurchipXY = null;
-/* Замороженный снапшот ухода фокуса (v182, вариант В): пишется на focusout
- * в capture-фазе — ДО bubble-обработчиков change/commit/render, пока узлы
- * живы, клавиатура и вёрстка ещё на месте. Один тап по любому месту (включая
- * путь в ⚙ → ⓘ) сначала гасит фокус — и сам кладёт в localStorage парный
- * захват «что видел замер в момент ухода». Кольцо 5, пишется всегда сразу
- * (фокус уходит редко), в диагностике — строка «Метка-фокус:». */
-var CHIPBLUR_KEY = 'external-brain-chipblur-v1';
-var chipBlurLog = [];
-function chipDbg(len, tlen, reached, pad, dh, src, rowId) {
-  try {
-    var e = { t: Date.now(), len: len, reached: (reached === true) ? 1 : (reached === false ? 0 : String(reached).slice(0, 40)), pad: pad, src: src || '' };
-    try {
-      var tl = parseInt(tlen, 10);
-      if (tl >= 0 && tl !== len) e.tlen = tl;
-    } catch (x) {}
-    try {
-      var d = parseInt(dh, 10);
-      if (d) e.dh = d;
-    } catch (x) {}
-    if (rowId) e.id = String(rowId).slice(-6);
-    if (!reached && len > 30 && lastDurchipXY) {
-      e.mw = lastDurchipXY.mw;
-      e.cw = lastDurchipXY.cw;
-    }
-    chipLog.push(e);
-    if (chipLog.length > 40) chipLog.shift();
-    var now = Date.now();
-    /* Позитив пишем сразу (v181): иначе его вытесняют из кольца
-     * последующие события до открытия диагностики. */
-    if (reached === true || now - chipLogSaved > 2000) {
-      chipLogSaved = now;
-      try { localStorage.setItem(CHIPLOG_KEY, JSON.stringify(chipLog)); } catch (x) {}
-    }
-  } catch (x) {}
-}
-function snapChipBlur(e) {
-  try {
-    var t = (e && e.target) || null;
-    if (!t || !t.classList || !t.classList.contains('tinput')) return;
-    var div = null;
-    try { div = t.closest ? t.closest('.tline') : null; } catch (x) { div = null; }
-    var rowId = '';
-    try { rowId = div && div.getAttribute ? (div.getAttribute('data-id') || '') : ''; } catch (x) { rowId = ''; }
-    var raw = '';
-    try { raw = String(t.value == null ? '' : t.value); } catch (x) { raw = ''; }
-    var trim = '';
-    try { trim = raw.trim(); } catch (x) { trim = ''; }
-    var chip = null;
-    try { chip = div && div.querySelector ? div.querySelector('.durchip') : null; } catch (x) { chip = null; }
-    if (!chip) return;
-    var verdict = updateDurchip(t, chip);
-    var xy = lastDurchipXY;
-    var chipW = 0;
-    try { chipW = chip.offsetWidth || 0; } catch (x) { chipW = 0; }
-    /* E-замер тут же (v184): та же дельта scrollHeight, что в fitChipRow,
-     * но неразрушающе — исходные paddingRight/height возвращаем синхронно,
-     * кадра между нет. Зеркальный reached выше может врать на устройстве
-     * (см. fitChipRow), а e/dh — честные для этого шрифта. */
-    var edh = 0;
-    try {
-      var origPad = t.style ? String(t.style.paddingRight || '') : '';
-      var origH = t.style ? String(t.style.height || '') : '';
-      /* Тот же сброс, что в fitChipRow (v185): eh0 — строго без полосы. */
-      t.style.paddingRight = '';
-      t.style.height = 'auto';
-      var eh0 = t.scrollHeight || 0;
-      t.style.paddingRight = ((chipW || 0) + 12) + 'px';
-      t.style.height = 'auto';
-      var eh1 = t.scrollHeight || 0;
-      edh = eh1 - eh0;
-      t.style.paddingRight = origPad;
-      t.style.height = 'auto';
-      t.style.height = origH || (t.scrollHeight + 'px');
-    } catch (x) { edh = 0; }
-    var pad = '';
-    try { pad = t.style ? String(t.style.paddingRight || '') : ''; } catch (x) { pad = ''; }
-    var chipTx = '';
-    try { chipTx = String(chip.textContent || '').slice(0, 12); } catch (x) { chipTx = ''; }
-    /* Хвост текста и ширина поля (v183, временно): без них стенд не
-     * воспроизведёт переносы — нужен ТОТ ЖЕ текст на ТОЙ ЖЕ ширине.
-     * Хвост (конец), а не начало: вердикт решает последняя строка. */
-    var tail = '';
-    try { tail = raw.slice(-30); } catch (x) { tail = ''; }
-    var fw = 0;
-    try { var rr = t.getBoundingClientRect(); fw = Math.round(rr.width || 0); } catch (x) { fw = 0; }
-    var snap = { t: Date.now(), raw: raw.length, trim: trim.length,
-      reached: (verdict === true) ? 1 : (verdict === false ? 0 : String(verdict).slice(0, 40)),
-      e: edh > 0 ? 1 : 0, dh: edh,
-      chipW: chipW, pad: pad, chip: chipTx, w: fw, tail: tail };
-    if (rowId) snap.id = String(rowId).slice(-6);
-    if (xy) { snap.mw = xy.mw; snap.cw = xy.cw; }
-    chipBlurLog.push(snap);
-    if (chipBlurLog.length > 5) chipBlurLog.shift();
-    try { localStorage.setItem(CHIPBLUR_KEY, JSON.stringify(chipBlurLog)); } catch (x) {}
-  } catch (x) {}
-}
 function refreshDurchips(box) {
   if (!box || !box.querySelectorAll) return;
   var chips = box.querySelectorAll('.durchip');
@@ -860,14 +738,6 @@ function init(ctx) {
       document.addEventListener('focusin', function () { headDbg(-1, -1, 'focus'); });
       document.addEventListener('focusout', function () { headDbg(-1, -1, 'blur'); });
     } catch (x) {}
-    /* Замороженный снапшот метки при уходе фокуса (v182, вариант В):
-     * capture-фаза — срабатывает ДО bubble-change/commit/render, узлы
-     * и вёрстка ещё живы. Старые браузеры третий аргумент-флаг понимают. */
-    try {
-      document.addEventListener('focusout', snapChipBlur, true);
-    } catch (x) {
-      try { document.addEventListener('focusout', snapChipBlur); } catch (e2) {}
-    }
     /* Сторож (v176): пока фокус в поле, раз в 500мс принудительно
      * пересчитываем дотяжку. Лечит любое залипание (непришедшие события,
      * пропущенный touchend): хуже не делает — без изменений dedup
@@ -890,7 +760,6 @@ var api = {
   autosize: autosize,
   fitChipRow: fitChipRow,
   updateDurchip: updateDurchip,
-  snapChipBlur: snapChipBlur,
   refreshDurchips: refreshDurchips
 };
 

@@ -237,61 +237,6 @@ function diagText() {
       lines.push('Шапка: ' + rows.join(' | '));
     }
   } catch (x) {}
-  /* Телеметрия подгонки под метку (v179, временная): длина текста,
-   * вердикт замера, поставленный отступ; при «не достаёт» у длинного —
-   * координаты маркера/метки. Когда строка с фото разберётся — выпилить. */
-  try {
-    var craw = localStorage.getItem('external-brain-chipfit-v1');
-    var clog = craw ? JSON.parse(craw) : null;
-    if (clog && clog.length) {
-      var crows = [];
-      for (var ci = 0; ci < clog.length; ci++) {
-        var ce = clog[ci];
-        var cd = new Date(ce.t || 0);
-        var ch = (cd.getHours() < 10 ? '0' : '') + cd.getHours();
-        var cm = (cd.getMinutes() < 10 ? '0' : '') + cd.getMinutes();
-        var cs2 = (cd.getSeconds() < 10 ? '0' : '') + cd.getSeconds();
-        var cell = ch + ':' + cm + ':' + cs2 + ' len=' + ce.len +
-          (ce.tlen != null && ce.tlen !== ce.len ? '/' + ce.tlen : '') +
-          ' reached=' + ce.reached + ' pad=' + ce.pad +
-          (ce.dh ? ' dh=+' + ce.dh : '') +
-          (ce.src ? ' ' + ce.src : '') + (ce.id ? ' #' + ce.id : '');
-        if (ce.mw != null) cell += ' mw=' + ce.mw + ' cw=' + ce.cw;
-        crows.push(cell);
-      }
-      lines.push('Метка: ' + crows.join(' | '));
-    }
-  } catch (x) {}
-  /* Замороженный снапшот ухода фокуса (v182, временный, выпилить вместе
-   * с телеметрией подгонки после поимки строки с фото): пишется на focusout
-   * в capture-фазе, переживает change/commit/render — в диагностике виден
-   * даже после пути через меню. */
-  try {
-    var braw = localStorage.getItem('external-brain-chipblur-v1');
-    var blog = braw ? JSON.parse(braw) : null;
-    if (blog && blog.length) {
-      var brows = [];
-      for (var bi = 0; bi < blog.length; bi++) {
-        var be = blog[bi];
-        var bd = new Date(be.t || 0);
-        var bh = (bd.getHours() < 10 ? '0' : '') + bd.getHours();
-        var bm = (bd.getMinutes() < 10 ? '0' : '') + bd.getMinutes();
-        var bs = (bd.getSeconds() < 10 ? '0' : '') + bd.getSeconds();
-        var bcell = bh + ':' + bm + ':' + bs + ' raw=' + be.raw + ' trim=' + be.trim +
-          ' reached=' + be.reached +
-          (be.e != null ? ' e=' + be.e : '') +
-          (be.mw != null ? ' mw=' + be.mw + ' cw=' + be.cw : '') +
-          (be.dh ? ' dh=+' + be.dh : '') +
-          ' chipW=' + be.chipW + ' pad=' + (be.pad || '—') +
-          (be.chip ? " chip='" + be.chip + "'" : '') +
-          (be.w ? ' w=' + be.w : '') +
-          (be.tail ? " tail='" + String(be.tail).replace(/\n/g, '⏎').slice(0, 34) + "'" : '') +
-          (be.id ? ' #' + be.id : '');
-        brows.push(bcell);
-      }
-      lines.push('Метка-фокус: ' + brows.join(' | '));
-    }
-  } catch (x) {}
   var h = C.getHistoryCounts();
   lines.push('История: ↩ ' + h.u + ' · ↪ ' + h.r);
   lines.push('Сеть: ' + connLine());
@@ -339,6 +284,12 @@ function diagText() {
 
 function init(ctx) {
   C = ctx;
+  /* Выпил временной телеметрии метки (v186): мёртвые ключи чистим сами,
+   * иначе лежат в localStorage вечно. */
+  try {
+    localStorage.removeItem('external-brain-chipfit-v1');
+    localStorage.removeItem('external-brain-chipblur-v1');
+  } catch (x) {}
   ctx.on('diagBtn', 'click', function () {
     diagText().then(function (txt) {
       ctx.showInfo('Диагностика', txt, txt);
