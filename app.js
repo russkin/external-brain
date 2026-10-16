@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v192';
+  var APP_VERSION = 'v193';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1123,7 +1123,7 @@
        * красная рамка на поле даты + курсор туда. Снимается при вводе. */
       var di2 = el('planDateInput');
       if (di2) {
-        try { di2.style.borderColor = '#f44336'; } catch (x) {}
+        try { di2.classList.add('err'); } catch (x) {}
         if (di2.focus) { try { di2.focus(); } catch (x) {} }
       }
       return;
@@ -1131,7 +1131,7 @@
     if (ti) ti.value = '';
     if (di) {
       di.value = '';
-      try { di.style.borderColor = ''; } catch (x) {}
+      try { di.classList.remove('err'); } catch (x) {}
     }
     clearPlanDraft();
     renderStatus();
@@ -1144,8 +1144,8 @@
   function planDateMaskInput() {
     var inp = el('planDateInput');
     if (!inp) return;
-    /* Раз пользователь правит — красную рамку ошибки гасим. */
-    try { inp.style.borderColor = ''; } catch (x) {}
+    /* Раз пользователь правит — красную ошибку гасим. */
+    try { inp.classList.remove('err'); } catch (x) {}
     if (!window.EBSettings || !window.EBSettings.fmtExpDigits) return;
     var pos = null;
     try { pos = inp.selectionStart; } catch (x) { pos = null; }
