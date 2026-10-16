@@ -354,6 +354,8 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(!appSrc.includes('fullOrdered'),
       'обход предков по своему порядку: tombstone сдвигают индексы');
     assert.ok(rendSrc.includes('is-done'), 'нет зачёркивания');
+    assert.ok(rendSrc.includes('doneShown: false') && !rendSrc.includes('isDoneShown(full'),
+      'живые строки наследуют зачёркивание из полного порядка — фантом после сдвига под невидимого done-соседа (v188)');
     assert.ok(html.includes('user-select'), 'свайп проигрывает выделению текста');
     assert.ok(gestSrc.includes('_swOpen'), 'состояние свайпа рассинхронизировано');
     assert.ok(html.includes('translateX(-200px)'), 'флаг наезжает на поле задачи');

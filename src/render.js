@@ -415,17 +415,18 @@ function renderLines() {
   if (!box || !state) return;
   box.innerHTML = '';
   var tasks = C.lineTasks();
-  /* Полный порядок (включая выполненных) — для наследования зачёркивания:
-   * done-родитель ушёл в секцию ниже, но детей зачёркивает. */
-  var full = C.fullList();
-  var fullIdx = {};
-  for (var fi = 0; fi < full.length; fi++) fullIdx[full[fi].id] = fi;
   function taskRow(t, i) {
     /* Треугольник — только по живым детям (v158): выполненные живут
      * в своей секции и пустой треугольник не дают. */
     var kids = C.hasLiveKids(t.id);
     return makeLine(t.id, t.title, C.lineIndent(t), {
-      doneShown: L.isDoneShown(full, fullIdx[t.id]),
+      /* Живые строки зачёркиваются только статусом (v188): наследование
+       * isDoneShown от done-родителя из полного порядка давало фантомные
+       * зачёркивания — сдвиг под невидимого done-соседа (замороженный
+       * createdAt в секции выполненных) молча «выполнял» задачу, а тап
+       * по «↩ Не выполнено» завершал её по-настоящему. Выполненные
+       * рисуются ниже с doneShown:true явно. */
+      doneShown: false,
       hidden: L.isHiddenByCollapse(tasks, i, collapsed),
       arrow: !kids ? null : (collapsed[t.id] ? '▶' : '▼'),
       estMin: lineEstMin(t)
