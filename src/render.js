@@ -522,6 +522,15 @@ function renderPlanLines() {
   var state = C.getState();
   var box = el('planLines');
   if (!box || !state) return;
+  /* Прокрутка страницы плана (v198): innerHTML схлопывает высоту и браузер
+   * клампит scrollTop контейнера в 0 — страница прыгает наверх при любом
+   * перестроении (посадка drag'а, создание плана, фоновый синк). Основной
+   * список от этого держит keepY, здесь — свой сейв. Кламп естественный. */
+  var scBox = null, sc = 0;
+  try {
+    scBox = el('planPage');
+    sc = scBox ? (scBox.scrollTop || 0) : 0;
+  } catch (x) { scBox = null; sc = 0; }
   box.innerHTML = '';
   var plans = C.planTasks();
   for (var i = 0; i < plans.length; i++) {
@@ -537,6 +546,7 @@ function renderPlanLines() {
   }
   var areas = box.querySelectorAll ? box.querySelectorAll('.tinput') : [];
   for (var q = 0; q < areas.length; q++) autosize(areas[q]);
+  try { if (scBox) scBox.scrollTop = sc; } catch (x) {}
 }
 
 /* Шапка над клавиатурой: в оверлейном режиме (iOS Safari, часть Android)

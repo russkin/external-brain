@@ -1364,6 +1364,10 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(gestSrc.includes("getAttribute('data-src') === 'plan'"),
       'свайп вправо на плане взводит модалку длительности (нет сторожа data-src)');
   });
+  it('прокрутка страницы плана переживает перестроение (v198)', () => {
+    assert.ok(/scBox\.scrollTop = sc/.test(rendSrc) && rendSrc.includes("el('planPage')"),
+      'renderPlanLines не возвращает scrollTop — страница прыгает наверх');
+  });
   it('кнопки шапки ровно в ряд (v196)', () => {
     assert.ok(html.includes('justify-content: space-between'), 'кнопки не разведены по ширине');
     assert.ok(/\.hbtn \{[^}]*flex: 1/.test(html), 'кнопки не равной ширины');
