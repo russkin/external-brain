@@ -1335,6 +1335,8 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(appSrc.includes("on('planAddBtn', 'click'"), 'кнопка ＋ не ведёт на создание');
     assert.ok(/planDateInput[\s\S]{0,300}focus\(\)/.test(appSrc),
       'пустая дата не ведёт курсор в поле даты (v191)');
+    assert.ok(appSrc.includes("borderColor = '#f44336'"),
+      'ошибка создания видна только строкой в подвале — поле даты не краснеет (v192)');
   });
   it('правка/удаление планов — те же точки, без своих удалялок', () => {
     assert.ok(!appSrc.includes('askDeletePlan') && !appSrc.includes('deletePlanTask'),

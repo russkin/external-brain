@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v191';
+  var APP_VERSION = 'v192';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1119,13 +1119,20 @@
     if (!made) {
       lastAction = 'план: нужны название и дата ДД.ММ.ГГГГ';
       renderStatus();
-      /* Подсказать руками: курсор в дату. */
+      /* Громко, а не только строкой в подвале (его закрывает клавиатура):
+       * красная рамка на поле даты + курсор туда. Снимается при вводе. */
       var di2 = el('planDateInput');
-      if (di2 && di2.focus) { try { di2.focus(); } catch (x) {} }
+      if (di2) {
+        try { di2.style.borderColor = '#f44336'; } catch (x) {}
+        if (di2.focus) { try { di2.focus(); } catch (x) {} }
+      }
       return;
     }
     if (ti) ti.value = '';
-    if (di) di.value = '';
+    if (di) {
+      di.value = '';
+      try { di.style.borderColor = ''; } catch (x) {}
+    }
     clearPlanDraft();
     renderStatus();
     var f = el('planInput');
@@ -1136,7 +1143,10 @@
    * (общий доступ через window.EBSettings, не копипаста). */
   function planDateMaskInput() {
     var inp = el('planDateInput');
-    if (!inp || !window.EBSettings || !window.EBSettings.fmtExpDigits) return;
+    if (!inp) return;
+    /* Раз пользователь правит — красную рамку ошибки гасим. */
+    try { inp.style.borderColor = ''; } catch (x) {}
+    if (!window.EBSettings || !window.EBSettings.fmtExpDigits) return;
     var pos = null;
     try { pos = inp.selectionStart; } catch (x) { pos = null; }
     var before = inp.value;
