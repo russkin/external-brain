@@ -288,3 +288,15 @@ describe('publishFile: журналы', () => {
     assert.ok(r.startsWith('log-error:'));
   });
 });
+
+describe('план едет через merge (ФАЗА 0)', () => {
+  it('planDate/planFired переживают слияние по ts', () => {
+    const l = [{ id: 'p', title: 'План', ts: 2, createdAt: 1, updatedAt: 2, planDate: '05.10.2026', planFired: 0 }];
+    const bare = [{ id: 'p', title: 'План', ts: 1, createdAt: 1, updatedAt: 1 }];
+    assert.equal(L.mergeTasks(l, bare)[0].planDate, '05.10.2026', 'свежая локальная хранит план');
+    const fired = [{ id: 'p', title: 'План', ts: 3, createdAt: 1, updatedAt: 3, planDate: '05.10.2026', planFired: 777 }];
+    assert.equal(L.mergeTasks(l, fired)[0].planFired, 777, 'свежая удалённая несёт срабатывание');
+    const same = [{ id: 'p', title: 'План', ts: 2, createdAt: 1, updatedAt: 2 }];
+    assert.equal(L.mergeTasks(l, same)[0].planDate, '05.10.2026', 'равные ts — локальный план не теряется');
+  });
+});

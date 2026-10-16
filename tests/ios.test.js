@@ -1251,3 +1251,27 @@ describe('удаление свайпом (v150)', () => {
     assert.ok(appSrc.includes('_ebUIClickBlocked'), 'удаление не взводит блокировку');
   });
 });
+
+describe('планирование ФАЗА 0: модель в строках (FR-95–FR-101)', () => {
+  it('whitelist и patch держат planDate/planFired', () => {
+    assert.ok(logicSrc.includes('planDate: normPlanDate(t.planDate)'), 'whitelist без planDate');
+    assert.ok(logicSrc.includes('planFired: toInt(t.planFired, 0)'), 'whitelist без planFired');
+    assert.ok(/function clarifyTask[\s\S]{0,900}planFired = 0/.test(logicSrc),
+      'смена даты не сбрасывает planFired');
+    assert.ok(logicSrc.includes('planDueTasks: planDueTasks'), 'planDueTasks не в api');
+    assert.ok(logicSrc.includes('isPlanned: isPlanned'), 'isPlanned не в api');
+  });
+  it('изоляция: lineTasks и логика прячут планы, fullList не тронут', () => {
+    assert.ok(/function lineTasks[\s\S]{0,500}isPlanned/.test(appSrc), 'lineTasks планы не фильтрует');
+    assert.ok(!/function fullList[\s\S]{0,300}isPlanned/.test(appSrc),
+      'fullList трогать нельзя (там done-логика)');
+    for (const fn of ['searchTasks', 'shareText', 'todoCount', 'stats']) {
+      assert.ok(new RegExp('function ' + fn + '[\\s\\S]{0,700}isPlanned').test(logicSrc),
+        fn + ' планы не фильтрует');
+    }
+  });
+  it('sanitize чистит planTargetId/planFireHour', () => {
+    assert.ok(storeSrc.includes('planTargetId'), 'нет planTargetId в store');
+    assert.ok(storeSrc.includes('planFireHour'), 'нет planFireHour в store');
+  });
+});

@@ -695,3 +695,129 @@ describe('срок токена (tokenExp)', () => {
     assert.equal(L.tokenWarnLevel('мусор', NOW), 0);
   });
 });
+
+describe('планирование ФАЗА 0: модель и изоляция (FR-95–FR-101)', () => {
+  function localMs(y, mo, d, h, mi) { return new Date(y, mo - 1, d, h || 0, mi || 0).getTime(); }
+  function ids(arr) { return arr.map(function (x) { return x.id; }); }
+  function mkPlan(tasks, title, date, now, id) {
+    mk(tasks, title, now, { id: id });
+    L.clarifyTask(tasks, id, { planDate: date }, now);
+    return L.getTask(tasks, id);
+  }
+  it('normPlanDate: формат, мусор, 29.02, ISO', () => {
+    assert.equal(L.normPlanDate('05.10.2026'), '05.10.2026');
+    assert.equal(L.normPlanDate('  05.10.2026  '), '05.10.2026');
+    assert.equal(L.normPlanDate(''), '');
+    assert.equal(L.normPlanDate(null), '');
+    assert.equal(L.normPlanDate(undefined), '');
+    assert.equal(L.normPlanDate(12345), '');
+    assert.equal(L.normPlanDate('мусор'), '');
+    assert.equal(L.normPlanDate('5.10.2026'), '', 'без ведущих нулей — мусор');
+    assert.equal(L.normPlanDate('05-10-2026'), '');
+    assert.equal(L.normPlanDate('05.13.2026'), '', 'месяца 13 нет');
+    assert.equal(L.normPlanDate('05.00.2026'), '', 'месяца 0 нет');
+    assert.equal(L.normPlanDate('32.10.2026'), '', '32-го нет');
+    assert.equal(L.normPlanDate('31.02.2026'), '', '31 февраля нет');
+    assert.equal(L.normPlanDate('29.02.2024'), '29.02.2024', 'високосный держим');
+    assert.equal(L.normPlanDate('29.02.2025'), '', '29.02 невисокосного — битое');
+    assert.equal(L.normPlanDate('2026-10-05'), '05.10.2026', 'старый ISO приводим');
+    assert.equal(L.normPlanDate('2026-13-01'), '');
+    assert.equal(L.normPlanDate('2026-02-30'), '');
+  });
+  it('whitelist: normalizeTask держит planDate/planFired', () => {
+    const n = L.normalizeTask({ id: 'x', title: 'П', planDate: '05.10.2026', planFired: 777 });
+    assert.equal(n.planDate, '05.10.2026');
+    assert.equal(n.planFired, 777);
+    const g = L.normalizeTask({ id: 'x', title: 'П', planDate: 'мусор', planFired: -5 });
+    assert.equal(g.planDate, '');
+    assert.equal(g.planFired, 0);
+    const d = L.normalizeTask({ id: 'x', title: 'П' });
+    assert.equal(d.planDate, '');
+    assert.equal(d.planFired, 0);
+  });
+  it('whitelist: cloneTask/merge держит поля при равных ts', () => {
+    assert.equal(L.mergeTask({ id: 'a', title: 'L', ts: 2, planDate: '05.10.2026', planFired: 0 },
+      { id: 'a', title: 'R', ts: 1 }).planDate, '05.10.2026', 'победа local с планом');
+    assert.equal(L.mergeTask({ id: 'a', title: 'L', ts: 1 },
+      { id: 'a', title: 'R', ts: 2, planDate: '05.10.2026', planFired: 9 }).planFired, 9,
+      'победа remote со сработавшим');
+    assert.equal(L.mergeTask({ id: 'a', title: 'L', ts: 2, planDate: '05.10.2026' },
+      { id: 'a', title: 'R', ts: 2 }).planDate, '05.10.2026',
+      'равные ts — локальный план не теряется');
+    assert.ok(L.isPlanned(L.normalizeTask({ id: 'x', title: 'П', planDate: '05.10.2026' })));
+    assert.equal(L.isPlanned(L.normalizeTask({ id: 'x', title: 'П' })), false);
+    assert.equal(L.isPlanned({ id: 'x', planDate: '05.10.2026', deleted: true }), false, 'могила — не план');
+    assert.equal(L.isPlanned(null), false);
+  });
+  it('clarify: смена planDate сбрасывает planFired', () => {
+    const t = L.blankTasks();
+    mkPlan(t, 'План', '05.10.2026', 1000, 'p');
+    L.getTask(t, 'p').planFired = 777;
+    L.clarifyTask(t, 'p', { planDate: '06.10.2026' }, 2000);
+    assert.equal(L.getTask(t, 'p').planDate, '06.10.2026');
+    assert.equal(L.getTask(t, 'p').planFired, 0, 'смена даты сбросила флаг');
+    L.getTask(t, 'p').planFired = 555;
+    L.clarifyTask(t, 'p', { planDate: '06.10.2026' }, 3000);
+    assert.equal(L.getTask(t, 'p').planFired, 555, 'та же дата — не смена');
+    L.clarifyTask(t, 'p', { title: 'Новое' }, 4000);
+    assert.equal(L.getTask(t, 'p').planFired, 555, 'чужой patch флаг не трогает');
+    L.clarifyTask(t, 'p', { planDate: '' }, 5000);
+    assert.equal(L.getTask(t, 'p').planFired, 0, 'очистка даты тоже сброс');
+  });
+  it('planDueTasks: порог 05:00 включительно (граница >=)', () => {
+    const t = L.blankTasks();
+    mkPlan(t, 'Сегодня', '16.10.2026', 1000, 'p');
+    assert.deepEqual(ids(L.planDueTasks(t, {}, localMs(2026, 10, 16, 5, 0))), ['p'], 'ровно 05:00 — пора');
+    assert.deepEqual(ids(L.planDueTasks(t, {}, localMs(2026, 10, 16, 6, 0))), ['p']);
+    assert.deepEqual(L.planDueTasks(t, {}, localMs(2026, 10, 16, 4, 59)), [], 'до порога — ждёт');
+  });
+  it('planDueTasks: прошлое — пора, будущее — нет', () => {
+    const t = L.blankTasks();
+    mkPlan(t, 'Сегодня', '16.10.2026', 1000, 'p');
+    mkPlan(t, 'Вчера', '15.10.2026', 1000, 'y');
+    mkPlan(t, 'Завтра', '17.10.2026', 1000, 'f');
+    assert.deepEqual(ids(L.planDueTasks(t, {}, localMs(2026, 10, 16, 12, 0))), ['p', 'y']);
+    assert.deepEqual(ids(L.planDueTasks(t, {}, localMs(2026, 10, 20, 12, 0))), ['p', 'y', 'f'], 'догон: старые ждут');
+  });
+  it('planDueTasks: planFired≠0, битая дата, удалённые — skip', () => {
+    const t = L.blankTasks();
+    mkPlan(t, 'Ждёт', '15.10.2026', 1000, 'w');
+    mkPlan(t, 'Был', '15.10.2026', 1000, 'f');
+    L.getTask(t, 'f').planFired = 777;
+    t.push({ id: 'b', title: 'Битая', status: 'todo', planDate: 'мусор', planFired: 0 });
+    mkPlan(t, 'Снос', '15.10.2026', 1000, 'd');
+    L.removeTask(t, 'd', 2000);
+    assert.deepEqual(ids(L.planDueTasks(t, {}, localMs(2026, 10, 16, 12, 0))), ['w']);
+  });
+  it('planDueTasks: свой planFireHour, битый → 5', () => {
+    const t = L.blankTasks();
+    mkPlan(t, 'Сегодня', '16.10.2026', 1000, 'p');
+    assert.deepEqual(L.planDueTasks(t, { planFireHour: 9 }, localMs(2026, 10, 16, 8, 0)), []);
+    assert.deepEqual(ids(L.planDueTasks(t, { planFireHour: 9 }, localMs(2026, 10, 16, 9, 0))), ['p']);
+    assert.equal(L.normFireHour('мусор'), 5);
+    assert.equal(L.normFireHour(99), 5);
+    assert.equal(L.normFireHour(-1), 5);
+    assert.equal(L.normFireHour(0), 0);
+    assert.equal(L.normFireHour(23), 23);
+    assert.deepEqual(ids(L.planDueTasks(t, { planFireHour: 'мусор' }, localMs(2026, 10, 16, 5, 0))), ['p']);
+  });
+  it('planDueTasks: чистый (не мутирует), не-массив — пусто', () => {
+    const t = L.blankTasks();
+    mkPlan(t, 'Сегодня', '16.10.2026', 1000, 'p');
+    const before = JSON.stringify(t);
+    const out = L.planDueTasks(t, {}, localMs(2026, 10, 16, 12, 0));
+    assert.equal(JSON.stringify(t), before, 'вход не тронут');
+    assert.notEqual(out, t);
+    assert.deepEqual(L.planDueTasks(null, {}, 1), []);
+    assert.deepEqual(L.planDueTasks('мусор', {}, 1), []);
+  });
+  it('изоляция: stats/todoCount/shareText/searchTasks планов не видят', () => {
+    const t = L.blankTasks();
+    mk(t, 'Дело', 1000, { id: 'a' });
+    mkPlan(t, 'План дело', '16.10.2026', 2000, 'p');
+    assert.deepEqual(L.stats(t), { todo: 1, done: 0 });
+    assert.equal(L.todoCount(t), 1);
+    assert.equal(L.shareText(t), '- Дело');
+    assert.deepEqual(L.searchTasks(t, 'дело'), ['a']);
+  });
+});
