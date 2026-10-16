@@ -526,7 +526,9 @@ function renderPlanLines() {
   var plans = C.planTasks();
   for (var i = 0; i < plans.length; i++) {
     var t = plans[i];
-    box.appendChild(makeLine(t.id, t.title, C.lineIndent(t), {
+    /* Планы плоские (отступов на странице плана нет): отступ всегда 0,
+     * что бы ни лежало в данных. В живых задачах разошьёшь при переносе. */
+    box.appendChild(makeLine(t.id, t.title, 0, {
       src: 'plan',
       doneShown: t.status === 'done',
       planDate: t.planDate,

@@ -1309,7 +1309,8 @@ describe('планирование ФАЗА 1: страница плана (FR-9
   it('экран #planPage: Назад, поле + дата, строки; настроек нет; скрытие классом', () => {
     assert.ok(html.includes('id="planPage"'), 'нет экрана плана');
     assert.ok(html.includes('id="planBack"'), 'нет кнопки Назад');
-    assert.ok(html.includes('← Назад'), 'Назад без стрелки-подписи');
+    assert.ok(/id="planBack"[^>]*aria-label="Назад к списку"/.test(html), 'у Назад нет подписи');
+    assert.ok(!html.includes('← Назад'), 'Назад не компактная (с надписью)');
     assert.ok(html.includes('id="planInput"'), 'нет поля создания плана');
     assert.ok(html.includes('id="planDateInput"'), 'нет поля даты плана');
     assert.ok(html.includes('ДД.ММ.ГГГГ'), 'нет подсказки формата даты');
@@ -1331,6 +1332,33 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(appSrc.includes('planScrollY'), 'скролл основного списка не пинится');
     assert.ok(/function showPlanPage[\s\S]{0,1500}el\('planInput'\)/.test(appSrc),
       'фокус при открытии не в поле плана');
+  });
+  it('шапка плана: ← ↩ ↪ 🔍 ⓘ (v196)', () => {
+    for (const id of ['planBack', 'planUndoBtn', 'planRedoBtn', 'planSearchBtn', 'planDiagBtn']) {
+      assert.ok(html.includes('id="' + id + '"'), 'нет ' + id + ' в шапке плана');
+    }
+    assert.ok(appSrc.includes("on('planUndoBtn'") || historySrc.includes("on('planUndoBtn'"),
+      '↩ плана не ведёт на отмену');
+    assert.ok(appSrc.includes("on('planRedoBtn'") || historySrc.includes("on('planRedoBtn'"),
+      '↪ плана не ведёт на возврат');
+    assert.ok(appSrc.includes("on('planSearchBtn'"), '🔍 плана не открывает поиск');
+    assert.ok(diagSrc.includes("on('planDiagBtn'"), 'ⓘ плана не открывает диагностику');
+    assert.ok(searchSrc.includes('openSearch: openSearch'), 'openSearch не экспортирован для плана');
+  });
+  it('форма плана в две строки, название с переносом (v196)', () => {
+    assert.ok(/<textarea[^>]*id="planInput"/.test(html), 'название не textarea (нет переноса)');
+    assert.ok(!/id="planInput"[^>]*wrap="off"/.test(html), 'перенос выключен');
+    assert.ok(html.includes('id="planFormRow"'), 'дата и ＋ не во второй строке');
+    assert.ok(/savePlanDraft[\s\S]{0,400}autosize\(/.test(appSrc), 'поле не растёт за текстом');
+  });
+  it('планы плоские: отступов нет (v196)', () => {
+    assert.ok(/makeLine\(t\.id, t\.title, 0,/.test(rendSrc), 'строка плана едет со своим отступом');
+    assert.ok(/no-op[\s\S]{0,200}planLines/.test(gestSrc), 'сдвиг на плане не заглушен');
+    assert.ok(gestSrc.includes("box.id === 'planLines'"), 'посадка на плане не в 0');
+  });
+  it('кнопки шапки ровно в ряд (v196)', () => {
+    assert.ok(html.includes('justify-content: space-between'), 'кнопки не разведены по ширине');
+    assert.ok(/\.hbtn \{[^}]*flex: 1/.test(html), 'кнопки не равной ширины');
   });
   it('черновик поля: ключ planfield-v1, запись на input, восстановление', () => {
     assert.ok(appSrc.includes('external-brain-planfield-v1'), 'нет ключа черновика поля');

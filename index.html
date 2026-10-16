@@ -17,9 +17,10 @@
       position: -webkit-sticky; position: sticky; top: 0; background: #fff; z-index: 5; }
     #titleRow { display: flex; align-items: center; gap: 12px; }
     header h1 { font-size: 18px; margin: 0; flex: 1; }
-    #headActions { display: flex; gap: 8px; }
-    #headActions .hbtn { min-height: 28px; padding: 2px 12px; font-size: 15px;
-      border: 1px solid #ddd; border-radius: 8px; background: #f7f7f7; }
+    #headActions { display: flex; gap: 8px; justify-content: space-between; }
+    #headActions .hbtn { min-height: 28px; padding: 2px 4px; font-size: 15px;
+      border: 1px solid #ddd; border-radius: 8px; background: #f7f7f7;
+      flex: 1 1 0; min-width: 0; text-align: center; }
     #headActions .hbtn:disabled { opacity: .35; }
     .done-sep { display: flex; align-items: center; gap: 8px; color: #999;
       font-size: 12px; margin: 4px 2px 0; cursor: pointer;
@@ -181,13 +182,19 @@
       background: #fff; z-index: 44; overflow-y: auto;
       -webkit-overflow-scrolling: touch; padding: 12px 14px 60px; }
     #planPage.open { display: block; }
-    #planHead { display: flex; align-items: center; gap: 10px;
+    #planHead { display: flex; align-items: center; gap: 8px;
       max-width: 720px; margin: 0 auto 10px; }
-    #planHead h2 { font-size: 18px; margin: 0; flex: 1; }
-    #planForm { display: flex; gap: 8px; max-width: 720px; margin: 0 auto 12px; }
-    #planInput { flex: 1; min-width: 0; font-size: 18px; font-family: inherit;
-      padding: 8px 10px; border: 2px solid #4a90e2; border-radius: 10px; }
-    #planDateInput { width: 132px; flex: none; font-size: 18px; font-family: inherit;
+    #planHead h2 { font-size: 18px; margin: 0; flex: 1; min-width: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #planHead button { flex: none; min-width: 40px; font-size: 16px; padding: 4px 8px;
+      border: 1px solid #ddd; border-radius: 8px; background: #f7f7f7; }
+    #planForm { display: flex; flex-direction: column; gap: 8px;
+      max-width: 720px; margin: 0 auto 12px; }
+    #planFormRow { display: flex; gap: 8px; }
+    #planInput { width: 100%; box-sizing: border-box; font-size: 18px; font-family: inherit;
+      line-height: 1.3; padding: 8px 10px; border: 2px solid #4a90e2; border-radius: 10px;
+      resize: none; overflow-y: hidden; }
+    #planDateInput { flex: 1; min-width: 0; font-size: 18px; font-family: inherit;
       padding: 8px 10px; border: 2px solid #4a90e2; border-radius: 10px; }
     #planAddBtn { flex: none; min-width: 52px; font-size: 22px; padding: 8px 0;
       border: 2px solid #4a90e2; border-radius: 10px; background: #4a90e2; color: #fff; }
@@ -267,13 +274,19 @@
        (целевая/час) здесь нет — это фаза 3. -->
   <div id="planPage">
     <div id="planHead">
-      <button id="planBack" title="Назад к списку" aria-label="Назад к списку">← Назад</button>
+      <button id="planBack" title="Назад к списку" aria-label="Назад к списку">←</button>
       <h2>Планирование</h2>
+      <button id="planUndoBtn" title="Отменить" aria-label="Отменить">↩</button>
+      <button id="planRedoBtn" title="Вернуть" aria-label="Вернуть">↪</button>
+      <button id="planSearchBtn" title="Поиск по списку" aria-label="Поиск по списку">🔍</button>
+      <button id="planDiagBtn" title="Диагностика" aria-label="Диагностика">ⓘ</button>
     </div>
     <div id="planForm">
-      <input id="planInput" autocomplete="off" placeholder="Новый план…" aria-label="Название плана" />
-      <input id="planDateInput" autocomplete="off" inputmode="numeric" maxlength="10" placeholder="ДД.ММ.ГГГГ" aria-label="Дата плана" />
-      <button id="planAddBtn" title="Добавить план" aria-label="Добавить план">＋</button>
+      <textarea id="planInput" rows="1" autocomplete="off" placeholder="Новый план…" aria-label="Название плана"></textarea>
+      <div id="planFormRow">
+        <input id="planDateInput" autocomplete="off" inputmode="numeric" maxlength="10" placeholder="ДД.ММ.ГГГГ" aria-label="Дата плана" />
+        <button id="planAddBtn" title="Добавить план" aria-label="Добавить план">＋</button>
+      </div>
     </div>
     <div id="planLines"></div>
   </div>

@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v195';
+  var APP_VERSION = 'v196';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1095,6 +1095,7 @@
       var pi = el('planInput');
       if (!pi) return;
       localStorage.setItem(PLANFIELD_KEY, pi.value);
+      autosize(pi);
     } catch (x) {}
   }
 
@@ -1278,6 +1279,14 @@
       else if (dv && dv.focus) { try { dv.focus(); } catch (x) {} }
     });
     on('planAddBtn', 'click', function () { createPlanFromForm(); });
+    /* Кнопки шапки плана: поиск — по основному списку (план плоский,
+     * свой поиск ему не нужен): страницу закрываем, открываем поиск. */
+    on('planSearchBtn', 'click', function () {
+      hidePlanPage();
+      if (window.EBSearch && window.EBSearch.openSearch) {
+        try { window.EBSearch.openSearch(); } catch (x) {}
+      }
+    });
     on('planInput', 'keydown', function (e) {
       if (e && e.key === 'Enter') {
         if (e.preventDefault) e.preventDefault();

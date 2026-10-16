@@ -295,6 +295,12 @@ function init(ctx) {
       ctx.showInfo('Диагностика', txt, txt);
     });
   });
+  /* Кнопка ⓘ в шапке плана — та же диагностика (модалка поверх страницы). */
+  ctx.on('planDiagBtn', 'click', function () {
+    diagText().then(function (txt) {
+      ctx.showInfo('Диагностика', txt, txt);
+    });
+  });
 }
 
 var api = {

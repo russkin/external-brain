@@ -249,6 +249,7 @@ function init(ctx) {
 
 var api = {
   init: init,
+  openSearch: openSearch,
   applySearchHit: applySearchHit,
   currentId: currentId
 };

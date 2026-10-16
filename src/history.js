@@ -180,12 +180,18 @@ function updateHistoryButtons() {
   var u = document.getElementById('undoBtn'), r = document.getElementById('redoBtn');
   if (u) u.disabled = !undoStack.length;
   if (r) r.disabled = !redoStack.length;
+  /* Кнопки шапки плана — то же состояние (история общая). */
+  var pu = document.getElementById('planUndoBtn'), pr = document.getElementById('planRedoBtn');
+  if (pu) pu.disabled = !undoStack.length;
+  if (pr) pr.disabled = !redoStack.length;
 }
 
 function init(ctx) {
   C = ctx;
   ctx.on('undoBtn', 'click', function () { doUndo(); });
   ctx.on('redoBtn', 'click', function () { doRedo(); });
+  ctx.on('planUndoBtn', 'click', function () { doUndo(); });
+  ctx.on('planRedoBtn', 'click', function () { doRedo(); });
 }
 
 var api = {

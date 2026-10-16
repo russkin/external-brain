@@ -423,7 +423,9 @@ function applyDropIndent(box, sibs, di, kids) {
   }
   var prevInd = prevRow ? indOf(prevRow) : 0;
   var nextInd = nextRow ? indOf(nextRow) : -1;
-  var want = !prevRow ? 0 : (nextInd === prevInd + 1 ? nextInd : prevInd);
+  /* Страница плана плоская: любой сброс — в 0 (вдруг в данных завалялся). */
+  var want = (box && box.id === 'planLines') ? 0 :
+    (!prevRow ? 0 : (nextInd === prevInd + 1 ? nextInd : prevInd));
   var myRow = sibs[di];
   var myId = myRow.getAttribute ? myRow.getAttribute('data-id') : null;
   var myT = myId ? L.getTask(state.tasks, myId) : null;
@@ -855,6 +857,13 @@ function wireLineDrag(div, grip, inp) {
         if (!kids[kc] || !kids[kc].style) continue;
         kids[kc].style.transition = '';
         kids[kc].style.transform = '';
+      }
+      /* На странице плана отступов нет (плоский список): сдвиг — no-op,
+       * только вернуть вид. Вертикальный порядок правит persist. */
+      if (boxOf(div) && boxOf(div).id === 'planLines') {
+        kids = [];
+        C.render();
+        return;
       }
       var bou = indentBounds();
       var lvl = bou.cur + Math.round(lastDx / INDENT_STEP);
