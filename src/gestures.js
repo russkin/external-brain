@@ -153,7 +153,10 @@ function wireLineSwipe(div, taskId) {
       div.classList.remove('swiped');
       div._swOpen = false;
     } else if (!div._swOpen && !div._swRArm && !swHadFlag && dx > 48 &&
-               Math.abs(dx) > Math.abs(dy) * 2 && taskId) {
+               Math.abs(dx) > Math.abs(dy) * 2 && taskId &&
+               /* Время на планах отключено (v197): свайп вправо модалку
+                * длительности не взводит, метки времени у планов нет. */
+               !(div.getAttribute && div.getAttribute('data-src') === 'plan')) {
       /* Свайп вправо: флагирует открытие модалки времени на pointerup
        * (модалка посреди жеста мешала бы пальцу). swHadFlag — если флаг
        * открыт/раскрыт в этом жесте, возврат вправо его только закрывает.
@@ -773,6 +776,10 @@ function wireLineDrag(div, grip, inp) {
       if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 2) {
         var _mt = myTask();
         if (!_mt || _mt.status === 'done') return;
+        /* Сдвигов на странице плана нет вообще (v197, плоский список):
+         * preview не едет, отскока нет; вертикаль ниже стартует как обычно. */
+        var _pb = boxOf(div);
+        if (_pb && _pb.id === 'planLines') return;
         startIndent();
       } else if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx) * 2) {
         startVertical(e);

@@ -182,11 +182,14 @@
       background: #fff; z-index: 44; overflow-y: auto;
       -webkit-overflow-scrolling: touch; padding: 12px 14px 60px; }
     #planPage.open { display: block; }
-    #planHead { display: flex; align-items: center; gap: 8px;
-      max-width: 720px; margin: 0 auto 10px; }
-    #planHead h2 { font-size: 18px; margin: 0; flex: 1; min-width: 0;
+    #planHead { max-width: 720px; margin: 0 auto 10px; }
+    #planHeadTop { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    #planHeadTop h2 { font-size: 18px; margin: 0; flex: 1; min-width: 0;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    #planHead button { flex: none; min-width: 40px; font-size: 16px; padding: 4px 8px;
+    #planHeadTop button { flex: none; min-width: 52px; font-size: 18px; padding: 6px 12px;
+      border: 1px solid #ddd; border-radius: 8px; background: #f7f7f7; }
+    #planHeadRow { display: flex; gap: 8px; }
+    #planHeadRow button { flex: 1 1 0; min-width: 0; font-size: 16px; padding: 4px 8px;
       border: 1px solid #ddd; border-radius: 8px; background: #f7f7f7; }
     #planForm { display: flex; flex-direction: column; gap: 8px;
       max-width: 720px; margin: 0 auto 12px; }
@@ -274,12 +277,15 @@
        (целевая/час) здесь нет — это фаза 3. -->
   <div id="planPage">
     <div id="planHead">
-      <button id="planBack" title="Назад к списку" aria-label="Назад к списку">←</button>
-      <h2>Планирование</h2>
-      <button id="planUndoBtn" title="Отменить" aria-label="Отменить">↩</button>
-      <button id="planRedoBtn" title="Вернуть" aria-label="Вернуть">↪</button>
-      <button id="planSearchBtn" title="Поиск по списку" aria-label="Поиск по списку">🔍</button>
-      <button id="planDiagBtn" title="Диагностика" aria-label="Диагностика">ⓘ</button>
+      <div id="planHeadTop">
+        <h2>Планирование</h2>
+        <button id="planBack" title="Назад к списку" aria-label="Назад к списку">←</button>
+      </div>
+      <div id="planHeadRow">
+        <button id="planUndoBtn" title="Отменить" aria-label="Отменить">↩</button>
+        <button id="planRedoBtn" title="Вернуть" aria-label="Вернуть">↪</button>
+        <button id="planDiagBtn" title="Диагностика" aria-label="Диагностика">ⓘ</button>
+      </div>
     </div>
     <div id="planForm">
       <textarea id="planInput" rows="1" autocomplete="off" placeholder="Новый план…" aria-label="Название плана"></textarea>

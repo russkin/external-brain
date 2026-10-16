@@ -1333,17 +1333,20 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(/function showPlanPage[\s\S]{0,1500}el\('planInput'\)/.test(appSrc),
       'фокус при открытии не в поле плана');
   });
-  it('шапка плана: ← ↩ ↪ 🔍 ⓘ (v196)', () => {
-    for (const id of ['planBack', 'planUndoBtn', 'planRedoBtn', 'planSearchBtn', 'planDiagBtn']) {
+  it('шапка плана: заголовок + Назад справа, ряд ↩ ↪ ⓘ, без поиска (v197)', () => {
+    for (const id of ['planBack', 'planUndoBtn', 'planRedoBtn', 'planDiagBtn']) {
       assert.ok(html.includes('id="' + id + '"'), 'нет ' + id + ' в шапке плана');
     }
+    assert.ok(!html.includes('id="planSearchBtn"'), 'поиск с плана не убран');
+    assert.ok(html.includes('id="planHeadTop"') && html.includes('id="planHeadRow"'),
+      'шапка плана не двухрядная');
+    assert.ok(html.indexOf('id="planBack"') > html.indexOf('<h2>'),
+      'Назад не справа (под большой палец)');
     assert.ok(appSrc.includes("on('planUndoBtn'") || historySrc.includes("on('planUndoBtn'"),
       '↩ плана не ведёт на отмену');
     assert.ok(appSrc.includes("on('planRedoBtn'") || historySrc.includes("on('planRedoBtn'"),
       '↪ плана не ведёт на возврат');
-    assert.ok(appSrc.includes("on('planSearchBtn'"), '🔍 плана не открывает поиск');
     assert.ok(diagSrc.includes("on('planDiagBtn'"), 'ⓘ плана не открывает диагностику');
-    assert.ok(searchSrc.includes('openSearch: openSearch'), 'openSearch не экспортирован для плана');
   });
   it('форма плана в две строки, название с переносом (v196)', () => {
     assert.ok(/<textarea[^>]*id="planInput"/.test(html), 'название не textarea (нет переноса)');
@@ -1351,10 +1354,15 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(html.includes('id="planFormRow"'), 'дата и ＋ не во второй строке');
     assert.ok(/savePlanDraft[\s\S]{0,400}autosize\(/.test(appSrc), 'поле не растёт за текстом');
   });
-  it('планы плоские: отступов нет (v196)', () => {
+  it('планы плоские: отступов нет, сдвиг не стартует (v197)', () => {
     assert.ok(/makeLine\(t\.id, t\.title, 0,/.test(rendSrc), 'строка плана едет со своим отступом');
-    assert.ok(/no-op[\s\S]{0,200}planLines/.test(gestSrc), 'сдвиг на плане не заглушен');
+    assert.ok(gestSrc.includes("if (_pb && _pb.id === 'planLines') return;"),
+      'сдвиг на плане стартует (потом отскок)');
     assert.ok(gestSrc.includes("box.id === 'planLines'"), 'посадка на плане не в 0');
+  });
+  it('время на планах отключено (v197)', () => {
+    assert.ok(gestSrc.includes("getAttribute('data-src') === 'plan'"),
+      'свайп вправо на плане взводит модалку длительности (нет сторожа data-src)');
   });
   it('кнопки шапки ровно в ряд (v196)', () => {
     assert.ok(html.includes('justify-content: space-between'), 'кнопки не разведены по ширине');
