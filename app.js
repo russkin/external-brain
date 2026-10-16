@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v190';
+  var APP_VERSION = 'v191';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1119,6 +1119,9 @@
     if (!made) {
       lastAction = 'план: нужны название и дата ДД.ММ.ГГГГ';
       renderStatus();
+      /* Подсказать руками: курсор в дату. */
+      var di2 = el('planDateInput');
+      if (di2 && di2.focus) { try { di2.focus(); } catch (x) {} }
       return;
     }
     if (ti) ti.value = '';
@@ -1240,6 +1243,15 @@
       try { window.history.back(); } catch (x) { hidePlanPage(); }
     });
     on('planInput', 'input', function () { savePlanDraft(); });
+    on('planInput', 'keydown', function (e) {
+      if (!e || e.key !== 'Enter') return;
+      if (e.preventDefault) e.preventDefault();
+      /* Enter в названии: дата уже есть — создаём; нет — ведём в дату. */
+      var dv = el('planDateInput');
+      if (dv && String(dv.value || '').trim()) createPlanFromForm();
+      else if (dv && dv.focus) { try { dv.focus(); } catch (x) {} }
+    });
+    on('planAddBtn', 'click', function () { createPlanFromForm(); });
     on('planInput', 'keydown', function (e) {
       if (e && e.key === 'Enter') {
         if (e.preventDefault) e.preventDefault();

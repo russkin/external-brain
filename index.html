@@ -189,6 +189,8 @@
       padding: 8px 10px; border: 2px solid #4a90e2; border-radius: 10px; }
     #planDateInput { width: 132px; flex: none; font-size: 18px; font-family: inherit;
       padding: 8px 10px; border: 2px solid #4a90e2; border-radius: 10px; }
+    #planAddBtn { flex: none; min-width: 52px; font-size: 22px; padding: 8px 0;
+      border: 2px solid #4a90e2; border-radius: 10px; background: #4a90e2; color: #fff; }
     #planLines { display: flex; flex-direction: column; gap: 8px;
       max-width: 720px; margin: 0 auto; }
     /* Метка даты плана — отдельный .planchip (не .durchip): длительность
@@ -261,6 +263,7 @@
     <div id="planForm">
       <input id="planInput" autocomplete="off" placeholder="Новый план…" aria-label="Название плана" />
       <input id="planDateInput" autocomplete="off" inputmode="numeric" maxlength="10" placeholder="ДД.ММ.ГГГГ" aria-label="Дата плана" />
+      <button id="planAddBtn" title="Добавить план" aria-label="Добавить план">＋</button>
     </div>
     <div id="planLines"></div>
   </div>

@@ -1331,6 +1331,10 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(logicSrc.includes('createPlan: createPlan'), 'createPlan не в api');
     assert.ok(/mutate\(function \(\) \{\s*\n?\s*made = L\.createPlan/.test(appSrc),
       'создание + дата не одним mutate (не один шаг истории)');
+    assert.ok(html.includes('id="planAddBtn"'), 'нет кнопки ＋ создания плана (только Enter в дате)');
+    assert.ok(appSrc.includes("on('planAddBtn', 'click'"), 'кнопка ＋ не ведёт на создание');
+    assert.ok(/planDateInput[\s\S]{0,300}focus\(\)/.test(appSrc),
+      'пустая дата не ведёт курсор в поле даты (v191)');
   });
   it('правка/удаление планов — те же точки, без своих удалялок', () => {
     assert.ok(!appSrc.includes('askDeletePlan') && !appSrc.includes('deletePlanTask'),
