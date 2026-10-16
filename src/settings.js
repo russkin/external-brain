@@ -176,7 +176,11 @@ function init(ctx) {
 }
 
 var api = {
-  init: init
+  init: init,
+  /* Маска даты — в общем доступе (ФАЗА 1 планирования): поле даты плана
+   * на #planPage пользуется теми же fmtExpDigits/expCaret, не копипастой. */
+  fmtExpDigits: fmtExpDigits,
+  expCaret: expCaret
 };
 
 if (typeof module !== 'undefined' && module.exports) {

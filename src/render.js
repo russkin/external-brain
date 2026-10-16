@@ -13,10 +13,11 @@
  * UMD: браузер (window.EBRender) + Node (module.exports) для тестов.
  *
  * Контекст ctx: L, getState, getVersion, renderNet, getSyncInfo,
- *   getLastAction, getBoot, updateHistoryButtons, lineTasks, fullList,
- *   lineIndent, getCollapsed, isDoneHidden, toggleDoneHidden, snapFull,
- *   pushUndo, wireLineInput, deleteEmptyTask, openDuration, toggleDoneSlide,
- *   wireLineSwipe, wireLineDrag, hasLiveKids, INDENT_STEP —
+ *   getLastAction, getBoot, updateHistoryButtons, lineTasks, planTasks,
+ *   fullList, lineIndent, getCollapsed, isDoneHidden, toggleDoneHidden,
+ *   snapFull, pushUndo, wireLineInput, deleteEmptyTask, openDuration,
+ *   toggleDoneSlide, wireLineSwipe, wireLineDrag, hasLiveKids, INDENT_STEP —
+ *   (planTasks — порядок планов для #planPage, ФАЗА 1).
  *   стабильные ссылки; изменяемое (state, черновик, карта свёрнутых)
  *   только через геттеры. L/INDENT_STEP фиксируются в init.
  */
@@ -57,6 +58,9 @@ function render() {
   var v2 = el('appVer');
   if (v2) v2.textContent = C.getVersion();
   renderLines();
+  /* Страница плана (если открыта) — в ногу с данными: фоновый синк
+   * и мутации перерисовывают оба списка одним render(). */
+  renderPlanLines();
   renderStatus();
   C.updateHistoryButtons();
   /* Подсветка поиска переживает перерисовки (фоновый синк): строка
@@ -160,13 +164,20 @@ function lineEstMin(t) {
   return sum;
 }
 
+/* Источник строки (ФАЗА 1 планирования, FR-95): opts.src 'plan' — строка
+ * страницы плана, иначе обычный список. Жесты НЕ дублируются: те же
+ * C.wireLineSwipe/C.wireLineDrag/C.wireLineInput, источник едет параметром
+ * (план: Enter только сохраняет, см. wireLineInput в app.js; drag строит
+ * каркас в своей коробке, см. boxOf в gestures.js). */
 function makeLine(taskId, value, indent, opts) {
   opts = opts || {};
+  var src = opts.src === 'plan' ? 'plan' : 'list';
   var div = document.createElement('div');
   div.className = 'tline';
   div.setAttribute('data-id', taskId);
   indent = C.lineIndent({ indent: indent });
   div.setAttribute('data-indent', String(indent));
+  if (src === 'plan') div.setAttribute('data-src', 'plan');
   div._indent = indent;
   if (indent) div.style.marginLeft = (indent * INDENT_STEP) + 'px';
   if (opts.hidden) div.classList.add('collapsed-kid');
@@ -260,12 +271,29 @@ function makeLine(taskId, value, indent, opts) {
     div.appendChild(del);
   }
   C.wireLineSwipe(div, taskId);
+  /* Метка даты плана — отдельный .planchip, НЕ .durchip (решение ФАЗЫ 1):
+   * длительность план не показывает, поэтому замер накрытия (fitChipRow),
+   * фон-зеркало (updateDurchip) и модалка по тапу длительности его
+   * не трогают; текст даты всегда цел статичным отступом поля справа
+   * (CSS .tline[data-src="plan"] .tinput). Тап сквозь метку — в поле
+   * (pointer-events: none): индикатор срабатывания только отображается
+   * (planFired!==0 → класс fired), кнопок нет. */
+  if (src === 'plan') {
+    var ptext = L.planChipText({ planDate: opts.planDate, planFired: opts.planFired });
+    if (ptext) {
+      var pchip = document.createElement('span');
+      pchip.className = 'planchip';
+      if (opts.planFired) pchip.classList.add('fired');
+      pchip.textContent = ptext;
+      pchip.setAttribute('aria-label', 'Дата плана: ' + ptext);
+      body.appendChild(pchip);
+    }
+  } else if (taskId && opts.estMin > 0) {
   /* Метка времени — НАЛОЖЕНИЕ в правом нижнем углу поля задачи
    * (position: absolute против .tline): тап — та же модалка, что свайп
    * вправо. Фон прозрачный, пока текст не доходит до метки (см.
    * updateDurchip — при пересчёте становится непрозрачным). Пустое
    * время (estMin=0) — метки нет, угол поля свободен. */
-  if (taskId && opts.estMin > 0) {
     var chip = document.createElement('button');
     chip.className = 'durchip';
     chip.type = 'button';
@@ -282,7 +310,7 @@ function makeLine(taskId, value, indent, opts) {
     })(taskId, chip);
     body.appendChild(chip);
   }
-  C.wireLineInput(div, inp, taskId, indent);
+  C.wireLineInput(div, inp, taskId, indent, src);
   C.wireLineDrag(div, grip, inp);
   return div;
 }
@@ -483,6 +511,30 @@ function renderLines() {
   var areas = box.querySelectorAll ? box.querySelectorAll('.tinput') : [];
   for (var q = 0; q < areas.length; q++) autosize(areas[q]);
   refreshDurchips(box);
+}
+
+/* Строки страницы планирования (ФАЗА 1, FR-95): все планы (включая
+ * выполненные — с зачёркиванием, и пустые — с «✕ Удалить») плоским
+ * списком в #planLines. Свёрнутости/раздела выполненных здесь нет.
+ * Поле создания (#planInput/#planDateInput) живёт ВНЕ #planLines —
+ * пересборка фокус и черновик не трогает. */
+function renderPlanLines() {
+  var state = C.getState();
+  var box = el('planLines');
+  if (!box || !state) return;
+  box.innerHTML = '';
+  var plans = C.planTasks();
+  for (var i = 0; i < plans.length; i++) {
+    var t = plans[i];
+    box.appendChild(makeLine(t.id, t.title, C.lineIndent(t), {
+      src: 'plan',
+      doneShown: t.status === 'done',
+      planDate: t.planDate,
+      planFired: t.planFired
+    }));
+  }
+  var areas = box.querySelectorAll ? box.querySelectorAll('.tinput') : [];
+  for (var q = 0; q < areas.length; q++) autosize(areas[q]);
 }
 
 /* Шапка над клавиатурой: в оверлейном режиме (iOS Safari, часть Android)
@@ -756,6 +808,7 @@ function init(ctx) {
 var api = {
   init: init,
   render: render,
+  renderPlanLines: renderPlanLines,
   renderStatus: renderStatus,
   expandForAnchor: expandForAnchor,
   autosize: autosize,

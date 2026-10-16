@@ -477,6 +477,46 @@ function isPlanned(t) {
   return !!t && !t.deleted && normPlanDate(t.planDate) !== '';
 }
 
+/* Создать план (ФАЗА 1, FR-95): название + дата ОБЯЗАТЕЛЬНЫ — планов
+ * без даты не бывает, пустой title не создаётся. Невалидно → null,
+ * массив не трогаем. Запись плоская (indent 0), в конец списка
+ * (порядок планов — по createdAt, как у живых). */
+function createPlan(tasks, title, planDate, nowMs, opts) {
+  if (!Array.isArray(tasks)) return null;
+  var t = normTitle(title);
+  var pd = normPlanDate(planDate);
+  if (!t || !pd) return null;
+  opts = opts || {};
+  var now = toInt(nowMs, Date.now());
+  var task = {
+    id: opts.id ? String(opts.id).slice(0, 64) : makeId(now),
+    title: t,
+    status: 'todo',
+    estMin: 0,
+    sumKids: true,
+    planDate: pd,
+    planFired: 0,
+    indent: 0,
+    createdAt: now,
+    updatedAt: now,
+    doneAt: 0,
+    ts: now,
+    deleted: false
+  };
+  tasks.push(task);
+  return task;
+}
+
+/* Текст метки даты для строки плана (ФАЗА 1, вёрстка): '' — не план
+ * (метки нет); иначе дата, у сработавшей (planFired!==0) — с галочкой
+ * (только индикатор, кнопок нет). */
+function planChipText(t) {
+  if (!isPlanned(t)) return '';
+  var pd = normPlanDate(t.planDate);
+  if (!pd) return '';
+  return toInt(t.planFired, 0) !== 0 ? pd + ' ✓' : pd;
+}
+
 /* Чистый детект сроков (без побочек — само срабатывание НЕ здесь):
  * план ждёт, если дата <= локальный день устройства И локальный час
  * >= planFireHour (граница >=: ровно в час порога — уже пора).
@@ -709,6 +749,8 @@ var api = {
   normPlanDate: normPlanDate,
   normFireHour: normFireHour,
   isPlanned: isPlanned,
+  createPlan: createPlan,
+  planChipText: planChipText,
   planDueTasks: planDueTasks,
   normalizeTask: normalizeTask,
   normalizeTasks: normalizeTasks,

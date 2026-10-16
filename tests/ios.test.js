@@ -189,14 +189,14 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'atStart считает пустую строку вставкой сверху');
     /* no-draft: поля-черновика нет — пересчёт его якоря после драга
      * не нужен, порядок пишется досдвиговым слепком. */
-    assert.ok(gestSrc.includes('var reordered = persistLineOrder(preDrop)') &&
+    assert.ok(gestSrc.includes('var reordered = persistLineOrder(preDrop, box)') &&
       !gestSrc.includes('dR.afterId = newAfterB'),
       'пересчёт якоря черновика остался');
     /* Отмена возвращает и отступ: слепок истории — до applyDropIndent,
      * иначе ↩ возвращал порядок, но не уровень (родитель не уходил с 1 на 0). */
     assert.ok(gestSrc.includes('var preDrop = (di !== -1 && di !== oldPos) ? C.snapFull() : null'),
       'нет досдвигового слепка перед applyDropIndent');
-    assert.ok(gestSrc.includes('function persistLineOrder(beforeOverride)'),
+    assert.ok(gestSrc.includes('function persistLineOrder(beforeOverride, boxOverride)'),
       'persistLineOrder не принимает досдвиговый слепок');
     assert.ok(gestSrc.includes('if (!reordered && preDrop && C.snapTasks() !== preDrop.tasks)'),
       'чистое изменение отступа без сдвига порядка не пишется в историю');
@@ -1273,5 +1273,105 @@ describe('планирование ФАЗА 0: модель в строках (F
   it('sanitize чистит planTargetId/planFireHour', () => {
     assert.ok(storeSrc.includes('planTargetId'), 'нет planTargetId в store');
     assert.ok(storeSrc.includes('planFireHour'), 'нет planFireHour в store');
+  });
+});
+
+describe('планирование ФАЗА 1: страница плана (FR-95)', () => {
+  it('кнопка 📅 в шапке (id, класс, подсказки)', () => {
+    assert.ok(html.includes('id="planBtn"'), 'нет planBtn в шапке');
+    assert.ok(/id="planBtn"[^>]*class="hbtn"/.test(html), 'кнопка не в стиле шапки');
+    assert.ok(html.includes('📅'), 'нет значка календаря');
+    assert.ok(/id="planBtn"[^>]*title=/.test(html), 'нет title у кнопки');
+    assert.ok(/id="planBtn"[^>]*aria-label=/.test(html), 'нет aria-label у кнопки');
+    var iH = html.indexOf('id="headActions"');
+    var iP = html.indexOf('id="planBtn"');
+    assert.ok(iH !== -1 && iP > iH && iP < html.indexOf('</header>'), '📅 не в панели шапки');
+    assert.ok(appSrc.includes("on('planBtn'"), 'открытие не подписано через on()');
+  });
+  it('экран #planPage: Назад, поле + дата, строки; настроек нет; скрытие классом', () => {
+    assert.ok(html.includes('id="planPage"'), 'нет экрана плана');
+    assert.ok(html.includes('id="planBack"'), 'нет кнопки Назад');
+    assert.ok(html.includes('← Назад'), 'Назад без стрелки-подписи');
+    assert.ok(html.includes('id="planInput"'), 'нет поля создания плана');
+    assert.ok(html.includes('id="planDateInput"'), 'нет поля даты плана');
+    assert.ok(html.includes('ДД.ММ.ГГГГ'), 'нет подсказки формата даты');
+    assert.ok(html.includes('id="planLines"'), 'нет контейнера строк плана');
+    assert.ok(!html.includes('planFireHour') && !html.includes('planTargetId'),
+      'раздел настроек — не эта фаза (фаза 3)');
+    assert.ok(html.includes('#planPage.open'), 'скрытие не классом .open');
+    assert.ok(!/id="planPage"[^>]*style=/.test(html),
+      'инлайн display:none бьёт класс (панель откроется невидимкой)');
+  });
+  it('навигация: pushState/popstate, history.back, фокус, скролл-пин', () => {
+    assert.ok(appSrc.includes("pushState({ page: 'plan' }, '', '#plan')"),
+      'открытие не через pushState #plan');
+    assert.ok(appSrc.includes("on('planBack'"), 'Назад не подписана через on()');
+    assert.ok(appSrc.includes('history.back()'), 'Назад не идёт через history.back()');
+    assert.ok(appSrc.includes("addEventListener('popstate'"), 'системная Назад не слушаеся');
+    assert.ok(appSrc.includes('function showPlanPage') && appSrc.includes('function hidePlanPage'),
+      'нет показа/скрытия страницы');
+    assert.ok(appSrc.includes('planScrollY'), 'скролл основного списка не пинится');
+    assert.ok(/function showPlanPage[\s\S]{0,1500}el\('planInput'\)/.test(appSrc),
+      'фокус при открытии не в поле плана');
+  });
+  it('черновик поля: ключ planfield-v1, запись на input, восстановление', () => {
+    assert.ok(appSrc.includes('external-brain-planfield-v1'), 'нет ключа черновика поля');
+    assert.ok(!appSrc.includes('planpage-v1'), 'ключ перепутан с planpage-v1');
+    assert.ok(appSrc.includes("on('planInput', 'input'"), 'запись черновика не на input');
+    assert.ok(appSrc.includes('localStorage.setItem(PLANFIELD_KEY'), 'черновик не пишется');
+    assert.ok(appSrc.includes('localStorage.getItem(PLANFIELD_KEY'), 'черновик не восстанавливается');
+  });
+  it('создание плана: Enter в шапке, дата обязательна, один mutate', () => {
+    assert.ok(appSrc.includes('function createPlanFromForm'), 'нет создания из шапки страницы');
+    assert.ok(appSrc.includes('L.createPlan(state.tasks, title, dateStr'),
+      'создание не через L.createPlan со state.tasks');
+    assert.ok(appSrc.includes("on('planInput', 'keydown'") &&
+      appSrc.includes("on('planDateInput', 'keydown'"), 'Enter не в обоих полях шапки');
+    assert.ok(logicSrc.includes('function createPlan'), 'нет createPlan в логике');
+    assert.ok(logicSrc.includes('createPlan: createPlan'), 'createPlan не в api');
+    assert.ok(/mutate\(function \(\) \{\s*\n?\s*made = L\.createPlan/.test(appSrc),
+      'создание + дата не одним mutate (не один шаг истории)');
+  });
+  it('правка/удаление планов — те же точки, без своих удалялок', () => {
+    assert.ok(!appSrc.includes('askDeletePlan') && !appSrc.includes('deletePlanTask'),
+      'удаление плана дублирует askDeleteTask');
+    assert.ok(rendSrc.includes("opts.src === 'plan'"), 'нет параметра источника в makeLine');
+    assert.ok(rendSrc.includes('C.wireLineInput(div, inp, taskId, indent, src)'),
+      'источник не едет в проводку ввода');
+    assert.ok(/src === 'plan'[\s\S]{0,400}commitLine\(taskId, inp\.value/.test(appSrc),
+      'Enter в плане не только сохраняет (рождает строки без даты)');
+  });
+  it('строка плана: метка даты отдельным чипом, индикатор сработавшей', () => {
+    assert.ok(rendSrc.includes('planchip'), 'нет метки даты плана');
+    assert.ok(!/src === 'plan'[\s\S]{0,600}durchip/.test(rendSrc),
+      'план рисует длительность вместо даты');
+    assert.ok(rendSrc.includes('planChipText'), 'текст метки не из логики');
+    assert.ok(rendSrc.includes("classList.add('fired')"), 'нет индикатора сработавшей');
+    assert.ok(rendSrc.includes('function renderPlanLines'), 'нет отрисовки строк плана');
+    assert.ok(rendSrc.includes('C.planTasks()'), 'строки плана не из planTasks');
+    assert.ok(html.includes('.planchip'), 'нет стилей метки даты');
+    assert.ok(appSrc.includes('function planTasks'), 'нет порядка планов в app.js');
+    assert.ok(logicSrc.includes('planChipText: planChipText'), 'planChipText не в api');
+  });
+  it('маска даты плана — общие fmtExpDigits/expCaret, не копипаста', () => {
+    assert.ok(settingsSrc.includes('fmtExpDigits: fmtExpDigits') &&
+      settingsSrc.includes('expCaret: expCaret'), 'маска не вынесена в общий доступ');
+    assert.ok(appSrc.includes('EBSettings.fmtExpDigits') &&
+      appSrc.includes('EBSettings.expCaret'), 'поле даты не переиспользует маску');
+    assert.ok(appSrc.includes("on('planDateInput', 'input'"), 'маска не подписана на ввод');
+    assert.ok(html.includes('id="planDateInput"') &&
+      /id="planDateInput"[^>]*inputmode="numeric"/.test(html), 'нет цифровой клавиатуры у даты');
+  });
+  it('жесты на плане — те же функции, коробка своя, план выполняется одиночкой', () => {
+    assert.ok(gestSrc.includes('planLines'), 'жесты не знают коробку плана');
+    assert.ok(gestSrc.includes('function boxOf'), 'нет выбора коробки по строке');
+    assert.ok(gestSrc.includes('C.planTasks()'), 'перестановка плана не в своём порядке');
+    assert.ok(appSrc.includes('planTasks: planTasks'), 'план-порядок не отдан модулям');
+    assert.ok(/L\.isPlanned\(pt0\)[\s\S]{0,300}L\.completeTask\(state\.tasks/.test(appSrc),
+      'выполнение плана идёт веткой по чужому списку');
+    assert.ok(!/getElementById\('plan[A-Za-z]+'\)\.addEventListener/.test(appSrc),
+      'прямая подписка плана без on()');
+    assert.ok(!/(^|[^A-Za-z_$.])prompt\s*\(/.test(appSrc) &&
+      !/(^|[^A-Za-z_$])confirm\s*\(/.test(appSrc), 'системные диалоги в коде плана');
   });
 });

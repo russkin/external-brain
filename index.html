@@ -173,6 +173,35 @@
     .gear-settings input { display: block; width: 100%; box-sizing: border-box;
       font-size: 14px; padding: 8px 10px; margin: 0 0 8px; }
     .gear-settings small { color: #666; }
+    /* Страница планирования (ФАЗА 1): скрытие — классом .open, как
+     * у #searchBar (инлайн display:none в разметке запрещён — бьёт
+     * класс, и панель открывается невидимкой). Поверх списка (z 44:
+     * меню 40 ниже, модалки 50 выше). */
+    #planPage { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: #fff; z-index: 44; overflow-y: auto;
+      -webkit-overflow-scrolling: touch; padding: 12px 14px 60px; }
+    #planPage.open { display: block; }
+    #planHead { display: flex; align-items: center; gap: 10px;
+      max-width: 720px; margin: 0 auto 10px; }
+    #planHead h2 { font-size: 18px; margin: 0; flex: 1; }
+    #planForm { display: flex; gap: 8px; max-width: 720px; margin: 0 auto 12px; }
+    #planInput { flex: 1; min-width: 0; font-size: 18px; font-family: inherit;
+      padding: 8px 10px; border: 2px solid #4a90e2; border-radius: 10px; }
+    #planDateInput { width: 132px; flex: none; font-size: 18px; font-family: inherit;
+      padding: 8px 10px; border: 2px solid #4a90e2; border-radius: 10px; }
+    #planLines { display: flex; flex-direction: column; gap: 8px;
+      max-width: 720px; margin: 0 auto; }
+    /* Метка даты плана — отдельный .planchip (не .durchip): длительность
+     * план не показывает; текст всегда цел статичным отступом поля
+     * (следующее правило), тап идёт сквозь в поле (pointer-events).
+     * Сработавшая (fired) — залитая: только индикатор, кнопок нет. */
+    .planchip { position: absolute; right: 2px; bottom: 6px; z-index: 1;
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 24px; padding: 0 9px; font-size: 12px; line-height: 1;
+      color: #7a4fa3; background: #fff; border: 1px solid #9b7bc4;
+      border-radius: 999px; white-space: nowrap; pointer-events: none; }
+    .planchip.fired { background: #4caf50; border-color: #4caf50; color: #fff; }
+    .tline[data-src="plan"] .tinput { padding-right: 112px; }
   </style>
 </head>
 <body>
@@ -185,6 +214,7 @@
       <button id="gearBtn" title="Меню" aria-label="Меню">⚙</button>
     </div>
     <div id="headActions">
+      <button id="planBtn" class="hbtn" title="Планирование" aria-label="Планирование">📅</button>
       <button id="searchBtn" class="hbtn" title="Поиск по задачам" aria-label="Поиск по задачам">🔍</button>
       <button id="collapseAllBtn" class="hbtn" title="Свернуть все группы" aria-label="Свернуть все группы">📁</button>
       <button id="expandAllBtn" class="hbtn" title="Развернуть все группы" aria-label="Развернуть все группы">📂</button>
@@ -219,6 +249,21 @@
   <main>
     <div id="lines"></div>
   </main>
+
+  <!-- Страница планирования (ФАЗА 1, FR-95): полноэкранный экран поверх
+       списка (кнопка 📅 → pushState/popstate). Раздела настроек
+       (целевая/час) здесь нет — это фаза 3. -->
+  <div id="planPage">
+    <div id="planHead">
+      <button id="planBack" title="Назад к списку" aria-label="Назад к списку">← Назад</button>
+      <h2>Планирование</h2>
+    </div>
+    <div id="planForm">
+      <input id="planInput" autocomplete="off" placeholder="Новый план…" aria-label="Название плана" />
+      <input id="planDateInput" autocomplete="off" inputmode="numeric" maxlength="10" placeholder="ДД.ММ.ГГГГ" aria-label="Дата плана" />
+    </div>
+    <div id="planLines"></div>
+  </div>
 
     <footer id="status">Загрузка…</footer>
 

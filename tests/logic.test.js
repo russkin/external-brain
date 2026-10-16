@@ -821,3 +821,49 @@ describe('планирование ФАЗА 0: модель и изоляция 
     assert.deepEqual(L.searchTasks(t, 'дело'), ['a']);
   });
 });
+
+describe('планирование ФАЗА 1: создание плана и метка даты (FR-95)', () => {
+  it('createPlan: название и дата обязательны, иначе null', () => {
+    const t = L.blankTasks();
+    assert.equal(L.createPlan(t, '', '16.10.2026', 1000), null, 'пустой title — не создавать');
+    assert.equal(L.createPlan(t, '   ', '16.10.2026', 1000), null);
+    assert.equal(L.createPlan(t, 'План', '', 1000), null, 'без даты — не создавать');
+    assert.equal(L.createPlan(t, 'План', 'мусор', 1000), null, 'битая дата — не создавать');
+    assert.equal(L.createPlan(t, 'План', '32.10.2026', 1000), null);
+    assert.equal(L.createPlan(t, 'План', '29.02.2025', 1000), null, '29.02 невисокосного — не создавать');
+    assert.equal(t.length, 0, 'массив не растёт при отказе');
+    assert.equal(L.createPlan(null, 'План', '16.10.2026', 1000), null, 'не-массив — null');
+  });
+  it('createPlan: плоская живая запись с датой, флаг ждёт', () => {
+    const t = L.blankTasks();
+    const p = L.createPlan(t, '  Позвонить  ', '16.10.2026', 1000, { id: 'p1' });
+    assert.equal(p.id, 'p1');
+    assert.equal(p.title, 'Позвонить');
+    assert.equal(p.status, 'todo');
+    assert.equal(p.planDate, '16.10.2026');
+    assert.equal(p.planFired, 0, 'новый план — ждёт');
+    assert.equal(p.indent, 0, 'план плоский');
+    assert.equal(p.deleted, false);
+    assert.ok(L.isPlanned(p));
+    assert.equal(L.createPlan(t, 'Второй', '2026-10-17', 2000, { id: 'p2' }).planDate,
+      '17.10.2026', 'ISO-дата приводится');
+  });
+  it('createPlan: whitelist держит план после normalize/merge', () => {
+    const t = L.blankTasks();
+    L.createPlan(t, 'План', '16.10.2026', 1000, { id: 'p' });
+    const n = L.normalizeTasks(t);
+    assert.equal(n.length, 1);
+    assert.equal(n[0].planDate, '16.10.2026');
+    const m = L.mergeTasks([], t);
+    assert.equal(m.length, 1);
+    assert.equal(m[0].planDate, '16.10.2026');
+  });
+  it('planChipText: дата, сработавшая с галочкой, не-план пусто', () => {
+    assert.equal(L.planChipText({ planDate: '16.10.2026', planFired: 0 }), '16.10.2026');
+    assert.equal(L.planChipText({ planDate: '16.10.2026', planFired: 777 }), '16.10.2026 ✓');
+    assert.equal(L.planChipText({ planDate: '', planFired: 0 }), '', 'не план — метки нет');
+    assert.equal(L.planChipText({ planDate: 'мусор', planFired: 0 }), '');
+    assert.equal(L.planChipText({ planDate: '16.10.2026', deleted: true }), '', 'могила — не план');
+    assert.equal(L.planChipText(null), '');
+  });
+});

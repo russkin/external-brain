@@ -4,11 +4,15 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v189';
+  var APP_VERSION = 'v190';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
   var DONE_HIDDEN_KEY = 'external-brain-done-hidden-v1';
+  /* Черновик поля создания плана (ФАЗА 1, FR-95): автосохранённый текст
+   * #planInput, не задача. Ключ — planfield-v1 (поле, не страница: словом
+   * «черновик» называли выпиленное поле ввода). */
+  var PLANFIELD_KEY = 'external-brain-planfield-v1';
   var L = window.EBLogic;
   var state = null;
   var lastAction = '';
@@ -334,6 +338,25 @@
     return L.normalizeTasks(state.tasks).filter(function (t) { return !t.deleted; });
   }
 
+  /* Планы для #planPage (ФАЗА 1, FR-95–FR-96): все неудалённые с датой
+   * (включая выполненные и пустые), порядок — по createdAt, как у живых. */
+  function planTasks() {
+    if (!state) return [];
+    var out = [];
+    for (var i = 0; i < state.tasks.length; i++) {
+      var t = state.tasks[i];
+      if (!t || t.deleted) continue;
+      if (!L.isPlanned(t)) continue;
+      out.push(t);
+    }
+    out.sort(function (a, b) {
+      var ca = a.createdAt || 0, cb = b.createdAt || 0;
+      if (ca !== cb) return ca - cb;
+      return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
+    });
+    return out;
+  }
+
   /* Есть ли у id ЖИВЫЕ вложенные (v158): треугольник, тап по точкам
    * и «свернуть все» смотрят только на живых — выполненные дети живут
    * в своей секции, группу не показывают (иначе пустой треугольник,
@@ -516,6 +539,15 @@
   }
 
   function toggleDoneNow(taskId, toDone) {
+    /* План — плоская запись (ФАЗА 1): ветки нет, выполняем/возвращаем
+     * одну задачу. completeBranch/reopenBranch идут по lineTasks, где
+     * плана нет (изоляция FR-96), — молча ничего не сделали бы. */
+    var pt0 = L.getTask(state.tasks, taskId);
+    if (pt0 && !pt0.deleted && L.isPlanned(pt0)) {
+      if (toDone) L.completeTask(state.tasks, taskId, Date.now());
+      else L.reopenTask(state.tasks, taskId, Date.now());
+      return L.getTask(state.tasks, taskId);
+    }
     if (toDone) {
       L.completeBranch(lineTasks(), taskId, Date.now());
       /* Живых не осталось — стартер, иначе некуда вставать (в том же
@@ -709,7 +741,13 @@
     return task;
   }
 
-  function wireLineInput(div, inp, taskId, indent) {
+  /* Источник строки (ФАЗА 1 планирования): src 'plan' — строка #planPage.
+   * Ввод/автосейв/Backspace — те же (Backspace в начале строки плана —
+   * no-op: mergeTaskIntoPrev план в lineTasks не находит); Enter в плане
+   * только сохраняет название (commitLine → clarifyTask) — новых строк
+   * не рождаем: план без названия/даты запрещён, а поле создания живёт
+   * в шапке страницы (#planInput + #planDateInput). */
+  function wireLineInput(div, inp, taskId, indent, src) {
     var saveTimer = null;
     /* Строка расщеплена (Enter-сплит) или склеена/удалена (Backspace-merge):
      * render() сносит этот input, а Chrome шлёт с него поздний change со
@@ -759,6 +797,11 @@
       }
       if (e.key !== 'Enter' || e.shiftKey) return;
       e.preventDefault();
+      if (src === 'plan') {
+        commitLine(taskId, inp.value, false);
+        focusTaskEnd(taskId);
+        return;
+      }
       /* Enter в середине текста: левая часть остаётся задачей, хвост
        * (от каретки до конца) уходит в новую задачу ниже — как в
        * редакторе. Отступ — по правилу поля под строкой: у родителя
@@ -997,6 +1040,128 @@
     });
   }
 
+  /* --- Страница планирования #planPage (ФАЗА 1, FR-95) ---
+   * Вторая страница: кнопка 📅 в шапке открывает (pushState + показ),
+   * «Назад» и системная Назад закрывают (history.back / popstate).
+   * На странице: поле создания (#planInput + дата #planDateInput,
+   * Enter создаёт план — название и дата обязательны), строки планов
+   * (#planLines через renderPlanLines с src 'plan'), правка названия —
+   * инлайн (clarifyTask), удаление — askDeleteTask (tombstone,
+   * с подтверждением; пустая — сразу). Все мутации — через mutate;
+   * создание + дата — один mutate (один шаг истории). Раздела настроек
+   * (целевая/час) в ФАЗЕ 1 нет — это фаза 3. Индикатор «сработала» —
+   * только отображение (planFired!==0, класс fired у метки). */
+
+  /* Скролл-пин основного списка: где были — туда и вернулись. */
+  var planScrollY = 0;
+
+  function showPlanPage() {
+    var pg = el('planPage');
+    if (!pg) return;
+    var gm = el('gearMenu');
+    if (gm) gm.classList.remove('open');
+    try { planScrollY = window.pageYOffset || 0; } catch (x) { planScrollY = 0; }
+    /* Черновик поля — восстановить при открытии (пишется на каждый
+     * input в savePlanDraft). */
+    try {
+      if (typeof localStorage !== 'undefined') {
+        var d = localStorage.getItem(PLANFIELD_KEY);
+        var pi = el('planInput');
+        if (pi && d != null) pi.value = d;
+      }
+    } catch (x) {}
+    if (!pg.classList.contains('open')) pg.classList.add('open');
+    render();
+    var inp = el('planInput');
+    if (inp && inp.focus) { try { inp.focus(); } catch (x) {} }
+  }
+
+  function hidePlanPage() {
+    var pg = el('planPage');
+    if (!pg || !pg.classList.contains('open')) return;
+    pg.classList.remove('open');
+    try { window.scrollTo(0, planScrollY); } catch (x) {}
+  }
+
+  function openPlanPage() {
+    showPlanPage();
+    try { window.history.pushState({ page: 'plan' }, '', '#plan'); } catch (x) {}
+  }
+
+  /* Черновик поля создания плана — запись на каждый input. */
+  function savePlanDraft() {
+    try {
+      if (typeof localStorage === 'undefined') return;
+      var pi = el('planInput');
+      if (!pi) return;
+      localStorage.setItem(PLANFIELD_KEY, pi.value);
+    } catch (x) {}
+  }
+
+  function clearPlanDraft() {
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.removeItem(PLANFIELD_KEY);
+    } catch (x) {}
+  }
+
+  /* Создать план из шапки страницы: название + дата обязательны
+   * (проверяет L.createPlan — без даты/названия вернёт null и ничего
+   * не тронет). Один mutate — один шаг истории. */
+  function createPlanFromForm() {
+    if (!state) return;
+    var ti = el('planInput'), di = el('planDateInput');
+    var title = ti ? ti.value : '', dateStr = di ? di.value : '';
+    lastAction = 'план создан';
+    var made = null;
+    mutate(function () {
+      made = L.createPlan(state.tasks, title, dateStr, Date.now());
+    });
+    if (!made) {
+      lastAction = 'план: нужны название и дата ДД.ММ.ГГГГ';
+      renderStatus();
+      return;
+    }
+    if (ti) ti.value = '';
+    if (di) di.value = '';
+    clearPlanDraft();
+    renderStatus();
+    var f = el('planInput');
+    if (f && f.focus) { try { f.focus(); } catch (x) {} }
+  }
+
+  /* Маска даты плана — те же fmtExpDigits/expCaret, что у срока токена
+   * (общий доступ через window.EBSettings, не копипаста). */
+  function planDateMaskInput() {
+    var inp = el('planDateInput');
+    if (!inp || !window.EBSettings || !window.EBSettings.fmtExpDigits) return;
+    var pos = null;
+    try { pos = inp.selectionStart; } catch (x) { pos = null; }
+    var before = inp.value;
+    var digitsBefore = 0;
+    if (pos != null) digitsBefore = before.slice(0, pos).replace(/\D/g, '').length;
+    var fmt = window.EBSettings.fmtExpDigits(before);
+    if (fmt !== before) {
+      inp.value = fmt;
+      if (pos != null && window.EBSettings.expCaret) window.EBSettings.expCaret(inp, fmt, digitsBefore);
+    }
+  }
+
+  function planDateMaskBackspace(e) {
+    if (!e || e.key !== 'Backspace') return;
+    var inp = el('planDateInput');
+    if (!inp || !window.EBSettings || !window.EBSettings.fmtExpDigits) return;
+    var s = null, en = null;
+    try { s = inp.selectionStart; en = inp.selectionEnd; } catch (x) { return; }
+    if (s == null || s !== en || s === 0) return;
+    if (inp.value.charAt(s - 1) !== '.') return;
+    /* Каретка сразу за авто-точкой: стираем цифру перед ней, а не точку. */
+    if (e.preventDefault) e.preventDefault();
+    var digits = inp.value.replace(/\D/g, '');
+    var dc = inp.value.slice(0, s).replace(/\D/g, '').length;
+    inp.value = window.EBSettings.fmtExpDigits(digits.slice(0, dc - 1) + digits.slice(dc));
+    if (window.EBSettings.expCaret) window.EBSettings.expCaret(inp, inp.value, dc - 1);
+  }
+
   /* Поиск — отдельным модулем src/search.js (рефакторинг, этап 1):
    * состояние внутри модуля, общее — только через контекст в init.
    * Подсветка дотягивается из render() через EBSearch.currentId(). */
@@ -1066,6 +1231,34 @@
       saveCollapsed: saveCollapsed,
       isDoneHidden: function () { return doneHidden; },
       toggleDoneHidden: toggleDoneHidden
+    });
+    /* Страница планирования (ФАЗА 1): открытие по 📅, закрытие по
+     * «Назад» (history.back) и системной кнопке (popstate → основной
+     * вид). Все подписки — только через on(). */
+    on('planBtn', 'click', function () { openPlanPage(); });
+    on('planBack', 'click', function () {
+      try { window.history.back(); } catch (x) { hidePlanPage(); }
+    });
+    on('planInput', 'input', function () { savePlanDraft(); });
+    on('planInput', 'keydown', function (e) {
+      if (e && e.key === 'Enter') {
+        if (e.preventDefault) e.preventDefault();
+        createPlanFromForm();
+      }
+    });
+    on('planDateInput', 'input', function () { planDateMaskInput(); });
+    on('planDateInput', 'keydown', function (e) {
+      if (e && e.key === 'Enter') {
+        if (e.preventDefault) e.preventDefault();
+        createPlanFromForm();
+        return;
+      }
+      planDateMaskBackspace(e);
+    });
+    window.addEventListener('popstate', function (e) {
+      var pg = (e && e.state && e.state.page) || '';
+      if (pg === 'plan') showPlanPage();
+      else hidePlanPage();
     });
     on('clearDone', 'click', function () { askClearDone(); });
     on('deleteDoneBtn', 'click', function () { askClearDone(); });
@@ -1149,6 +1342,7 @@
       mutate: mutate,
       lineIndent: lineIndent,
       lineTasks: lineTasks,
+      planTasks: planTasks,
       getCollapsed: function () { return collapsed; },
       saveCollapsed: saveCollapsed,
       hasLiveKids: hasLiveKids,
@@ -1174,6 +1368,7 @@
       getBoot: function () { return { error: bootError, stack: bootStack }; },
       updateHistoryButtons: updateHistoryButtons,
       lineTasks: lineTasks,
+      planTasks: planTasks,
       fullList: fullList,
       lineIndent: lineIndent,
       hasLiveKids: hasLiveKids,

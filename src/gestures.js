@@ -11,9 +11,10 @@
  * UMD: браузер (window.EBGestures) + Node (module.exports) для тестов.
  *
  * Контекст ctx: L, getState, render, save, mutate, lineIndent, lineTasks,
- *   getCollapsed, saveCollapsed, hasLiveKids, toggleCollapse, toggleDoneNow,
- *   openDuration, snapFull, snapTasks, pushUndo, updateHistoryButtons,
- *   INDENT_STEP, LINES_GAP —
+ *   planTasks, getCollapsed, saveCollapsed, hasLiveKids, toggleCollapse,
+ *   toggleDoneNow, openDuration, snapFull, snapTasks, pushUndo,
+ *   updateHistoryButtons, INDENT_STEP, LINES_GAP —
+ *   (planTasks — порядок планов для drag на #planPage, ФАЗА 1).
  *   стабильные ссылки; изменяемое (state, черновик, карта свёрнутых)
  *   только через геттеры. L/INDENT_STEP/LINES_GAP фиксируются в init.
  */
@@ -32,6 +33,30 @@ function rowShown(cr) {
   if (cr.style && cr.style.display === 'none') return false;
   if (cr.classList && cr.classList.contains('collapsed-kid')) return false;
   return true;
+}
+
+/* Коробка строк для жеста (ФАЗА 1 планирования): основной список #lines
+ * или страница плана #planLines. Строка знает свою коробку по DOM —
+ * каркас drag'а, дыра и посадка строятся в той же коробке, код жестов
+ * один (без дублей под план). Не план — как было (#lines). */
+function boxOf(div) {
+  try {
+    if (div && div.parentNode && div.parentNode.id === 'planLines') {
+      var pb = document.getElementById('planLines');
+      if (pb) return pb;
+    }
+  } catch (x) {}
+  return el('lines');
+}
+
+/* Строка по id в коробке (null — нет такой). */
+function findRow(box, taskId) {
+  if (!box || !box.querySelectorAll || !taskId) return null;
+  var rows = box.querySelectorAll('.tline[data-id]');
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].getAttribute && rows[i].getAttribute('data-id') === taskId) return rows[i];
+  }
+  return null;
 }
 
 var C = null;
@@ -200,13 +225,13 @@ function toggleDoneSlide(taskId) {
     try { aeF.blur(); } catch (x) {}
   }
   var toDone = task.status !== 'done';
+  /* Строку ищем сначала в основном списке, затем на странице плана. */
   var box = el('lines');
-  var row = null;
-  if (box && box.querySelectorAll) {
-    var rows = box.querySelectorAll('.tline[data-id]');
-    for (var i = 0; i < rows.length; i++) {
-      if (rows[i].getAttribute('data-id') === taskId) { row = rows[i]; break; }
-    }
+  var row = findRow(box, taskId);
+  if (!row) {
+    var pbox = el('planLines');
+    var prow = findRow(pbox, taskId);
+    if (prow) { box = pbox; row = prow; }
   }
   if (!row || (row.classList && row.classList.contains('sliding-done'))) {
     if (!row) {
@@ -236,7 +261,7 @@ function toggleDoneSlide(taskId) {
     } catch (x) {}
     /* Встречаем строку на новом месте коротким проявлением. */
     try {
-      var box2 = el('lines');
+      var box2 = box;
       var rows2 = box2 && box2.querySelectorAll ? box2.querySelectorAll('.tline[data-id]') : [];
       for (var k = 0; k < rows2.length; k++) {
         if (rows2[k].getAttribute && rows2[k].getAttribute('data-id') === taskId) {
@@ -261,19 +286,25 @@ function toggleDoneSlide(taskId) {
 /* beforeOverride — слепок ДО мутации отступа (applyDropIndent): финиш
  * вызывает persist уже после неё, и свежий snapFull() нёс бы новый отступ —
  * отмена возвращала бы порядок, но не отступ. */
-function persistLineOrder(beforeOverride) {
+function persistLineOrder(beforeOverride, boxOverride) {
   var state = C.getState();
-  var box = el('lines');
+  /* Коробку даёт финиш жеста (boxOf): план переупорядочивается в своём
+   * порядке planTasks, основной список — как было в lineTasks. */
+  var box = boxOverride || el('lines');
   if (!box || !state) return;
+  var wantPlan = box.id === 'planLines';
   var domAlive = [];
   var rows = box.querySelectorAll ? box.querySelectorAll('.tline[data-id]') : [];
   for (var i = 0; i < rows.length; i++) {
     var id = rows[i].getAttribute('data-id');
     var t = id ? L.getTask(state.tasks, id) : null;
-    if (t && !t.deleted && t.status !== 'done') domAlive.push(id);
+    /* На странице плана выполненные видны (с зачёркиванием) — они часть
+     * порядка; в основном списке их секция отдельно и в порядок не входит. */
+    if (t && !t.deleted && (wantPlan || t.status !== 'done')) domAlive.push(id);
   }
   if (!domAlive.length) return false;
-  var cur = C.lineTasks().map(function (t) { return t.id; });
+  var wantTasks = (wantPlan && C.planTasks) ? C.planTasks() : C.lineTasks();
+  var cur = wantTasks.map(function (t) { return t.id; });
   if (cur.length === domAlive.length) {
     var same = true;
     for (var k = 0; k < domAlive.length; k++) {
@@ -454,7 +485,7 @@ function wireLineDrag(div, grip, inp) {
    * оффсеты. Вынесено отдельно, чтобы тик автопрокрутки двигал дыру вслед
    * за уезжающей из-под неподвижного пальца страницей. */
   function updateHole(clientY) {
-    var box = el('lines');
+    var box = boxOf(div);
     if (!box || !order) return false;
     var dt = clientY - grabDy;
     div.style.top = dt + 'px';
@@ -523,7 +554,7 @@ function wireLineDrag(div, grip, inp) {
    * иначе у нового поля отступ не меняется вообще. */
   function indentBounds() {
     var cur = 0, prev = 0, first = true;
-    var box = el('lines');
+    var box = boxOf(div);
     if (box) {
       var rows = rowsOf(box);
       for (var i = 0; i < rows.length; i++) {
@@ -551,7 +582,7 @@ function wireLineDrag(div, grip, inp) {
    * остаётся на месте и видимой, иначе ↩ прятала бы её с глаз. */
   function expandParentAbove(finalLvl) {
     var collapsed = C.getCollapsed();
-    var box = el('lines');
+    var box = boxOf(div);
     if (!box) return;
     var rows = rowsOf(box);
     var self = -1, i;
@@ -585,7 +616,7 @@ function wireLineDrag(div, grip, inp) {
      * бы детей (внучки оставались на старом отступе). */
     kids = [];
     var mine = myTask();
-    var box = el('lines');
+    var box = boxOf(div);
     if (mine && box) {
       var lv0 = C.lineIndent(mine);
       var rows = rowsOf(box);
@@ -601,7 +632,7 @@ function wireLineDrag(div, grip, inp) {
     }
   }
   function startVertical(e) {
-    var box = el('lines');
+    var box = boxOf(div);
     if (!box) return;
     mode = 'vertical';
     /* Высота контейнера фиксируется: вынутая из потока строка ужмёт
@@ -699,7 +730,7 @@ function wireLineDrag(div, grip, inp) {
      * Проверка до взятия pid, иначе мув стартует drag мимо гарда. */
     var mt0 = myTask();
     if (mt0 && mt0.status === 'done') return;
-    var box = el('lines');
+    var box = boxOf(div);
     if (!box) return;
     pid = e.pointerId;
     x0 = e.clientX;
@@ -746,7 +777,7 @@ function wireLineDrag(div, grip, inp) {
         if (mode !== 'vertical') return;
       } else return;
     }
-    var box = el('lines');
+    var box = boxOf(div);
     if (!box) return;
     if (mode === 'indent') {
       lastDx = dx;
@@ -857,7 +888,7 @@ function wireLineDrag(div, grip, inp) {
         /* Курсор — в строку на новом месте (узел пересоздан render):
          * клавиатура не успевает закрыться, набор продолжается. */
         var brow = null;
-        var bx = el('lines');
+        var bx = boxOf(div);
         if (bx && bx.querySelectorAll) {
           var brows = bx.querySelectorAll('.tline[data-id]');
           for (var bi = 0; bi < brows.length; bi++) {
@@ -870,7 +901,7 @@ function wireLineDrag(div, grip, inp) {
       return;
     }
     mode = null;
-    var box = el('lines');
+    var box = boxOf(div);
     var firstTop = null;
     try { firstTop = div.getBoundingClientRect().top; } catch (x) { firstTop = null; }
     /* Посадка ровно в дыру: где preview — там и место. Пересчёт не нужен,
@@ -967,7 +998,7 @@ function wireLineDrag(div, grip, inp) {
     }
     order = null;
     kids = [];
-    var reordered = persistLineOrder(preDrop);
+    var reordered = persistLineOrder(preDrop, box);
     /* Порядок не сдвинулся, а отступ — да: изменение есть, а шага истории
      * нет (persist вернул false). Пушим досдвиговый слепок, иначе ↩
      * откатит чужое более раннее действие вместо отступа. */
