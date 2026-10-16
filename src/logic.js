@@ -3,10 +3,13 @@
  * Модель (плоский список, как задачи в Google Keep): статусы 'inbox'/'next'
  *   УДАЛЕНЫ (T-cleanup-inbox-next, в UI не различались — всё живое теперь
  *   'todo'); старые данные с ними нормализация молча приводит к 'todo'.
- *   task = { id, title, status, estMin, sumKids,
- *            indent, createdAt, updatedAt, doneAt, ts, deleted }
- *   sumKids: у родителя — считать ли метку авто-суммой вложенных (по
- *            умолчанию true; false — своё estMin вручную, как у листа).
+  *   task = { id, title, status, estMin, sumKids, planDate, planFired,
+  *            indent, createdAt, updatedAt, doneAt, ts, deleted }
+  *   sumKids: у родителя — считать ли метку авто-суммой вложенных (по
+  *            умолчанию true; false — своё estMin вручную, как у листа).
+  *   planDate/planFired (ФАЗА 0 планирования, FR-95–FR-101): дата плана
+  *            'ДД.ММ.ГГГГ' ('' — не план) + момент срабатывания (0 — ждёт);
+  *            оба поля — в whitelist, смена даты сбрасывает planFired.
  *   status: 'todo' (живая) | 'done' (готово)
  *   indent: уровень отступа 0..8 — задача с отступом входит в группу задачи
  *           без отступа (или с меньшим отступом) сверху.
@@ -88,7 +91,8 @@ function createTask(tasks, title, nowMs, opts) {
 }
 
 /* Правка полей задачи: patch
- * { status, title, indent, estMin, sumKids }. Невалидный status игнорируется. */
+ * { status, title, indent, estMin, sumKids, planDate }. Невалидный status игнорируется.
+ * Смена planDate ВСЕГДА сбрасывает planFired=0 (повторное срабатывание). */
 function clarifyTask(tasks, id, patch, nowMs) {
   var task = getTask(tasks, id);
   if (!task || task.deleted) return null;
@@ -105,6 +109,13 @@ function clarifyTask(tasks, id, patch, nowMs) {
   if (patch.indent != null) task.indent = normIndent(patch.indent);
   if (patch.estMin != null) task.estMin = normEst(patch.estMin);
   if (patch.sumKids != null) task.sumKids = patch.sumKids !== false;
+  if (patch.planDate != null) {
+    var nd = normPlanDate(patch.planDate);
+    if (nd !== normPlanDate(task.planDate)) {
+      task.planDate = nd;
+      task.planFired = 0;
+    }
+  }
   task.updatedAt = now;
   task.ts = now;
   return task;
@@ -308,6 +319,7 @@ function searchTasks(tasks, query) {
   for (var i = 0; i < tasks.length; i++) {
     var t = tasks[i];
     if (!t || t.deleted || !t.title) continue;
+    if (isPlanned(t)) continue;
     if (normSearch(t.title).indexOf(q) !== -1) out.push(t.id);
   }
   return out;
@@ -328,14 +340,14 @@ function doneList(tasks) {
 }
 
 function todoCount(tasks) {
-  return todoList(tasks).filter(function (t) { return !!t.title; }).length;
+  return todoList(tasks).filter(function (t) { return !!t.title && !isPlanned(t); }).length;
 }
 
 function stats(tasks) {
   var tl = [];
   for (var i = 0; i < tasks.length; i++) {
     var t = tasks[i];
-    if (t && !t.deleted && t.title) tl.push(t);
+    if (t && !t.deleted && t.title && !isPlanned(t)) tl.push(t);
   }
   return {
     todo: todoList(tl).length,
@@ -354,7 +366,7 @@ function shareItem(t) {
 
 function shareText(tasks) {
   var lines = [];
-  var all = normalizeTasks(tasks).filter(function (t) { return !t.deleted && t.title; });
+  var all = normalizeTasks(tasks).filter(function (t) { return !t.deleted && t.title && !isPlanned(t); });
   var i, t;
   for (i = 0; i < all.length; i++) {
     t = all[i];
@@ -429,6 +441,69 @@ function tokenWarnLevel(exp, nowMs) {
   return 0;
 }
 
+/* --- Планирование, ФАЗА 0 (FR-95–FR-101): только модель и изоляция,
+ * страницы плана и срабатывания-побочки здесь НЕТ. --- */
+
+/* Дата плана 'ДД.ММ.ГГГГ' (по образцу normTokenExp): мусор, битые даты,
+ * 29.02 невисокосного года → ''. Старый ISO 'ГГГГ-ММ-ДД' молча приводим. */
+function normPlanDate(s) {
+  var v = String(s == null ? '' : s).trim();
+  var d, m, y;
+  var iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (iso) {
+    y = parseInt(iso[1], 10); m = parseInt(iso[2], 10); d = parseInt(iso[3], 10);
+  } else {
+    var dm = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(v);
+    if (!dm) return '';
+    d = parseInt(dm[1], 10); m = parseInt(dm[2], 10); y = parseInt(dm[3], 10);
+  }
+  if (m < 1 || m > 12 || d < 1 || d > 31) return '';
+  var back = new Date(Date.UTC(y, m - 1, d));
+  if (back.getUTCFullYear() !== y || back.getUTCMonth() !== m - 1 || back.getUTCDate() !== d) return '';
+  function p(n) { return (n < 10 ? '0' : '') + n; }
+  return p(d) + '.' + p(m) + '.' + y;
+}
+
+/* Час срабатывания планов (настройка settings.planFireHour): целое 0..23,
+ * битое/пустое → 5 (порог по умолчанию — 05:00 локального времени). */
+function normFireHour(v) {
+  var n = parseInt(v, 10);
+  if (!(n >= 0) || n > 23) return 5;
+  return n;
+}
+
+/* Плановая ли задача: стоит дата плана (могилы — не планы). */
+function isPlanned(t) {
+  return !!t && !t.deleted && normPlanDate(t.planDate) !== '';
+}
+
+/* Чистый детект сроков (без побочек — само срабатывание НЕ здесь):
+ * план ждёт, если дата <= локальный день устройства И локальный час
+ * >= planFireHour (граница >=: ровно в час порога — уже пора).
+ * Только planFired===0 (сработавшие/битые planFired≠0 — skip),
+ * битая дата — skip. Возвращает ссылки (массив новый, задачи те же). */
+function planDueTasks(tasks, settings, nowMs) {
+  if (!Array.isArray(tasks)) return [];
+  var hour = 5;
+  if (settings && typeof settings === 'object') hour = normFireHour(settings.planFireHour);
+  var now = toInt(nowMs, Date.now());
+  var d = new Date(now);
+  var ty = d.getFullYear(), tm = d.getMonth(), td = d.getDate();
+  if (d.getHours() < hour) return [];
+  var out = [];
+  for (var i = 0; i < tasks.length; i++) {
+    var t = tasks[i];
+    if (!t || t.deleted) continue;
+    var pd = normPlanDate(t.planDate);
+    if (!pd) continue;
+    if (toInt(t.planFired, 0) !== 0) continue;
+    var p = pd.split('.');
+    var py = parseInt(p[2], 10), pm = parseInt(p[1], 10) - 1, pdd = parseInt(p[0], 10);
+    if (py < ty || (py === ty && (pm < tm || (pm === tm && pdd <= td)))) out.push(t);
+  }
+  return out;
+}
+
 /* Метка времени для строки: 0 → '', 30 → '30м', 60 → '1ч', 90 → '1ч 30м'. */
 function fmtDur(mins) {
   var m = toInt(mins, 0);
@@ -468,6 +543,8 @@ function normalizeTask(t) {
     status: status,
     estMin: normEst(t.estMin),
     sumKids: t.sumKids !== false,
+    planDate: normPlanDate(t.planDate),
+    planFired: toInt(t.planFired, 0),
     indent: indent,
     createdAt: createdAt,
     updatedAt: updatedAt,
@@ -538,6 +615,7 @@ function cloneTask(t) {
   var c = {
     id: t.id, title: t.title, status: t.status, indent: normIndent(t.indent),
     estMin: normEst(t.estMin), sumKids: t.sumKids !== false,
+    planDate: normPlanDate(t.planDate), planFired: toInt(t.planFired, 0),
     createdAt: t.createdAt,
     updatedAt: t.updatedAt, doneAt: t.doneAt, ts: t.ts || 0, deleted: !!t.deleted
   };
@@ -628,6 +706,10 @@ var api = {
   normTokenExp: normTokenExp,
   tokenDaysLeft: tokenDaysLeft,
   tokenWarnLevel: tokenWarnLevel,
+  normPlanDate: normPlanDate,
+  normFireHour: normFireHour,
+  isPlanned: isPlanned,
+  planDueTasks: planDueTasks,
   normalizeTask: normalizeTask,
   normalizeTasks: normalizeTasks,
   restoreWithTombstones: restoreWithTombstones,

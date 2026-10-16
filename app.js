@@ -318,6 +318,7 @@
       var t = state.tasks[i];
       if (!t || t.deleted) continue;
       if (t.status === 'done') continue;
+      if (L.isPlanned(t)) continue;
       out.push(t);
     }
     out.sort(function (a, b) {

@@ -167,6 +167,17 @@
     } else if (state.settings.tokenExp == null) {
       state.settings.tokenExp = '';
     }
+    /* Планирование, ФАЗА 0 (FR-100/FR-97): целевая задача — только локально
+     * (в синк не едет), строка ≤64, дефолт ''; час срабатывания 0..23,
+     * битый → 5. */
+    var pt = state.settings.planTargetId;
+    state.settings.planTargetId = (typeof pt === 'string') ? pt.slice(0, 64) : '';
+    if (window.EBLogic && window.EBLogic.normFireHour) {
+      state.settings.planFireHour = window.EBLogic.normFireHour(state.settings.planFireHour);
+    } else {
+      var ph = parseInt(state.settings.planFireHour, 10);
+      state.settings.planFireHour = (ph >= 0 && ph <= 23) ? ph : 5;
+    }
     if (!state.updatedAt) state.updatedAt = Date.now();
     return state;
   }
