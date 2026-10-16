@@ -207,6 +207,11 @@
       border-radius: 999px; white-space: nowrap; pointer-events: none; }
     .planchip.fired { background: #4caf50; border-color: #4caf50; color: #fff; }
     .tline[data-src="plan"] .tinput { padding-right: 112px; }
+    /* ВРЕМЕННАЯ плашка времени (диагностика по скриншотам, до решения
+     * хозяина): тонкая строка под шапкой, ЧЧ:ММ:СС локального времени,
+     * обновляется раз в секунду. */
+    #clockBar { font-size: 11px; line-height: 1.2; color: #999; text-align: center;
+      padding: 1px 0; background: #fff; border-bottom: 1px solid #f0f0f0; }
   </style>
 </head>
 <body>
@@ -228,6 +233,8 @@
       <button id="deleteDoneBtn" class="hbtn" title="Удалить выполненные" aria-label="Удалить выполненные">🗑</button>
     </div>
   </header>
+
+  <div id="clockBar" title="Время устройства (временно, для диагностики)">--:--:--</div>
 
   <div id="gearMenu">
     <button id="diagBtn">ⓘ Информация для диагностики</button>
