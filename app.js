@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v193';
+  var APP_VERSION = 'v194';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1213,6 +1213,22 @@
       askConfirm: askConfirm,
       getVersion: function () { return APP_VERSION; }
     });
+
+    /* ВРЕМЕННЫЕ часы под шапкой (диагностика по скриншотам, до решения
+     * хозяина): ЧЧ:ММ:СС локального времени, раз в секунду. */
+    function tickClock() {
+      try {
+        var c = el('clockBar');
+        if (!c) return;
+        var d = new Date();
+        function p(n) { return (n < 10 ? '0' : '') + n; }
+        c.textContent = p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+      } catch (x) {}
+    }
+    try {
+      tickClock();
+      setInterval(tickClock, 1000);
+    } catch (x) {}
 
     on('installBtn', 'click', function () {
       if (window._deferredPrompt) {

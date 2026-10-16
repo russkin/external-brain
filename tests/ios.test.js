@@ -970,6 +970,18 @@ describe('синк: триггеры и протокол', () => {
     assert.ok(trigSrc.includes('syncQueued'), 'нет очереди syncQueued');
     assert.ok(!appSrc.includes('syncFlying'), 'флаги single-flight остались в app.js');
   });
+  it('синк не гасит клавиатуру: авто-синк ждёт потери фокуса (v194)', () => {
+    assert.ok(trigSrc.includes('function isTypingNow') && trigSrc.includes("contains('tinput')"),
+      'нет проверки фокуса в поле задачи');
+    assert.ok(trigSrc.includes('focusDeferred') && trigSrc.includes("'deferred'"),
+      'авто-синк не откладывается при наборе');
+    assert.ok(trigSrc.includes("doSync(true)") &&
+      trigSrc.includes("on('syncNowBtn', 'click', function () { doSync(true); })") &&
+      trigSrc.includes("on('syncLight', 'click', function () { doSync(true); })"),
+      'ручной синк тоже откладывается (тап сам снимает фокус — должен идти сразу)');
+    assert.ok(trigSrc.includes("addEventListener('focusout'") && trigSrc.includes('flushFocusDeferred'),
+      'отложенный синк не добирается на focusout');
+  });
   it('движок и триггеры — модуль src/triggers.js (этап 5)', () => {
     for (const fn of ['scheduleSync', 'doSync', 'setLight', 'renderNet', 'checkUpdate',
       'pokeSwUpdate', 'setupPolling', 'onReady', 'getSync', 'restoreLog', 'init']) {
@@ -1277,6 +1289,12 @@ describe('планирование ФАЗА 0: модель в строках (F
 });
 
 describe('планирование ФАЗА 1: страница плана (FR-95)', () => {
+  it('ВРЕМЕННАЯ плашка часов под шапкой (до решения хозяина)', () => {
+    assert.ok(html.includes('id="clockBar"'), 'нет плашки clockBar');
+    assert.ok(html.includes('#clockBar'), 'нет стиля clockBar');
+    assert.ok(appSrc.includes('function tickClock') && appSrc.includes('setInterval(tickClock, 1000)'),
+      'часы не тикают раз в секунду');
+  });
   it('кнопка 📅 в шапке (id, класс, подсказки)', () => {
     assert.ok(html.includes('id="planBtn"'), 'нет planBtn в шапке');
     assert.ok(/id="planBtn"[^>]*class="hbtn"/.test(html), 'кнопка не в стиле шапки');

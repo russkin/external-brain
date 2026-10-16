@@ -108,6 +108,14 @@ function doSync(force) {
     C.renderStatus();
     return Promise.resolve('no-token');
   }
+  /* Фокус в поле задачи — авто-синк откладываем (v194): pulled/merged
+   * перестраивает список (C.render) и гасит клавиатуру прямо посреди
+   * набора. Ручной (кнопка/светофор, force) идёт всегда — тап по ним
+   * сам снимает фокус первым. Отложенное добираем на focusout. */
+  if (!force && isTypingNow()) {
+    focusDeferred = true;
+    return Promise.resolve('deferred');
+  }
   if (syncFlying) { syncQueued = true; return Promise.resolve('queued'); }
   syncFlying = true;
   setLight('yellow', true);
@@ -252,6 +260,27 @@ function pokeSwUpdate() {
   } catch (e) {}
 }
 
+/* Курсор в поле задачи (.tinput живёт в перестраиваемых строках):
+ * рендер по итогам синка его уничтожит вместе с клавиатурой. */
+function isTypingNow() {
+  try {
+    var ae = document.activeElement;
+    return !!(ae && ae.classList && ae.classList.contains('tinput'));
+  } catch (x) { return false; }
+}
+
+/* Отложенный фокусом авто-синк: добираем после потери фокуса, с паузой
+ * 300мс — тап, снявший фокус (флаг/свайп-кнопка), должен долететь
+ * до старого DOM раньше перестроения. */
+var focusDeferred = false;
+function flushFocusDeferred() {
+  if (!focusDeferred) return;
+  focusDeferred = false;
+  try {
+    setTimeout(function () { doSync(); }, 300);
+  } catch (x) {}
+}
+
 function setupPolling() {
   setInterval(function () {
     var state = C ? C.getState() : null;
@@ -294,8 +323,15 @@ function init(ctx) {
   });
   window.addEventListener('focus', onForeground);
   window.addEventListener('pageshow', onForeground);
-  window.addEventListener('online', function () { renderNet(); doSync(true); });
+  window.addEventListener('online', function () { renderNet(); doSync(); });
   window.addEventListener('offline', renderNet);
+  /* Потеря фокуса полем задачи — добираем отложенный авто-синк. */
+  document.addEventListener('focusout', function (e) {
+    try {
+      var t = e && e.target;
+      if (t && t.classList && t.classList.contains('tinput')) flushFocusDeferred();
+    } catch (x) {}
+  });
   if (navigator.connection && navigator.connection.addEventListener) {
     navigator.connection.addEventListener('change', renderNet);
   }
