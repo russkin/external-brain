@@ -1397,6 +1397,16 @@ describe('планирование ФАЗА 1: страница плана (FR-9
       html.includes('outline: 2px solid #f44336'),
       'ошибка краснеет только рамкой — чёрный outline фокуса её перекрывает (v193)');
   });
+  it('рамка ошибки формы плана — на незаполненном поле (v199)', () => {
+    assert.ok(/titleMissing/.test(appSrc), 'выбор виновного поля не по пустому названию');
+    assert.ok(/titleMissing \? \(ti2 \|\| di2\) : \(di2 \|\| ti2\)/.test(appSrc),
+      'пустое название при заполненной дате красит дату, а не название');
+    assert.ok(html.includes('#planInput.err'), 'у названия плана нет красной рамки');
+    assert.ok(/on\('planInput', 'input'[\s\S]{0,300}classList\.remove\('err'\)/.test(appSrc),
+      'ошибка на названии не гасится при вводе');
+    assert.ok(/classList\.remove\('err'\)[\s\S]{0,80}classList\.remove\('err'\)[\s\S]{0,200}classList\.add\('err'\)/.test(appSrc),
+      'перед подсветкой не снимаются обе рамки (старая горит)');
+  });
   it('правка/удаление планов — те же точки, без своих удалялок', () => {
     assert.ok(!appSrc.includes('askDeletePlan') && !appSrc.includes('deletePlanTask'),
       'удаление плана дублирует askDeleteTask');

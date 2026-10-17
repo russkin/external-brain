@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v198';
+  var APP_VERSION = 'v199';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1121,11 +1121,21 @@
       lastAction = 'план: нужны название и дата ДД.ММ.ГГГГ';
       renderStatus();
       /* Громко, а не только строкой в подвале (его закрывает клавиатура):
-       * красная рамка на поле даты + курсор туда. Снимается при вводе. */
+       * красная рамка на поле, КОТОРОГО не хватает (v199) — пустое
+       * название при заполненной дате красит название, а не дату.
+       * Название — первым: без него не бывает планов, дата бывает
+       * некорректной. Снимается при вводе в любое поле. */
       var di2 = el('planDateInput');
-      if (di2) {
-        try { di2.classList.add('err'); } catch (x) {}
-        if (di2.focus) { try { di2.focus(); } catch (x) {} }
+      var ti2 = el('planInput');
+      var titleMissing = !String(title || '').trim();
+      var badField = titleMissing ? (ti2 || di2) : (di2 || ti2);
+      try {
+        if (ti2) ti2.classList.remove('err');
+        if (di2) di2.classList.remove('err');
+      } catch (x) {}
+      if (badField) {
+        try { badField.classList.add('err'); } catch (x) {}
+        if (badField.focus) { try { badField.focus(); } catch (x) {} }
       }
       return;
     }
@@ -1134,6 +1144,7 @@
       di.value = '';
       try { di.classList.remove('err'); } catch (x) {}
     }
+    try { var ti3 = el('planInput'); if (ti3) ti3.classList.remove('err'); } catch (x) {}
     clearPlanDraft();
     renderStatus();
     var f = el('planInput');
@@ -1269,7 +1280,12 @@
     on('planBack', 'click', function () {
       try { window.history.back(); } catch (x) { hidePlanPage(); }
     });
-    on('planInput', 'input', function () { savePlanDraft(); });
+    on('planInput', 'input', function () {
+      /* Раз пользователь правит — красную ошибку гасим (v199). */
+      var t = el('planInput');
+      if (t) { try { t.classList.remove('err'); } catch (x) {} }
+      savePlanDraft();
+    });
     on('planInput', 'keydown', function (e) {
       if (!e || e.key !== 'Enter') return;
       if (e.preventDefault) e.preventDefault();
