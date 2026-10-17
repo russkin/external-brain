@@ -799,6 +799,26 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(/function finish\(e\)[\s\S]{0,300}stopEdge\(\);/.test(gestSrc),
       'таймер автопрокрутки не гасится на финише жеста');
   });
+  it('дыра едет за реальным призраком при автопрокрутке (v201)', () => {
+    var iU = gestSrc.indexOf('function updateHole');
+    assert.ok(iU !== -1, 'нет updateHole');
+    var uBlock = gestSrc.slice(iU, gestSrc.indexOf('function edgeTick'));
+    assert.ok(/getBoundingClientRect\(\)\.top/.test(uBlock),
+      'верх дыры по clientY - grabDy — при автопрокрутке призрак уезжает за палец');
+    assert.ok(!/var dt = clientY - grabDy/.test(uBlock),
+      'координата дыры от постоянного y0 пальца (строка отстреливает назад)');
+  });
+  it('посадка держит якорь из свежего DOM (v201)', () => {
+    var iF = gestSrc.indexOf('function finish(e)');
+    var fBlock = gestSrc.slice(iF, gestSrc.indexOf('var reordered = persistLineOrder'));
+    assert.ok(fBlock.includes('anchorRow'), 'якорь не по data-id');
+    assert.ok(/querySelectorAll\('\.tline\[data-id\]'\)/.test(fBlock),
+      'якорь не найден в свежем DOM коробки');
+    assert.ok(!/box\.insertBefore\(div, (anchor|fr\[phi\]\.row)\)/.test(fBlock),
+      'insertBefore по узлу из каркаса — NotFound при выпавшем якоре');
+    assert.ok(/try \{ box\.insertBefore\(div, anchorRow\); \} catch \(x\) \{\}/.test(fBlock),
+      'insertBefore без страховки — исключение роняет persist');
+  });
   it('перетаскивание: слепок на захвате, сдвиги соседей, посадка после', () => {
     assert.ok(gestSrc.includes('pointerdown'), 'нет pointerdown на grip');
     assert.ok(gestSrc.includes('pointermove'), 'нет pointermove для живого drag');
