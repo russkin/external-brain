@@ -388,32 +388,8 @@ function persistLineOrder(beforeOverride, boxOverride) {
       bt.ts = now;
       bt.updatedAt = now;
     }
-  } else if (wantPlan) {
-    /* v202 (этап 1: только план): зазор исчерпан ИЛИ блок занял весь
-     * список (перенос первой/последней через весь — P и N оба null).
-     * Старая ветка перенумеровывала всех по СТАРОМУ createdAt — новое
-     * место выбрасывалось, render сортировал по меткам и строку
-     * отстреливало назад на своё место. Здесь — по ПОРЯДКУ В DOM
-     * (как встали после посадки): планы плоские, свой порядок свой.
-     * Неплановые задачи не трогаем — у них свой порядок и свои метки,
-     * лишний ts дёргал бы синк впустую. */
-    var maxCa = 0;
-    state.tasks.forEach(function (t) {
-      if (!t || t.deleted) return;
-      var ca = +t.createdAt || 0;
-      if (ca > maxCa) maxCa = ca;
-    });
-    var nb = maxCa + 1;
-    domAlive.forEach(function (id, idx) {
-      var pt = L.getTask(state.tasks, id);
-      if (!pt) return;
-      pt.createdAt = nb + idx;
-      pt.ts = now;
-      pt.updatedAt = now;
-    });
   } else {
-    /* Зазор исчерпан (живой список, этап 2 — правка отдельно):
-     * перенумеровать ВСЕ видимые подряд в текущем порядке
+    /* Зазор исчерпан: перенумеровать ВСЕ видимые подряд в текущем порядке
      * (живых и выполненных) — относительный порядок не меняется, перепрыгнуть
      * через замороженные метки негде. */
     var all = state.tasks.filter(function (t) { return t && !t.deleted; });
@@ -543,7 +519,7 @@ function wireLineDrag(div, grip, inp) {
     /* Верх призрака — по РЕАЛЬНОМУ rect, а не от clientY - grabDy (v201):
      * edgeTick крутит скроллер, якорь y0 пальца стоит, и расчёт уводил
      * призрак за палец — дыра отпускала phi, посадка отстреливала строку
-     * назад на первое/последнее место (грабли 49). */
+     * назад на первое/последнее место (грабли 64). */
     var curTop = 0;
     try { curTop = div.getBoundingClientRect().top; } catch (x) { curTop = clientY - grabDy; }
     var dt = curTop;
@@ -992,7 +968,7 @@ function wireLineDrag(div, grip, inp) {
       /* Якорь — по data-id в свежем DOM, а не из каркаса (v201): дыру
        * снимают выше (снятие трансформ), и узел fr[phi].row мог выпасть
        * из коробки — insertBefore падал с NotFound («отстреливает обратно»
-       * на первом/последнем месте, грабли 49а). Дыра открыта ровно перед
+       * на первом/последнем месте, грабли 63). Дыра открыта ровно перед
        * этим рядом — новый query идёт встык с ним. */
       var anchorRow = null;
       if (box && order && phi < fr.length) {
