@@ -799,25 +799,27 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(/function finish\(e\)[\s\S]{0,300}stopEdge\(\);/.test(gestSrc),
       'таймер автопрокрутки не гасится на финише жеста');
   });
-  it('дыра едет за реальным призраком при автопрокрутке (v201)', () => {
+  it('drag живой: призрак идёт за пальцем, якорь посадки из каркаса (v203)', () => {
+    /* v201 чинил «отстрел края» заменой dt на rect призрака — это УБИЛО
+     * follow: dt перестал зависеть от пальца, призрак стоял на месте
+     * захвата до отпускания (грабли 49). Якорь по data-id (тоже v201)
+     * ломал посадку над разделителем done (у separator нет data-id →
+     * anchorRow null → строка в конец). Правка откатена, сторожим
+     * рабочие строки: их менять нельзя без стенда с реальным тачем. */
     var iU = gestSrc.indexOf('function updateHole');
     assert.ok(iU !== -1, 'нет updateHole');
     var uBlock = gestSrc.slice(iU, gestSrc.indexOf('function edgeTick'));
-    assert.ok(/getBoundingClientRect\(\)\.top/.test(uBlock),
-      'верх дыры по clientY - grabDy — при автопрокрутке призрак уезжает за палец');
-    assert.ok(!/var dt = clientY - grabDy/.test(uBlock),
-      'координата дыры от постоянного y0 пальца (строка отстреливает назад)');
-  });
-  it('посадка держит якорь из свежего DOM (v201)', () => {
+    assert.ok(/var dt = clientY - grabDy/.test(uBlock),
+      'верх призрака не от пальца — drag замирает на месте захвата');
+    assert.ok(!/getBoundingClientRect\(\)\.top;\s*\} catch/.test(uBlock) ||
+      !/curTop/.test(uBlock),
+      'координата призрака от его же rect — призрак не двигается');
     var iF = gestSrc.indexOf('function finish(e)');
     var fBlock = gestSrc.slice(iF, gestSrc.indexOf('var reordered = persistLineOrder'));
-    assert.ok(fBlock.includes('anchorRow'), 'якорь не по data-id');
-    assert.ok(/querySelectorAll\('\.tline\[data-id\]'\)/.test(fBlock),
-      'якорь не найден в свежем DOM коробки');
-    assert.ok(!/box\.insertBefore\(div, (anchor|fr\[phi\]\.row)\)/.test(fBlock),
-      'insertBefore по узлу из каркаса — NotFound при выпавшем якоре');
-    assert.ok(/try \{ box\.insertBefore\(div, anchorRow\); \} catch \(x\) \{\}/.test(fBlock),
-      'insertBefore без страховки — исключение роняет persist');
+    assert.ok(/var anchor = phi < fr\.length \? fr\[phi\]\.row : null;/.test(fBlock),
+      'якорь посадки не из каркаса — по data-id ломает посадку над done');
+    assert.ok(/box\.insertBefore\(div, anchor\);/.test(fBlock),
+      'insertBefore не по якорю каркаса');
   });
   it('перетаскивание: слепок на захвате, сдвиги соседей, посадка после', () => {
     assert.ok(gestSrc.includes('pointerdown'), 'нет pointerdown на grip');

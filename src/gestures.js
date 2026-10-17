@@ -516,13 +516,7 @@ function wireLineDrag(div, grip, inp) {
   function updateHole(clientY) {
     var box = boxOf(div);
     if (!box || !order) return false;
-    /* Верх призрака — по РЕАЛЬНОМУ rect, а не от clientY - grabDy (v201):
-     * edgeTick крутит скроллер, якорь y0 пальца стоит, и расчёт уводил
-     * призрак за палец — дыра отпускала phi, посадка отстреливала строку
-     * назад на первое/последнее место (грабли 64). */
-    var curTop = 0;
-    try { curTop = div.getBoundingClientRect().top; } catch (x) { curTop = clientY - grabDy; }
-    var dt = curTop;
+    var dt = clientY - grabDy;
     div.style.top = dt + 'px';
     var boxTop = 0;
     try { boxTop = box.getBoundingClientRect().top; } catch (x) { boxTop = 0; }
@@ -965,28 +959,13 @@ function wireLineDrag(div, grip, inp) {
         var r = row2.getBoundingClientRect();
         preTops.push({ el: row2, top: r.top });
       }
-      /* Якорь — по data-id в свежем DOM, а не из каркаса (v201): дыру
-       * снимают выше (снятие трансформ), и узел fr[phi].row мог выпасть
-       * из коробки — insertBefore падал с NotFound («отстреливает обратно»
-       * на первом/последнем месте, грабли 63). Дыра открыта ровно перед
-       * этим рядом — новый query идёт встык с ним. */
-      var anchorRow = null;
-      if (box && order && phi < fr.length) {
-        var fid = fr[phi].row && fr[phi].row.getAttribute ?
-          fr[phi].row.getAttribute('data-id') : null;
-        if (fid && box.querySelectorAll) {
-          var frows = box.querySelectorAll('.tline[data-id]');
-          for (var fi = 0; fi < frows.length; fi++) {
-            if (frows[fi].getAttribute('data-id') === fid) { anchorRow = frows[fi]; break; }
-          }
-        }
-      }
+      /* Посадка ровно в дыру: якорь — первый ряд под ней из слепка.
+       * Пересчёт не нужен, промаха между preview и посадкой нет. */
+      var anchor = phi < fr.length ? fr[phi].row : null;
       /* Дыру снимаем мгновенно ДО перестановки: старая трансформа дыры,
        * сложенная с новым потоком (строка+дети вернулись), даёт прыжок
        * строк ниже вверх с возвратом. Замер preTops выше — со старой
-       * дырой, замер nt ниже — уже на чистом потоке, FLIP честный.
-       * Якорь держим в anchorRow (свежий), а не в fr[phi].row —
-       * снятие трансформ может выпустить его из коробки. */
+       * дырой, замер nt ниже — уже на чистом потоке, FLIP честный. */
       for (var hc = 0; hc < fr.length; hc++) {
         fr[hc].row.style.transition = 'none';
         fr[hc].row.style.transform = '';
@@ -999,7 +978,7 @@ function wireLineDrag(div, grip, inp) {
       for (var p0 = 0; p0 < sibs0.length; p0++) {
         if (sibs0[p0] === div) oldPos = p0;
       }
-      try { box.insertBefore(div, anchorRow); } catch (x) {}
+      box.insertBefore(div, anchor);
       var ref = div.nextSibling;
       for (var m = kids.length - 1; m >= 0; m--) {
         kids[m].style.display = '';
