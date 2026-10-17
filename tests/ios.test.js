@@ -819,6 +819,22 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(/try \{ box\.insertBefore\(div, anchorRow\); \} catch \(x\) \{\}/.test(fBlock),
       'insertBefore без страховки — исключение роняет persist');
   });
+  it('порядок плана при отстреле края — по DOM, не по старым меткам (v202)', () => {
+    var iP = gestSrc.indexOf('function persistLineOrder');
+    assert.ok(iP !== -1, 'нет persistLineOrder');
+    var pBlock = gestSrc.slice(iP, gestSrc.indexOf('function applyDropIndent'));
+    assert.ok(pBlock.includes('} else if (wantPlan) {'),
+      'запасная ветка не отличает план — края отстреливает как список');
+    assert.ok(/domAlive\.forEach\(function \(id, idx\)/.test(pBlock),
+      'план не перенумеровывается по DOM-порядку после посадки');
+    assert.ok(/pt\.createdAt = nb \+ idx/.test(pBlock),
+      'createdAt плана не по позиции в DOM');
+    assert.ok(pBlock.includes('maxCa'), 'нет базы выше всех меток — коллизия с чужими');
+    var iElse = pBlock.indexOf('} else {');
+    assert.ok(iElse !== -1 &&
+      /state\.tasks\.filter\(function \(t\) \{ return t && !t\.deleted; \}\)/.test(pBlock.slice(iElse)),
+      'живой список потерял запасную ветку (этап 2 не готов — её трогаем отдельно)');
+  });
   it('перетаскивание: слепок на захвате, сдвиги соседей, посадка после', () => {
     assert.ok(gestSrc.includes('pointerdown'), 'нет pointerdown на grip');
     assert.ok(gestSrc.includes('pointermove'), 'нет pointermove для живого drag');
