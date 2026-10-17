@@ -59,6 +59,16 @@ function findRow(box, taskId) {
   return null;
 }
 
+/* Скроллер, который едет при drag'е и держится пином (v200): у живого
+ * списка — окно (null), у страницы плана — её контейнер #planScroll
+ * (шапка и форма живут вне скроллера, как у живого списка). */
+function dragScrollerOf(box) {
+  try {
+    if (box && box.id === 'planLines') return el('planScroll') || null;
+  } catch (x) {}
+  return null;
+}
+
 var C = null;
 var L = null;
 var INDENT_STEP = 0;
@@ -73,20 +83,32 @@ var dragActive = false;
 
 /* Пин прокрутки: пока жест жив, страница не уезжает — автоскролы
  * (фокус, закрытие клавиатуры) держатся на месте, содержимое не
- * уходит из-под пальца. Свой автоскрол руками двигает pinY. */
-var pinY = null, pinTimer = null, pinOn = false;
+ * уходит из-под пальца. Свой автоскрол руками двигает pinY.
+ * v200: пинится РЕАЛЬНЫЙ скроллер жеста — у живого списка окно, у
+ * страницы плана её контейнер #planScroll (шапка там вне скроллера,
+ * как у живого списка). Скролл элемента не всплывает — слушаем window
+ * с capture, одним обработчиком на оба случая. */
+var pinY = null, pinTimer = null, pinOn = false, pinEl = null;
+function pinGet() {
+  return pinEl ? (pinEl.scrollTop || 0) : (window.pageYOffset || 0);
+}
+function pinSet(v) {
+  if (pinEl) pinEl.scrollTop = v;
+  else window.scrollTo(0, v);
+}
 function onPinScroll() {
   if (pinY == null) return;
-  if (window.pageYOffset !== pinY) {
-    try { window.scrollTo(0, pinY); } catch (x) {}
+  if (pinGet() !== pinY) {
+    try { pinSet(pinY); } catch (x) {}
   }
 }
-function pinScroll() {
+function pinScroll(elSc) {
   if (pinTimer) { clearTimeout(pinTimer); pinTimer = null; }
-  pinY = window.pageYOffset;
+  pinEl = elSc || null;
+  pinY = pinGet();
   if (!pinOn) {
     pinOn = true;
-    window.addEventListener('scroll', onPinScroll);
+    window.addEventListener('scroll', onPinScroll, true);
     window.addEventListener('resize', onPinScroll);
   }
 }
@@ -97,9 +119,10 @@ function unpinScroll(delay) {
     return;
   }
   pinY = null;
+  pinEl = null;
   if (pinOn) {
     pinOn = false;
-    window.removeEventListener('scroll', onPinScroll);
+    window.removeEventListener('scroll', onPinScroll, true);
     window.removeEventListener('resize', onPinScroll);
   }
 }
@@ -475,8 +498,9 @@ function wireLineDrag(div, grip, inp) {
   var state = C.getState();
   var pid = null, grabDy = 0, divH = 0, holeH = 0, holeShift = 0, x0 = 0, y0 = 0;
   /* Автопрокрутка у краёв — по таймеру: стоящий палец pointermove не шлёт,
-   * и прокрутка только по движению глохла после пары рывков. */
-  var edgeTimer = null, lastY = 0, edgeStart = 0;
+   * и прокрутка только по движению глохла после пары рывков. dragSc —
+   * скроллер жеста (null — окно; #planScroll у страницы плана, v200). */
+  var edgeTimer = null, lastY = 0, edgeStart = 0, dragSc = null;
   function edgeZone(y) {
     if (y < 110) return -1;
     if (y > (window.innerHeight || 800) - 110) return 1;
@@ -519,11 +543,14 @@ function wireLineDrag(div, grip, inp) {
     var hold = Date.now() - edgeStart;
     var step = 3 + Math.min(2, Math.floor(hold / 600));
     try {
-      window.scrollBy(0, dir * step);
+      /* Скроллер жеста: у страницы плана — её контейнер, у живого
+       * списка — окно (v200, как и пин). */
+      if (dragSc) dragSc.scrollTop = (dragSc.scrollTop || 0) + dir * step;
+      else window.scrollBy(0, dir * step);
       /* Пин — с РЕАЛЬНОГО смещения, а не += шаг: у края scrollBy
        * клампится (страница стоит), а пин убегал бы дальше — потом
        * onPinScroll дёргал страницу обратно и вверх было не уехать. */
-      if (pinY != null) pinY = window.pageYOffset;
+      if (pinY != null) pinY = pinGet();
       lastScrollTs = Date.now();
     } catch (x) {}
     updateHole(lastY);
@@ -752,7 +779,8 @@ function wireLineDrag(div, grip, inp) {
     mode = null;
     kids = [];
     try { grip.setPointerCapture(pid); } catch (x) {}
-    pinScroll();
+    dragSc = dragScrollerOf(box);
+    pinScroll(dragSc);
     document.addEventListener('pointerup', finish);
     document.addEventListener('pointercancel', finish);
     /* Взялись за grip — фокус НЕ трогаем: blur на захвате закрывал
@@ -846,6 +874,7 @@ function wireLineDrag(div, grip, inp) {
     /* Закрытие клавиатуры двигает страницу уже ПОСЛЕ жеста:
      * держим пин ещё полсекунды, чтобы итог не дёргался. */
     if (didBlur) unpinScroll(500); else unpinScroll();
+    dragSc = null;
     /* Тап по многоточию родителя (без движения): свернуть/развернуть детей. */
     if (mode === null && e && e.type === 'pointerup') {
       var tapped = myTask();

@@ -593,7 +593,7 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(block.includes('dragActive = true'), 'флаг не поднимается на захвате');
     assert.ok(!block.includes('.blur()'),
       'клавиатуру гасят на захвате — прыжок вьюпорта посреди touch роняет жест');
-    assert.ok(block.includes('pinScroll()'), 'прокрутка не заперта на время жеста');
+    assert.ok(block.includes('pinScroll(dragSc)'), 'прокрутка не заперта на время жеста (по скроллеру жеста)');
     assert.ok(block.includes("document.addEventListener('pointerup', finish)"),
       'нет document-страховки от зависшего pid (жест умирает без pointerup на grip)');
     var iF = gestSrc.indexOf('function finish(e)');
@@ -616,15 +616,15 @@ describe('логика вызывается с state.tasks', () => {
   });
   it('жест держит прокрутку, порог вертикали симметричен, захват перехватывается', () => {
     assert.ok(gestSrc.includes('function pinScroll'), 'нет pinScroll');
-    assert.ok(gestSrc.includes("window.addEventListener('scroll', onPinScroll)"),
-      'скролл не слушается на время пина');
-    assert.ok(gestSrc.includes('window.scrollTo(0, pinY)'), 'пин не возвращает страницу на место');
+    assert.ok(gestSrc.includes("window.addEventListener('scroll', onPinScroll, true)"),
+      'скролл не слушается на время пина (элемент не всплывает — нужен capture)');
+    assert.ok(gestSrc.includes('pinSet(pinY)'), 'пин не возвращает скроллер на место');
     assert.ok(gestSrc.includes('unpinScroll(500)'),
       'закрытие клавиатуры после жеста не подстраховано пином');
     assert.ok(gestSrc.includes('Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx) * 2'),
       'порог вертикали не симметричен горизонтали — дрожь пальца лочит не тот режим');
     var iA = gestSrc.indexOf('function edgeTick');
-    assert.ok(iA !== -1 && gestSrc.slice(iA, iA + 800).includes('pinY'),
+    assert.ok(iA !== -1 && gestSrc.slice(iA, iA + 1400).includes('pinY = pinGet()'),
       'автопрокрутка не двигает пин — страница дёрнется обратно');
     var iL = gestSrc.indexOf("grip.addEventListener('lostpointercapture'");
     assert.ok(iL !== -1 && gestSrc.slice(iL, iL + 400).includes('setPointerCapture'),
@@ -792,7 +792,7 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(gestSrc.includes('dragDist'), 'автопрокрутка без порога движения');
     assert.ok(gestSrc.includes('setInterval(edgeTick, 20)'),
       'автопрокрутка только по движению пальца — стоящий палец не крутит');
-    assert.ok(gestSrc.includes('pinY = window.pageYOffset'),
+    assert.ok(gestSrc.includes('pinY = pinGet()'),
       'пин убегает дальше клампа — дёргает страницу обратно');
     assert.ok(gestSrc.includes('updateHole(lastY)'),
       'дыра не едет за страницей на тиках автопрокрутки');
@@ -1365,8 +1365,27 @@ describe('планирование ФАЗА 1: страница плана (FR-9
       'свайп вправо на плане взводит модалку длительности (нет сторожа data-src)');
   });
   it('прокрутка страницы плана переживает перестроение (v198)', () => {
-    assert.ok(/scBox\.scrollTop = sc/.test(rendSrc) && rendSrc.includes("el('planPage')"),
-      'renderPlanLines не возвращает scrollTop — страница прыгает наверх');
+    assert.ok(/scBox\.scrollTop = sc/.test(rendSrc) && rendSrc.includes("el('planScroll')"),
+      'renderPlanLines не возвращает scrollTop скроллера — страница прыгает наверх');
+  });
+  it('шапка плана вне скроллера — как у живого списка (v200)', () => {
+    assert.ok(html.includes('id="planScroll"'), 'нет скроллера #planScroll');
+    assert.ok(/id="planScroll"[\s\S]{0,400}id="planForm"/.test(html) &&
+      /id="planScroll"[\s\S]{0,900}id="planLines"/.test(html),
+      'форма/строки не внутри #planScroll');
+    assert.ok(/#planPage\.open \{ display: flex/.test(html),
+      'план не flex-колонка (шапка не отделена от скроллера)');
+    assert.ok(/#planHead \{ flex: none/.test(html), 'шапка плана не flex:none');
+    assert.ok(!/#planHead \{[^}]*position: sticky/.test(html),
+      'шапка обратно sticky внутри скроллера — прыгает на старых WebView');
+  });
+  it('пин и краевой автоскролл жеста целятся в скроллер планов (v200)', () => {
+    assert.ok(gestSrc.includes('function dragScrollerOf(box)'), 'нет выбора скроллера жеста');
+    assert.ok(gestSrc.includes('pinScroll(dragSc)'), 'пин не по скроллеру жеста');
+    assert.ok(gestSrc.includes("addEventListener('scroll', onPinScroll, true)"),
+      'скролл контейнера не ловится (нет capture)');
+    assert.ok(/dragSc\) dragSc\.scrollTop/.test(gestSrc),
+      'краевой автоскролл не двигает скроллер планов');
   });
   it('кнопки шапки ровно в ряд (v196)', () => {
     assert.ok(html.includes('justify-content: space-between'), 'кнопки не разведены по ширине');

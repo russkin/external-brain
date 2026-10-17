@@ -177,20 +177,26 @@
     /* Страница планирования (ФАЗА 1): скрытие — классом .open, как
      * у #searchBar (инлайн display:none в разметке запрещён — бьёт
      * класс, и панель открывается невидимкой). Поверх списка (z 44:
-     * меню 40 ниже, модалки 50 выше). */
+     * меню 40 ниже, модалки 50 выше). v200: устройство как у живого
+     * списка — шапка ВНЕ скроллера (#planScroll), а не sticky в нём:
+     * sticky в фикс-оверлее с -webkit-overflow-scrolling: touch на
+     * старых Android/iOS прыгал при клавиатуре и во время drag'а. */
     #planPage { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: #fff; z-index: 44; overflow-y: auto;
-      -webkit-overflow-scrolling: touch; padding: 12px 14px 60px; }
-    #planPage.open { display: block; }
-    #planHead { max-width: 720px; margin: 0 auto 10px; }
-    #planHeadTop { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+      background: #fff; z-index: 44; overflow: hidden; }
+    #planPage.open { display: flex; flex-direction: column; }
+    #planHead { flex: none; width: 100%; box-sizing: border-box;
+      padding: 12px 14px 8px; background: #fff; }
+    #planHeadTop { display: flex; align-items: center; gap: 10px;
+      max-width: 720px; margin: 0 auto 8px; }
     #planHeadTop h2 { font-size: 18px; margin: 0; flex: 1; min-width: 0;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     #planHeadTop button { flex: none; min-width: 52px; font-size: 18px; padding: 6px 12px;
       border: 1px solid #ddd; border-radius: 8px; background: #f7f7f7; }
-    #planHeadRow { display: flex; gap: 8px; }
+    #planHeadRow { display: flex; gap: 8px; max-width: 720px; margin: 0 auto; }
     #planHeadRow button { flex: 1 1 0; min-width: 0; font-size: 16px; padding: 4px 8px;
       border: 1px solid #ddd; border-radius: 8px; background: #f7f7f7; }
+    #planScroll { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden;
+      -webkit-overflow-scrolling: touch; padding: 0 14px 60px; }
     #planForm { display: flex; flex-direction: column; gap: 8px;
       max-width: 720px; margin: 0 auto 12px; }
     #planFormRow { display: flex; gap: 8px; }
@@ -289,14 +295,16 @@
         <button id="planDiagBtn" title="Диагностика" aria-label="Диагностика">ⓘ</button>
       </div>
     </div>
-    <div id="planForm">
-      <textarea id="planInput" rows="1" autocomplete="off" placeholder="Новый план…" aria-label="Название плана"></textarea>
-      <div id="planFormRow">
-        <input id="planDateInput" autocomplete="off" inputmode="numeric" maxlength="10" placeholder="ДД.ММ.ГГГГ" aria-label="Дата плана" />
-        <button id="planAddBtn" title="Добавить план" aria-label="Добавить план">＋</button>
+    <div id="planScroll">
+      <div id="planForm">
+        <textarea id="planInput" rows="1" autocomplete="off" placeholder="Новый план…" aria-label="Название плана"></textarea>
+        <div id="planFormRow">
+          <input id="planDateInput" autocomplete="off" inputmode="numeric" maxlength="10" placeholder="ДД.ММ.ГГГГ" aria-label="Дата плана" />
+          <button id="planAddBtn" title="Добавить план" aria-label="Добавить план">＋</button>
+        </div>
       </div>
+      <div id="planLines"></div>
     </div>
-    <div id="planLines"></div>
   </div>
 
     <footer id="status">Загрузка…</footer>

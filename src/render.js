@@ -522,13 +522,15 @@ function renderPlanLines() {
   var state = C.getState();
   var box = el('planLines');
   if (!box || !state) return;
-  /* Прокрутка страницы плана (v198): innerHTML схлопывает высоту и браузер
-   * клампит scrollTop контейнера в 0 — страница прыгает наверх при любом
+  /* Прокрутка страницы плана (v198→v200): innerHTML схлопывает высоту и
+   * браузер клампит scrollTop в 0 — страница прыгает наверх при любом
    * перестроении (посадка drag'а, создание плана, фоновый синк). Основной
-   * список от этого держит keepY, здесь — свой сейв. Кламп естественный. */
+   * список от этого держит keepY, здесь — свой сейв. Скроллер — #planScroll
+   * (v200: шапка вне его), на старой разметке — сам #planPage. Кламп
+   * естественный. */
   var scBox = null, sc = 0;
   try {
-    scBox = el('planPage');
+    scBox = el('planScroll') || el('planPage');
     sc = scBox ? (scBox.scrollTop || 0) : 0;
   } catch (x) { scBox = null; sc = 0; }
   box.innerHTML = '';
