@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v206';
+  var APP_VERSION = 'v207';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1437,12 +1437,14 @@
     else askPlanTargetMissing();
   }
 
-  /* Увести в настройку целевой: страница плана (если не открыта) и
-   * фокус в селект — выбор и есть повторный проход ждущих (change
-   * селекта чистит гейт и будит проверку). */
+  /* Увести в настройку целевой: страница плана + окно настроек
+   * (v207: селект живёт там) + фокус в селект — выбор и есть
+   * повторный проход ждущих (change чистит гейт и будит проверку). */
   function focusPlanTarget() {
     var pg = el('planPage');
     if (!pg || !pg.classList.contains('open')) openPlanPage();
+    var back = el('modalBack');
+    if (!back || !back.classList.contains('open')) askPlanSettings();
     var sel = el('planTargetSel');
     if (sel && sel.focus) { try { sel.focus(); } catch (x) {} }
   }
@@ -1504,6 +1506,44 @@
       schedulePlanCheck(0);
     };
     cancel.onclick = function () { done(); };
+  }
+
+  /* --- Настройки планов (v207): кнопка ⚙ в ряду ↩ ↪ ⓘ шапки ---
+   * Целевая и час живут в модалке (#planSetBox, как durCtl у времени):
+   * строки больше не тратят место над списком. Контролы живые — change
+   * сохраняет сам (обработчики planTargetSel/planHourInput в wire),
+   * окно только открывает/закрывает (одна кнопка «Закрыть», паттерн
+   * askPlanNotify). Закрытие будит проверку: пока окно было открыто,
+   * срабатывание откладывалось (planQuiet). */
+  function askPlanSettings() {
+    var back = el('modalBack'), text = el('modalText'), input = el('modalInput');
+    var ok = el('modalOk'), cancel = el('modalCancel'), clearBtn = el('modalClear');
+    var box = el('planSetBox');
+    if (!back || !text || !ok || !box) return;
+    text.textContent = 'Настройки планирования';
+    if (input) input.style.display = 'none';
+    if (clearBtn) { clearBtn.style.display = 'none'; clearBtn.onclick = null; }
+    if (cancel) { cancel.style.display = 'none'; cancel.onclick = null; }
+    ok.textContent = 'Закрыть';
+    box.style.display = 'block';
+    back.classList.add('open');
+    ok.onclick = function () { closePlanSettings(); };
+    /* На iOS клик мимо не закрывает — страхуем и Отменой (скрытой
+     * кнопкой виден только «Закрыть», как в уведомлении). */
+    if (cancel) cancel.onclick = function () { closePlanSettings(); };
+  }
+
+  function closePlanSettings() {
+    var back = el('modalBack'), input = el('modalInput');
+    var ok = el('modalOk'), cancel = el('modalCancel'), clearBtn = el('modalClear');
+    var box = el('planSetBox');
+    if (box) box.style.display = 'none';
+    if (back) back.classList.remove('open');
+    if (ok) { ok.onclick = null; ok.textContent = 'OK'; }
+    if (cancel) { cancel.onclick = null; cancel.style.display = ''; }
+    if (clearBtn) { clearBtn.onclick = null; clearBtn.style.display = 'none'; }
+    if (input) input.style.display = '';
+    schedulePlanCheck(0);
   }
 
   /* Опции цели в селекте страницы плана (FR-100): живые задачи в
@@ -1693,6 +1733,9 @@
       renderStatus();
       schedulePlanCheck(0);
     });
+    /* Настройки планов (v207): ⚙ в ряду шапки плана открывает модалку
+     * с целевой и часом (строки живут в #planSetBox). */
+    on('planSetBtn', 'click', function () { askPlanSettings(); });
     /* Час срабатывания (фаза 3, FR-97): нормализация L.normFireHour
      * (битое/пустое → 5), локально (settings не в payload синка), один
      * save только при реальном изменении + немедленный проход ждущих:

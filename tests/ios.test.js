@@ -1357,8 +1357,8 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(/function showPlanPage[\s\S]{0,1500}el\('planInput'\)/.test(appSrc),
       'фокус при открытии не в поле плана');
   });
-  it('шапка плана: заголовок + Назад справа, ряд ↩ ↪ ⓘ, без поиска (v197)', () => {
-    for (const id of ['planBack', 'planUndoBtn', 'planRedoBtn', 'planDiagBtn']) {
+  it('шапка плана: заголовок + Назад справа, ряд ↩ ↪ ⓘ ⚙, без поиска (v197/v207)', () => {
+    for (const id of ['planBack', 'planUndoBtn', 'planRedoBtn', 'planDiagBtn', 'planSetBtn']) {
       assert.ok(html.includes('id="' + id + '"'), 'нет ' + id + ' в шапке плана');
     }
     assert.ok(!html.includes('id="planSearchBtn"'), 'поиск с плана не убран');
@@ -1608,19 +1608,42 @@ describe('планирование ФАЗА 1: страница плана (FR-9
       'заголовки задач кладутся в innerHTML селекта');
   });
 
-  it('строки цели и часа на странице плана — под формой (фаза 3, v206)', () => {
+  it('настройки планов в модалке по ⚙ (v207): строки убраны с основного вида', () => {
+    var iSet = html.indexOf('id="planSetBox"');
+    var iModal = html.indexOf('id="modalBox"');
+    var iOk = html.indexOf('id="modalOk"');
     var iRow = html.indexOf('id="planTargetRow"');
     var iHour = html.indexOf('id="planHourRow"');
-    var iForm = html.indexOf('id="planForm"');
+    var iScroll = html.indexOf('id="planScroll"');
     var iLines = html.indexOf('id="planLines"');
-    assert.ok(iRow !== -1 && iHour !== -1, 'нет строки целевой/часа');
-    assert.ok(iForm < iRow && iRow < iHour && iHour < iLines,
-      'строки настроек не между формой и строками (или не в порядке целевая→час)');
+    assert.ok(iSet !== -1, 'нет контейнера настроек #planSetBox');
+    assert.ok(iModal < iSet && iSet < iOk, 'planSetBox не внутри модалки (между modalBox и modalOk)');
+    assert.ok(iSet < iRow && iRow < iHour && iHour < iOk,
+      'строки целевой/часа не внутри контейнера настроек или не в порядке');
+    assert.ok(!(iRow > iScroll && iRow < iLines) && !(iHour > iScroll && iHour < iLines),
+      'строки остались в основном виде страницы (надо убрать в настройки)');
     assert.ok(/<label for="planTargetSel">Целевая: <\/label>/.test(html) ||
       /<label for="planTargetSel">Целевая:<\/label>/.test(html), 'нет подписи строки');
     assert.ok(/#planTargetRow \{[^}]*display: flex/.test(html) &&
       /#planHourRow \{[^}]*display: flex/.test(html), 'строки настроек не flex');
-    assert.ok(/id="planHourInput"/.test(html), 'нет поля часа');
+    assert.ok(/#planSetBox \{ display: none/.test(html), 'контейнер не спрятан по умолчанию');
+    assert.ok(appSrc.includes("on('planSetBtn', 'click'"), 'кнопка ⚙ не подписана через on()');
+    assert.ok(appSrc.includes('function askPlanSettings') &&
+      appSrc.includes('function closePlanSettings'), 'нет открытия/закрытия настроек');
+    assert.ok(appSrc.includes("'Настройки планирования'") && appSrc.includes("'Закрыть'"),
+      'нет заголовка/кнопки окна настроек');
+    var iS = appSrc.indexOf('function askPlanSettings');
+    var sBlock = appSrc.slice(iS, appSrc.indexOf('function closePlanSettings', iS));
+    assert.ok(/box\.style\.display = 'block'/.test(sBlock), 'контейнер не показывается');
+    var iC = appSrc.indexOf('function closePlanSettings');
+    var cBlock = appSrc.slice(iC, appSrc.indexOf('/* Опции цели', iC));
+    assert.ok(/box\.style\.display = 'none'/.test(cBlock), 'контейнер не скрывается');
+    assert.ok(/schedulePlanCheck\(0\)/.test(cBlock),
+      'закрытие не будит проверку (модалка глушила planQuiet)');
+    var iF = appSrc.indexOf('function focusPlanTarget');
+    var fBlock = appSrc.slice(iF, appSrc.indexOf('function askPlanTargetMissing', iF));
+    assert.ok(/askPlanSettings\(\)/.test(fBlock),
+      '«в настройку целевой» не открывает окно настроек (селект спрятан)');
   });
 
   it('час срабатывания: поле, нормализация, локально, проход (фаза 3, FR-97, v206)', () => {

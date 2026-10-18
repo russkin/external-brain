@@ -101,6 +101,8 @@
       background: transparent; border: 1px solid #4a90e2; border-radius: 999px;
       white-space: nowrap; }
     #durCtl { display: none; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+    /* Настройки планов в модалке (v207): прячется/показывается как durCtl. */
+    #planSetBox { display: none; margin-bottom: 4px; }
     .durrow { display: flex; align-items: center; gap: 10px; }
     .durrow span { flex: 1; font-size: 14px; color: #555; }
     .durrow b { min-width: 64px; text-align: center; font-size: 22px; }
@@ -302,9 +304,9 @@
   </main>
 
   <!-- Страница планирования (ФАЗА 1, FR-95): полноэкранный экран поверх
-        списка (кнопка 📅 → pushState/popstate). Выбор цели — строка
-        #planTargetRow под формой (ФАЗА 2, FR-100); час срабатывания —
-        #planHourRow под ней (фаза 3, v206, FR-97). -->
+        списка (кнопка 📅 → pushState/popstate). Настройки планов (целевая
+        #planTargetRow + час #planHourRow) — в модалке по кнопке ⚙ ряда
+        ↩ ↪ ⓘ (v207; до v207 строки лежали под формой). -->
   <div id="planPage">
     <div id="planHead">
       <div id="planHeadTop">
@@ -315,6 +317,7 @@
         <button id="planUndoBtn" title="Отменить" aria-label="Отменить">↩</button>
         <button id="planRedoBtn" title="Вернуть" aria-label="Вернуть">↪</button>
         <button id="planDiagBtn" title="Диагностика" aria-label="Диагностика">ⓘ</button>
+        <button id="planSetBtn" title="Настройки планирования" aria-label="Настройки планирования">⚙</button>
       </div>
     </div>
     <div id="planScroll">
@@ -324,15 +327,6 @@
           <input id="planDateInput" autocomplete="off" inputmode="numeric" maxlength="10" placeholder="ДД.ММ.ГГГГ" aria-label="Дата плана" />
           <button id="planAddBtn" title="Добавить план" aria-label="Добавить план">＋</button>
         </div>
-      </div>
-      <div id="planTargetRow">
-        <label for="planTargetSel">Целевая:</label>
-        <select id="planTargetSel" aria-label="Целевая задача планов"></select>
-      </div>
-      <div id="planHourRow">
-        <label for="planHourInput">Срабатывает в:</label>
-        <input id="planHourInput" autocomplete="off" inputmode="numeric" maxlength="2" aria-label="Час срабатывания планов" />
-        <span id="planHourHint">ч (0–23, по умолчанию 5)</span>
       </div>
       <div id="planLines"></div>
     </div>
@@ -376,6 +370,20 @@
           <b id="durMv">0</b>
           <button id="durMp" aria-label="Больше минут">+</button></div>
         <label id="durSumRow" style="display:none"><input type="checkbox" id="durSum" /> Суммировать из вложенных</label>
+      </div>
+      <!-- Настройки планов (v207): целевая и час переехали сюда из
+           основного вида страницы (кнопка ⚙ в шапке, как durCtl у
+           времени — показ/скрытие инлайн-стилем). -->
+      <div id="planSetBox">
+        <div id="planTargetRow">
+          <label for="planTargetSel">Целевая:</label>
+          <select id="planTargetSel" aria-label="Целевая задача планов"></select>
+        </div>
+        <div id="planHourRow">
+          <label for="planHourInput">Срабатывает в:</label>
+          <input id="planHourInput" autocomplete="off" inputmode="numeric" maxlength="2" aria-label="Час срабатывания планов" />
+          <span id="planHourHint">ч (0–23, по умолчанию 5)</span>
+        </div>
       </div>
       <div class="row">
         <button id="modalOk">OK</button>
