@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v207';
+  var APP_VERSION = 'v208';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -205,6 +205,37 @@
    * L.clarifyTask сбрасывает planFired (логика, FR-97) — план получает
    * второй шанс, и гейт уведомлений чистится (FR-98: сброс и на смене
    * даты, как на смене цели) — новое срабатывание снова покажет окно. */
+  /* Модалка над клавиатурой (v208): дата плана открывается сразу с
+   * фокусом в поле — на iPhone клавиатура перекрывает низ экрана, а
+   * модалка центрируется по всей вьюпорте и уезжает под неё. Берём
+   * «хвост» вьюпорты (innerHeight − vv.height − vv.offsetTop) и кладём
+   * модалке paddingBottom — центр остаётся между шапкой и клавиатурой.
+   * visualViewport есть не везде (старый Android) — молчим. Снимается
+   * при закрытии: следующие окна центрируются как раньше. */
+  function modalKbSync() {
+    var back = el('modalBack');
+    if (!back) return;
+    var vv = window.visualViewport;
+    if (!vv || !back.classList.contains('open')) return;
+    var tail = Math.round(window.innerHeight - vv.height - vv.offsetTop);
+    if (!(tail > 0)) tail = 0;
+    back.style.paddingBottom = tail ? tail + 'px' : '';
+  }
+  function modalKbWatch(on) {
+    var vv = window.visualViewport;
+    if (!vv) return;
+    if (on) {
+      if (vv._ebKb) return;
+      vv._ebKb = modalKbSync;
+      vv.addEventListener('resize', vv._ebKb);
+      vv.addEventListener('scroll', vv._ebKb);
+      modalKbSync();
+    } else if (vv._ebKb) {
+      vv.removeEventListener('resize', vv._ebKb);
+      vv.removeEventListener('scroll', vv._ebKb);
+      vv._ebKb = null;
+    }
+  }
   function askPlanDate(initial) {
     return new Promise(function (resolve) {
       var back = el('modalBack'), text = el('modalText'), input = el('modalInput');
@@ -230,9 +261,15 @@
         planDateMaskBackspace(e, input);
       };
       back.classList.add('open');
-      setTimeout(function () { try { input.focus(); } catch (e) {} }, 50);
+      modalKbWatch(true);
+      setTimeout(function () {
+        try { input.focus(); } catch (e) {}
+        modalKbSync();
+      }, 50);
       function done(v) {
         back.classList.remove('open');
+        modalKbWatch(false);
+        back.style.paddingBottom = '';
         ok.onclick = null; cancel.onclick = null;
         /* Обработчики поля снимаем: модалка одна на все окна, следующий
          * askText/askConfirm не должен получить чужую маску и Enter. */

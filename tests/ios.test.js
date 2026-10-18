@@ -1415,6 +1415,19 @@ describe('планирование ФАЗА 1: страница плана (FR-9
       /if \(nd === cur\) return;/.test(dBlock),
       'отмена/тот же день пишут мёртвую мутацию');
   });
+  it('модалка даты: центр над клавиатурой (v208)', () => {
+    assert.ok(/function modalKbSync\(\)/.test(appSrc) && /function modalKbWatch\(on\)/.test(appSrc),
+      'нет синхронизации модалки с visualViewport');
+    var iA = appSrc.indexOf('function askPlanDate');
+    var aBlock = appSrc.slice(iA, appSrc.indexOf('function openPlanDate', iA));
+    assert.ok(/modalKbWatch\(true\)/.test(aBlock) && /modalKbSync\(\)/.test(aBlock),
+      'открытие даты не следит за клавиатурой');
+    assert.ok(/modalKbWatch\(false\)/.test(aBlock) &&
+      /back\.style\.paddingBottom = '';\n/.test(aBlock + '\n'),
+      'закрытие даты не снимает наблюдателя и padding');
+    assert.ok(/innerHeight - vv\.height - vv\.offsetTop/.test(appSrc),
+      'хвост вьюпорты не считается — центр не между шапкой и клавиатурой');
+  });
   it('прокрутка страницы плана переживает перестроение (v198)', () => {
     assert.ok(/scBox\.scrollTop = sc/.test(rendSrc) && rendSrc.includes("el('planScroll')"),
       'renderPlanLines не возвращает scrollTop скроллера — страница прыгает наверх');
