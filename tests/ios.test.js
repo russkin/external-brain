@@ -1384,9 +1384,36 @@ describe('планирование ФАЗА 1: страница плана (FR-9
       'сдвиг на плане стартует (потом отскок)');
     assert.ok(gestSrc.includes("box.id === 'planLines'"), 'посадка на плане не в 0');
   });
-  it('время на планах отключено (v197)', () => {
-    assert.ok(gestSrc.includes("getAttribute('data-src') === 'plan'"),
-      'свайп вправо на плане взводит модалку длительности (нет сторожа data-src)');
+  it('свайп вправо: плану — дата, списку — время (v205)', () => {
+    var iW = gestSrc.indexOf('function wireLineSwipe');
+    var swBlock = gestSrc.slice(iW, gestSrc.indexOf('function toggleDoneSlide'));
+    assert.ok(swBlock.includes('C.openPlanDate(taskId)') &&
+      swBlock.includes('C.openDuration(taskId)'),
+      'pointerup не разводит план (дата) и обычную строку (время)');
+    assert.ok(swBlock.includes("getAttribute('data-src') === 'plan'"),
+      'нет сторожа строки плана в свайпе');
+    assert.ok(!swBlock.includes("!(div.getAttribute && div.getAttribute('data-src') === 'plan')"),
+      'свайп вправо на плане всё ещё замокан (замок v197 не снят)');
+    assert.ok(appSrc.includes('function askPlanDate') && appSrc.includes('function openPlanDate'),
+      'нет точки входа смены даты');
+    assert.ok(appSrc.includes('openPlanDate: openPlanDate'),
+      'жестам не отдан openPlanDate');
+    assert.ok(/function planDateMaskInput\(inp\)/.test(appSrc) &&
+      /planDateMaskInput\(input\)/.test(appSrc),
+      'маска не параметризована полем (модалка даты без маски)');
+    assert.ok(/planDateMaskBackspace\(e, input\)/.test(appSrc),
+      'Backspace в модалке даты не через авто-точку');
+    assert.ok(html.includes('#modalInput.err'), 'нет красной рамки битой даты в модалке');
+    var iD = appSrc.indexOf('function openPlanDate');
+    var dBlock = appSrc.slice(iD, appSrc.indexOf('function save()', iD));
+    assert.ok(/L\.clarifyTask\(state\.tasks, taskId, \{ planDate: nd \}\)/.test(dBlock),
+      'дата не пишется через clarifyTask (planFired не сбросится)');
+    assert.ok(/planGateKey = '';/.test(dBlock), 'смена даты не сбрасывает гейт (FR-98)');
+    assert.ok(dBlock.includes("lastAction = 'дата плана изменена'"),
+      'нет отметки в строке статуса');
+    assert.ok(/if \(!nd \|\| !state\) return;/.test(dBlock) &&
+      /if \(nd === cur\) return;/.test(dBlock),
+      'отмена/тот же день пишут мёртвую мутацию');
   });
   it('прокрутка страницы плана переживает перестроение (v198)', () => {
     assert.ok(/scBox\.scrollTop = sc/.test(rendSrc) && rendSrc.includes("el('planScroll')"),
@@ -1541,6 +1568,8 @@ describe('планирование ФАЗА 1: страница плана (FR-9
       'битая цель (выполнена/плановая) не задерживает проверку');
     assert.ok(/planDueTasks\(state\.tasks, state\.settings/.test(pre),
       'порог берётся не из state.settings');
+    assert.ok(/if \(!L\.planChildTitle\(p\.title, p\.planDate\)\) continue;/.test(pre),
+      'план без имени не выкинут из ждущих — вечная петля проверка→безрезультатная мутация→save');
   });
 
   it('уведомление: одна кнопка «Закрыть», гейт на событие, список экранирован', () => {

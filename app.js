@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v204';
+  var APP_VERSION = 'v205';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -195,6 +195,76 @@
       var patch = { estMin: res.min };
       if (parent) patch.sumKids = res.sum;
       mutate(function () { L.clarifyTask(state.tasks, taskId, patch); });
+    });
+  }
+
+  /* --- Свайп вправо по плану: смена даты (v205) ---
+   * Та же маска ДД.ММ.ГГГГ и тот же судья L.normPlanDate, что в форме:
+   * пустое/битое — красная рамка, окно не закрывается (планов без даты
+   * не бывает; убрать план — можно долгим нажатием). Смена даты через
+   * L.clarifyTask сбрасывает planFired (логика, FR-97) — план получает
+   * второй шанс, и гейт уведомлений чистится (FR-98: сброс и на смене
+   * даты, как на смене цели) — новое срабатывание снова покажет окно. */
+  function askPlanDate(initial) {
+    return new Promise(function (resolve) {
+      var back = el('modalBack'), text = el('modalText'), input = el('modalInput');
+      var ok = el('modalOk'), cancel = el('modalCancel'), clearBtn = el('modalClear');
+      if (!back || !input || !ok || !cancel) { resolve(null); return; }
+      text.textContent = 'Дата плана';
+      input.style.display = '';
+      input.value = initial || '';
+      input.setAttribute('inputmode', 'numeric');
+      input.setAttribute('placeholder', 'ДД.ММ.ГГГГ');
+      input.classList.remove('err');
+      if (clearBtn) { clearBtn.style.display = 'none'; }
+      /* Маска — та же, что в форме: input форматирует, Backspace не
+       * прилипает к авто-точке, Enter работает как OK (старый iOS
+       * Chrome Enter из поля сам не превратит). */
+      input.oninput = function () { planDateMaskInput(input); };
+      input.onkeydown = function (e) {
+        if (e && e.key === 'Enter') {
+          if (e.preventDefault) e.preventDefault();
+          if (ok.onclick) ok.onclick();
+          return;
+        }
+        planDateMaskBackspace(e, input);
+      };
+      back.classList.add('open');
+      setTimeout(function () { try { input.focus(); } catch (e) {} }, 50);
+      function done(v) {
+        back.classList.remove('open');
+        ok.onclick = null; cancel.onclick = null;
+        /* Обработчики поля снимаем: модалка одна на все окна, следующий
+         * askText/askConfirm не должен получить чужую маску и Enter. */
+        input.oninput = null;
+        input.onkeydown = null;
+        if (clearBtn) clearBtn.onclick = null;
+        input.removeAttribute('placeholder');
+        input.removeAttribute('inputmode');
+        input.classList.remove('err');
+        resolve(v);
+      }
+      ok.onclick = function () {
+        var nd = L.normPlanDate(input.value);
+        if (!nd) { input.classList.add('err'); return; }
+        done(nd);
+      };
+      cancel.onclick = function () { done(null); };
+    });
+  }
+
+  function openPlanDate(taskId) {
+    if (!taskId || !state) return;
+    var task = L.getTask(state.tasks, taskId);
+    if (!task || task.deleted) return;
+    var cur = L.normPlanDate(task.planDate);
+    askPlanDate(cur).then(function (nd) {
+      if (!nd || !state) return;
+      if (nd === cur) return;
+      planGateKey = '';
+      lastAction = 'дата плана изменена';
+      mutate(function () { L.clarifyTask(state.tasks, taskId, { planDate: nd }); });
+      renderStatus();
     });
   }
 
@@ -1158,9 +1228,11 @@
   }
 
   /* Маска даты плана — те же fmtExpDigits/expCaret, что у срока токена
-   * (общий доступ через window.EBSettings, не копипаста). */
-  function planDateMaskInput() {
-    var inp = el('planDateInput');
+   * (общий доступ через window.EBSettings, не копипаста). Поле можно
+   * передать аргументом: одна маска обслуживает и форму (#planDateInput),
+   * и модалку смены даты (#modalInput, v205). */
+  function planDateMaskInput(inp) {
+    inp = inp || el('planDateInput');
     if (!inp) return;
     /* Раз пользователь правит — красную ошибку гасим. */
     try { inp.classList.remove('err'); } catch (x) {}
@@ -1177,9 +1249,9 @@
     }
   }
 
-  function planDateMaskBackspace(e) {
+  function planDateMaskBackspace(e, inp) {
     if (!e || e.key !== 'Backspace') return;
-    var inp = el('planDateInput');
+    inp = inp || el('planDateInput');
     if (!inp || !window.EBSettings || !window.EBSettings.fmtExpDigits) return;
     var s = null, en = null;
     try { s = inp.selectionStart; en = inp.selectionEnd; } catch (x) { return; }
@@ -1623,6 +1695,7 @@
       toggleCollapse: toggleCollapse,
       toggleDoneNow: toggleDoneNow,
       openDuration: openDuration,
+      openPlanDate: openPlanDate,
       snapFull: snapFull,
       snapTasks: snapTasks,
       pushUndo: pushUndo,

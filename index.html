@@ -118,6 +118,9 @@
     #modalText { margin-bottom: 10px; white-space: pre-wrap; word-break: break-word;
       max-height: 50vh; overflow-y: auto; font-size: 14px; }
     #modalInput { width: 100%; font-size: 18px; padding: 10px; margin-bottom: 12px; }
+    /* Ошибка ввода даты в модалке (v205): краснеют рамка и outline —
+     * как у формы плана (v199), толщина не меняется (макет не дёргает). */
+    #modalInput.err { border-color: #f44336; outline: 2px solid #f44336; outline-offset: 1px; }
     #modalBox .row { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap;
       border-top: none; padding: 0; }
     #modalBox .row button { flex: 1 1 auto; white-space: nowrap; }

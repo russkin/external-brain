@@ -1,5 +1,5 @@
 /* gestures.js — жесты списка: свайп строки (флаг «Выполнено» слева,
- * модалка времени справа), перетаскивание за grip (вертикальный drag с дырой
+ * модалка времени справа — на плане модалка даты), перетаскивание за grip (вертикальный drag с дырой
  * и каркасом покоя + сдвиг отступа влево/вправо), отметка выполненной
  * со слайдом и сохранение порядка после посадки.
  * Вынесено из app.js (рефакторинг, этап 6): код перенесён как есть.
@@ -12,7 +12,7 @@
  *
  * Контекст ctx: L, getState, render, save, mutate, lineIndent, lineTasks,
  *   planTasks, getCollapsed, saveCollapsed, hasLiveKids, toggleCollapse,
- *   toggleDoneNow, openDuration, snapFull, snapTasks, pushUndo,
+ *   toggleDoneNow, openDuration, openPlanDate, snapFull, snapTasks, pushUndo,
  *   updateHistoryButtons, INDENT_STEP, LINES_GAP —
  *   (planTasks — порядок планов для drag на #planPage, ФАЗА 1).
  *   стабильные ссылки; изменяемое (state, черновик, карта свёрнутых)
@@ -128,8 +128,9 @@ function unpinScroll(delay) {
 }
 
 /* Свайп строки справа налево: открыть флаг «Выполнено»; слева направо
- * (вправо): модалка времени задачи — НО не если в этом жесте задет
- * раскрытый флаг (тогда возврат вправо только закрывает флаг, swHadFlag).
+ * (вправо): модалка времени задачи, а на строке плана — модалка даты
+ * (v205) — НО не если в этом жесте задет раскрытый флаг (тогда возврат
+ * вправо только закрывает флаг, swHadFlag).
  * Тап по открытой строке (без сдвига) — закрыть флаг обратно. */
 function wireLineSwipe(div, taskId) {
   var swPid = null, swX0 = 0, swY0 = 0;
@@ -176,13 +177,12 @@ function wireLineSwipe(div, taskId) {
       div.classList.remove('swiped');
       div._swOpen = false;
     } else if (!div._swOpen && !div._swRArm && !swHadFlag && dx > 48 &&
-               Math.abs(dx) > Math.abs(dy) * 2 && taskId &&
-               /* Время на планах отключено (v197): свайп вправо модалку
-                * длительности не взводит, метки времени у планов нет. */
-               !(div.getAttribute && div.getAttribute('data-src') === 'plan')) {
-      /* Свайп вправо: флагирует открытие модалки времени на pointerup
-       * (модалка посреди жеста мешала бы пальцу). swHadFlag — если флаг
-       * открыт/раскрыт в этом жесте, возврат вправо его только закрывает.
+               Math.abs(dx) > Math.abs(dy) * 2 && taskId) {
+      /* Свайп вправо: флагирует открытие модалки на pointerup (модалка
+       * посреди жеста мешала бы пальцу). Что откроется — решает pointerup:
+       * обычной строке время, плану — дата (v205, меток времени у планов
+       * нет). swHadFlag — если флаг открыт/раскрыт в этом жесте, возврат
+       * вправо его только закрывает.
        * Те же подстраховки, что у левого свайпа: blur, render подавлен,
        * захват указателя. */
       div._swRArm = true;
@@ -210,7 +210,13 @@ function wireLineSwipe(div, taskId) {
        * метке в углу — отпускание часто попадает именно в неё),
        * не должен вернуть фокус в поле или открыть вторую модалку. */
       div._swBlockUntil = Date.now() + 400;
-      C.openDuration(taskId);
+      /* Строка плана (v205): свайп вправо меняет ДАТУ, а не время —
+       * у плана поле времени не бывает (v197). */
+      if (div.getAttribute && div.getAttribute('data-src') === 'plan') {
+        C.openPlanDate(taskId);
+      } else {
+        C.openDuration(taskId);
+      }
     }
     /* Тап по самим кнопкам сюда не входит: у них свои обработчики. */
     if (e.target && e.target.closest &&
