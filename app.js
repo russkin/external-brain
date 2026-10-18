@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v205';
+  var APP_VERSION = 'v206';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1343,8 +1343,11 @@
     /* Сначала «есть работа» — и только потом ожидание: иначе тихий
      * 400-мс опрос крутится, когда планов не ждёт. */
     var pre = planFireRead();
-    if (!pre || !pre.targetOk) return;
+    if (!pre) return;
     if (!planQuiet()) { schedulePlanCheck(400); return; }
+    /* Краевой FR-99 (фаза 3): планы due, но целевая бита — ждущие
+     * получают одно окно на событие (гейт с префиксом edge:). */
+    if (!pre.targetOk) { planEdgeGate(pre); return; }
     var created = [];
     var firedIds = [];
     var now = Date.now();
@@ -1418,6 +1421,91 @@
     };
   }
 
+  /* --- Краевые целевой (фаза 3, FR-99) ---
+   * Планы due, но целевая бита: «нет/удалена/сделана планом» → планы
+   * ждут с одним окном «в настройку целевой»; «выполнена» → вопрос:
+   * выбрать новую или восстановить текущую. Гейт — тот же planGateKey
+   * с префиксом edge: (раз на событие, память на сессию); после
+   * назначения/восстановления гейт чистится, ждущие идут своим ходом
+   * (сработавшие не пересчитываются — FR-99). */
+  function planEdgeGate(pre) {
+    var kind = (pre.target && pre.target.status === 'done') ? 'done' : 'none';
+    var key = 'edge:' + kind;
+    if (key === planGateKey) return;
+    planGateKey = key;
+    if (kind === 'done') askPlanTargetDone();
+    else askPlanTargetMissing();
+  }
+
+  /* Увести в настройку целевой: страница плана (если не открыта) и
+   * фокус в селект — выбор и есть повторный проход ждущих (change
+   * селекта чистит гейт и будит проверку). */
+  function focusPlanTarget() {
+    var pg = el('planPage');
+    if (!pg || !pg.classList.contains('open')) openPlanPage();
+    var sel = el('planTargetSel');
+    if (sel && sel.focus) { try { sel.focus(); } catch (x) {} }
+  }
+
+  /* Цели нет/она недоступна (удалена, сжатый маркер, сделана планом):
+   * одна кнопка ведёт в селект, Отмена — планы просто ждут. */
+  function askPlanTargetMissing() {
+    var back = el('modalBack'), text = el('modalText'), input = el('modalInput');
+    var ok = el('modalOk'), cancel = el('modalCancel'), clearBtn = el('modalClear');
+    if (!back || !text || !ok || !cancel) return;
+    text.textContent = 'Планы ждут: целевая не выбрана или недоступна. ' +
+      'Выберите задачу обычного списка — в неё лягут сработавшие планы.';
+    if (input) input.style.display = 'none';
+    if (clearBtn) { clearBtn.style.display = 'none'; clearBtn.onclick = null; }
+    cancel.style.display = '';
+    ok.textContent = 'Выбрать целевую';
+    back.classList.add('open');
+    function done() {
+      back.classList.remove('open');
+      ok.onclick = null; cancel.onclick = null;
+      ok.textContent = 'OK';
+      schedulePlanCheck(0);
+    }
+    ok.onclick = function () { done(); focusPlanTarget(); };
+    cancel.onclick = function () { done(); };
+  }
+
+  /* Целевая выполнена: OK — выбрать новую (селект), «Восстановить» —
+   * вернуть текущую статусом todo и положить в неё же ждущие планы
+   * (clarifyTask + повторный проход), Отмена — планы ждут. */
+  function askPlanTargetDone() {
+    var back = el('modalBack'), text = el('modalText'), input = el('modalInput');
+    var ok = el('modalOk'), cancel = el('modalCancel'), clearBtn = el('modalClear');
+    if (!back || !text || !ok || !cancel) return;
+    text.textContent = 'Целевая задача выполнена. Восстановить её или выбрать новую?';
+    if (input) input.style.display = 'none';
+    cancel.style.display = '';
+    ok.textContent = 'Выбрать новую';
+    if (clearBtn) { clearBtn.style.display = ''; clearBtn.textContent = 'Восстановить'; }
+    back.classList.add('open');
+    function done() {
+      back.classList.remove('open');
+      ok.onclick = null; cancel.onclick = null;
+      if (clearBtn) { clearBtn.onclick = null; clearBtn.textContent = 'Очистить'; clearBtn.style.display = 'none'; }
+      ok.textContent = 'OK';
+      schedulePlanCheck(0);
+    }
+    ok.onclick = function () { done(); focusPlanTarget(); };
+    if (clearBtn) clearBtn.onclick = function () {
+      var tid = state && state.settings ? String(state.settings.planTargetId || '') : '';
+      done();
+      if (!tid || !state) return;
+      var t = L.getTask(state.tasks, tid);
+      if (!t || t.deleted || t.status !== 'done') return;
+      planGateKey = '';
+      lastAction = 'целевая восстановлена';
+      mutate(function () { L.clarifyTask(state.tasks, tid, { status: 'todo' }); });
+      renderStatus();
+      schedulePlanCheck(0);
+    };
+    cancel.onclick = function () { done(); };
+  }
+
   /* Опции цели в селекте страницы плана (FR-100): живые задачи в
    * порядке списка + всегда пункт «(не выбрана)» (пустая цель —
    * норма: планы ждут). Тексты — через textContent (заголовки —
@@ -1454,6 +1542,13 @@
       sel.appendChild(op);
     }
     try { sel.value = cur; } catch (x) {}
+    /* Час срабатывания (фаза 3, FR-97): значение из настроек, норма —
+     * L.normFireHour (битое показывается как 5). Пока в поле печатают —
+     * не затираем (пользовательский фокус). */
+    var hi = el('planHourInput');
+    if (hi && document.activeElement !== hi) {
+      hi.value = String(L.normFireHour(state.settings.planFireHour));
+    }
   }
 
   /* Поиск — отдельным модулем src/search.js (рефакторинг, этап 1):
@@ -1595,6 +1690,22 @@
       save();
       renderPlanTarget();
       lastAction = 'целевая планов изменена';
+      renderStatus();
+      schedulePlanCheck(0);
+    });
+    /* Час срабатывания (фаза 3, FR-97): нормализация L.normFireHour
+     * (битое/пустое → 5), локально (settings не в payload синка), один
+     * save только при реальном изменении + немедленный проход ждущих:
+     * порог сместился — «вчерашние» планы могли стать due. */
+    on('planHourInput', 'change', function () {
+      var hi = el('planHourInput');
+      if (!hi || !state || !state.settings) return;
+      var nv = L.normFireHour(hi.value);
+      hi.value = String(nv);
+      if (nv === L.normFireHour(state.settings.planFireHour)) return;
+      state.settings.planFireHour = nv;
+      save();
+      lastAction = 'час срабатывания изменён';
       renderStatus();
       schedulePlanCheck(0);
     });

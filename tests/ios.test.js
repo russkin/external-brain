@@ -1422,7 +1422,7 @@ describe('планирование ФАЗА 1: страница плана (FR-9
   it('шапка плана вне скроллера — как у живого списка (v200)', () => {
     assert.ok(html.includes('id="planScroll"'), 'нет скроллера #planScroll');
     assert.ok(/id="planScroll"[\s\S]{0,400}id="planForm"/.test(html) &&
-      /id="planScroll"[\s\S]{0,900}id="planLines"/.test(html),
+      /id="planScroll"[\s\S]{0,1200}id="planLines"/.test(html),
       'форма/строки не внутри #planScroll');
     assert.ok(/#planPage\.open \{ display: flex/.test(html),
       'план не flex-колонка (шапка не отделена от скроллера)');
@@ -1561,7 +1561,8 @@ describe('планирование ФАЗА 1: страница плана (FR-9
       'planFired не с метками ts');
     assert.ok(/collapsed\[target\.id\]/.test(mBlock), 'свёрнутая цель не разворачивается');
     assert.ok(/expandForAnchor\(target\.id, tInd\)/.test(mBlock), 'предки цели не разворачиваются');
-    assert.ok(/if \(!pre \|\| !pre\.targetOk\) return;/.test(appSrc),
+    assert.ok(/if \(!pre\) return;/.test(appSrc), 'нет раннего выхода без ждущих');
+    assert.ok(/if \(!pre\.targetOk\) \{ planEdgeGate\(pre\); return; \}/.test(appSrc),
       'без рабочей цели идём в mutate вхолостую (писал бы state каждый тик)');
     var pre = appSrc.slice(appSrc.indexOf('function planFireRead'), appSrc.indexOf('function planBranchLastId'));
     assert.ok(/target\.status !== 'done'/.test(pre) && /L\.isPlanned\(target\)/.test(pre),
@@ -1607,15 +1608,67 @@ describe('планирование ФАЗА 1: страница плана (FR-9
       'заголовки задач кладутся в innerHTML селекта');
   });
 
-  it('строка цели на странице плана — под формой, без фазы 3', () => {
+  it('строки цели и часа на странице плана — под формой (фаза 3, v206)', () => {
     var iRow = html.indexOf('id="planTargetRow"');
+    var iHour = html.indexOf('id="planHourRow"');
     var iForm = html.indexOf('id="planForm"');
     var iLines = html.indexOf('id="planLines"');
-    assert.ok(iRow !== -1, 'нет строки целевой');
-    assert.ok(iForm < iRow && iRow < iLines, 'строка цели не между формой и строками');
+    assert.ok(iRow !== -1 && iHour !== -1, 'нет строки целевой/часа');
+    assert.ok(iForm < iRow && iRow < iHour && iHour < iLines,
+      'строки настроек не между формой и строками (или не в порядке целевая→час)');
     assert.ok(/<label for="planTargetSel">Целевая: <\/label>/.test(html) ||
       /<label for="planTargetSel">Целевая:<\/label>/.test(html), 'нет подписи строки');
-    assert.ok(/#planTargetRow \{[^}]*display: flex/.test(html), 'строка цели не flex');
-    assert.ok(!html.includes('planFireHour'), 'час — фаза 3, не заехал рано');
+    assert.ok(/#planTargetRow \{[^}]*display: flex/.test(html) &&
+      /#planHourRow \{[^}]*display: flex/.test(html), 'строки настроек не flex');
+    assert.ok(/id="planHourInput"/.test(html), 'нет поля часа');
+  });
+
+  it('час срабатывания: поле, нормализация, локально, проход (фаза 3, FR-97, v206)', () => {
+    assert.ok(/id="planHourInput"[^>]*inputmode="numeric"/.test(html) &&
+      /id="planHourInput"[^>]*maxlength="2"/.test(html),
+      'нет цифровой клавиатуры/лимита у поля часа');
+    assert.ok(appSrc.includes("on('planHourInput', 'change'"), 'поле часа не подписано через on()');
+    var iH = appSrc.indexOf("on('planHourInput', 'change'");
+    var hBlock = appSrc.slice(iH, appSrc.indexOf('});', iH));
+    assert.ok(/L\.normFireHour\(hi\.value\)/.test(hBlock), 'час не нормализуется через normFireHour');
+    assert.ok(/state\.settings\.planFireHour = nv;/.test(hBlock), 'час не пишется в settings');
+    assert.ok(hBlock.includes("lastAction = 'час срабатывания изменён'"), 'нет отметки в статусе');
+    assert.ok(/schedulePlanCheck\(0\)/.test(hBlock),
+      'после смены часа нет немедленного прохода ждущих (порог сместился)');
+    assert.ok(/function renderPlanTarget\(\)[\s\S]*planHourInput/.test(appSrc),
+      'значение часа не отрисовывается из настроек');
+    assert.ok(!syncSrc.includes('planFireHour'), 'час уехал в payload синка (настройка локальная)');
+  });
+
+  it('краевые целевой: недоступна/выполнена — окна и повторный проход (фаза 3, FR-99, v206)', () => {
+    assert.ok(appSrc.includes('function planEdgeGate') &&
+      appSrc.includes('function askPlanTargetMissing') &&
+      appSrc.includes('function askPlanTargetDone'),
+      'нет краевых обработчиков целевой');
+    assert.ok(/var key = 'edge:' \+ kind;/.test(appSrc), 'нет ключа гейта edge:');
+    assert.ok(/if \(!pre\.targetOk\) \{ planEdgeGate\(pre\); return; \}/.test(appSrc),
+      'битая цель не ведёт в edgeGate (молча ждёт без окна)');
+    assert.ok(appSrc.includes("'Выбрать целевую'"), 'нет кнопки «в настройку целевой»');
+    assert.ok(appSrc.includes("'Выбрать новую'") && appSrc.includes("'Восстановить'"),
+      'у выполненной цели нет вопроса (новая/восстановить)');
+    assert.ok(/L\.clarifyTask\(state\.tasks, tid, \{ status: 'todo' \}\)/.test(appSrc),
+      'восстановление не через clarifyTask статусом todo');
+    assert.ok(/function focusPlanTarget\(\)[\s\S]{0,300}openPlanPage\(\)/.test(appSrc),
+      'кнопка выбора не уводит на страницу плана в селект');
+    var iM = appSrc.indexOf('function askPlanTargetMissing');
+    assert.ok(/schedulePlanCheck\(0\)/.test(appSrc.slice(iM, appSrc.indexOf('function askPlanTargetDone', iM))),
+      'закрытие окна не будит повторный проход ждущих');
+  });
+
+  it('диагностика планирования: цель, счётчики, последнее срабатывание (фаза 3, FR-101, v206)', () => {
+    assert.ok(diagSrc.includes("'Планирование: цель '"), 'нет строки планирования');
+    assert.ok(diagSrc.includes("'Последнее срабатывание: '"), 'нет строки последнего срабатывания');
+    var iP = diagSrc.indexOf("'Планирование: цель '");
+    var iA = diagSrc.indexOf("'Последнее действие: '");
+    var iC = diagSrc.indexOf("'Постоянная копия: '");
+    assert.ok(iC !== -1 && iC < iP && iP < iA,
+      'строки планирования не между «Постоянная копия» и «Последнее действие» (FR-53)');
+    assert.ok(/C\.L\.isPlanned\(pt\)/.test(diagSrc) && /pt\.planFired/.test(diagSrc),
+      'счётчики не по планам/planFired');
   });
 });

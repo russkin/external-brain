@@ -225,6 +225,14 @@
     #planTargetSel { flex: 1 1 auto; min-width: 0; font-size: 15px; font-family: inherit;
       padding: 6px 8px; border: 1px solid #ccc; border-radius: 8px;
       background: #fff; color: #333; }
+    /* Час срабатывания (фаза 3, FR-97, v206): под строкой целевой. */
+    #planHourRow { display: flex; align-items: center; gap: 8px;
+      max-width: 720px; margin: 0 auto 12px; font-size: 15px; color: #666; }
+    #planHourRow label { flex: none; }
+    #planHourInput { flex: none; width: 56px; font-size: 15px; font-family: inherit;
+      padding: 6px 8px; border: 1px solid #ccc; border-radius: 8px;
+      background: #fff; color: #333; text-align: center; }
+    #planHourHint { font-size: 13px; color: #888; }
     #planLines { display: flex; flex-direction: column; gap: 8px;
       max-width: 720px; margin: 0 auto; }
     /* Метка даты плана — отдельный .planchip (не .durchip): длительность
@@ -296,7 +304,7 @@
   <!-- Страница планирования (ФАЗА 1, FR-95): полноэкранный экран поверх
         списка (кнопка 📅 → pushState/popstate). Выбор цели — строка
         #planTargetRow под формой (ФАЗА 2, FR-100); час срабатывания —
-        фаза 3. -->
+        #planHourRow под ней (фаза 3, v206, FR-97). -->
   <div id="planPage">
     <div id="planHead">
       <div id="planHeadTop">
@@ -320,6 +328,11 @@
       <div id="planTargetRow">
         <label for="planTargetSel">Целевая:</label>
         <select id="planTargetSel" aria-label="Целевая задача планов"></select>
+      </div>
+      <div id="planHourRow">
+        <label for="planHourInput">Срабатывает в:</label>
+        <input id="planHourInput" autocomplete="off" inputmode="numeric" maxlength="2" aria-label="Час срабатывания планов" />
+        <span id="planHourHint">ч (0–23, по умолчанию 5)</span>
       </div>
       <div id="planLines"></div>
     </div>

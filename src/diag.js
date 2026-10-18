@@ -262,6 +262,32 @@ function diagText() {
     (pubAt ? fmtDT(pubAt) + ' · ' + pubStatus + pubNote : 'ещё не было'));
   lines.push('Локальная копия: ' + backupLabel(C.fmtWhen));
   lines.push('Постоянная копия: ' + pinLabel(C.fmtWhen));
+  /* Планирование (фаза 3, FR-101): цель, счётчики и последнее
+   * срабатывание (макс planFired; план живёт и после удаления дочки). */
+  try {
+    if (state && state.settings && state.tasks) {
+      var plN = 0, plW = 0, plF = 0, lastF = 0, pl;
+      for (pl = 0; pl < state.tasks.length; pl++) {
+        var pt = state.tasks[pl];
+        if (!pt || pt.deleted || !C.L.isPlanned(pt)) continue;
+        plN++;
+        if (pt.planFired) {
+          plF++;
+          if (pt.planFired > lastF) lastF = pt.planFired;
+        } else plW++;
+      }
+      var tgId = String(state.settings.planTargetId || '');
+      var tg = tgId ? C.L.getTask(state.tasks, tgId) : null;
+      var tgLabel = !tgId ? '(не выбрана)'
+        : (!tg || tg.deleted) ? '(удалена)'
+        : C.L.isPlanned(tg) ? '(сделана планом)'
+        : tg.status === 'done' ? (tg.title || '(без названия)') + ' ✓'
+        : (tg.title || '(без названия)');
+      lines.push('Планирование: цель ' + tgLabel + ', планов ' + plN +
+        ', ждут ' + plW + ', сработало ' + plF);
+      lines.push('Последнее срабатывание: ' + (lastF ? fmtDT(lastF) : 'нет'));
+    }
+  } catch (x) {}
   var lastAction = C.getLastAction();
   if (lastAction) lines.push('Последнее действие: ' + lastAction);
   /* Только непойманные JS-ошибки (window.onerror); ошибки синка живут
