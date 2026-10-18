@@ -10,7 +10,10 @@
  * UMD: браузер (window.EBTriggers) + Node (module.exports) для тестов.
  *
  * Контекст ctx: on, getState, render, renderStatus, askConfirm, getVersion —
- *   стабильные ссылки; изменяемое (state) только через getState().
+ *   стабильные ссылки; изменяемое (state) только через getState();
+ *   planCheck — будильник срабатывания планов (ФАЗА 2): зовётся на
+ *   возврате на вкладку, по сети и на тике 60 сек (сама проверка —
+ *   в app.js, она схлопывает повторы сама).
  */
 (function () {
 'use strict';
@@ -18,6 +21,8 @@
 function el(id) { return document.getElementById(id); }
 
 var C = null;
+/* Будильник срабатывания планов (ФАЗА 2, FR-97) — тонкая ссылка из app.js. */
+var planCheck = null;
 
 /* --- single-flight синк: летит один, повтор ждёт очереди --- */
 var syncFlying = false;
@@ -284,6 +289,7 @@ function flushFocusDeferred() {
 function setupPolling() {
   setInterval(function () {
     var state = C ? C.getState() : null;
+    if (planCheck) planCheck();
     if (!document.hidden && navigator.onLine && state && state.settings.token) doSync();
   }, 60000);
 }
@@ -302,6 +308,7 @@ function onReady() {
 
 function init(ctx) {
   C = ctx;
+  planCheck = (ctx && typeof ctx.planCheck === 'function') ? ctx.planCheck : null;
   ctx.on('syncNowBtn', 'click', function () { doSync(true); });
   /* Тап по светофору — принудительный синк (как в purchases). */
   ctx.on('syncLight', 'click', function () { doSync(true); });
@@ -310,6 +317,9 @@ function init(ctx) {
    * иначе bfcache/focus без visibility оставляет старое. */
   var lastFg = 0;
   function onForeground() {
+    /* Планы — ДО троттла (ФАЗА 2): проверка дешёвая и схлопывается
+     * сама (schedulePlanCheck), а срабатывать может и между синками. */
+    if (planCheck) planCheck();
     var now = Date.now();
     if (now - lastFg < 15000) return;
     lastFg = now;
@@ -323,7 +333,11 @@ function init(ctx) {
   });
   window.addEventListener('focus', onForeground);
   window.addEventListener('pageshow', onForeground);
-  window.addEventListener('online', function () { renderNet(); doSync(); });
+  window.addEventListener('online', function () {
+    if (planCheck) planCheck();
+    renderNet();
+    doSync();
+  });
   window.addEventListener('offline', renderNet);
   /* Потеря фокуса полем задачи — добираем отложенный авто-синк. */
   document.addEventListener('focusout', function (e) {

@@ -212,6 +212,16 @@
      * перекрывал бы рамку, пока поле активно). Снимается при вводе. */
     #planInput.err, #planDateInput.err {
       border-color: #f44336; outline: 2px solid #f44336; outline-offset: 1px; }
+    /* Целевая планов (ФАЗА 2, FR-100): строка под формой — куда
+     * сработавший план кладёт дочку. Нативный select (старые WebView
+     * понимают, список прокручивается системный, клавиатура не нужна).
+     * Хранение локальное — в синк строка не уходит. */
+    #planTargetRow { display: flex; align-items: center; gap: 8px;
+      max-width: 720px; margin: 0 auto 12px; font-size: 15px; color: #666; }
+    #planTargetRow label { flex: none; }
+    #planTargetSel { flex: 1 1 auto; min-width: 0; font-size: 15px; font-family: inherit;
+      padding: 6px 8px; border: 1px solid #ccc; border-radius: 8px;
+      background: #fff; color: #333; }
     #planLines { display: flex; flex-direction: column; gap: 8px;
       max-width: 720px; margin: 0 auto; }
     /* Метка даты плана — отдельный .planchip (не .durchip): длительность
@@ -281,8 +291,9 @@
   </main>
 
   <!-- Страница планирования (ФАЗА 1, FR-95): полноэкранный экран поверх
-       списка (кнопка 📅 → pushState/popstate). Раздела настроек
-       (целевая/час) здесь нет — это фаза 3. -->
+        списка (кнопка 📅 → pushState/popstate). Выбор цели — строка
+        #planTargetRow под формой (ФАЗА 2, FR-100); час срабатывания —
+        фаза 3. -->
   <div id="planPage">
     <div id="planHead">
       <div id="planHeadTop">
@@ -302,6 +313,10 @@
           <input id="planDateInput" autocomplete="off" inputmode="numeric" maxlength="10" placeholder="ДД.ММ.ГГГГ" aria-label="Дата плана" />
           <button id="planAddBtn" title="Добавить план" aria-label="Добавить план">＋</button>
         </div>
+      </div>
+      <div id="planTargetRow">
+        <label for="planTargetSel">Целевая:</label>
+        <select id="planTargetSel" aria-label="Целевая задача планов"></select>
       </div>
       <div id="planLines"></div>
     </div>

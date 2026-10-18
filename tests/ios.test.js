@@ -1328,7 +1328,7 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(iH !== -1 && iP > iH && iP < html.indexOf('</header>'), '📅 не в панели шапки');
     assert.ok(appSrc.includes("on('planBtn'"), 'открытие не подписано через on()');
   });
-  it('экран #planPage: Назад, поле + дата, строки; настроек нет; скрытие классом', () => {
+  it('экран #planPage: Назад, поле + дата, строки, целевая; час — фаза 3; скрытие классом', () => {
     assert.ok(html.includes('id="planPage"'), 'нет экрана плана');
     assert.ok(html.includes('id="planBack"'), 'нет кнопки Назад');
     assert.ok(/id="planBack"[^>]*aria-label="Назад к списку"/.test(html), 'у Назад нет подписи');
@@ -1337,8 +1337,10 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(html.includes('id="planDateInput"'), 'нет поля даты плана');
     assert.ok(html.includes('ДД.ММ.ГГГГ'), 'нет подсказки формата даты');
     assert.ok(html.includes('id="planLines"'), 'нет контейнера строк плана');
-    assert.ok(!html.includes('planFireHour') && !html.includes('planTargetId'),
-      'раздел настроек — не эта фаза (фаза 3)');
+    assert.ok(html.includes('id="planTargetSel"') && html.includes('id="planTargetRow"'),
+      'нет выбора целевой на странице плана (ФАЗА 2, FR-100)');
+    assert.ok(!html.includes('planFireHour'),
+      'час срабатывания — фаза 3');
     assert.ok(html.includes('#planPage.open'), 'скрытие не классом .open');
     assert.ok(!/id="planPage"[^>]*style=/.test(html),
       'инлайн display:none бьёт класс (панель откроется невидимкой)');
@@ -1489,5 +1491,102 @@ describe('планирование ФАЗА 1: страница плана (FR-9
       'прямая подписка плана без on()');
     assert.ok(!/(^|[^A-Za-z_$.])prompt\s*\(/.test(appSrc) &&
       !/(^|[^A-Za-z_$])confirm\s*\(/.test(appSrc), 'системные диалоги в коде плана');
+  });
+
+  /* --- ФАЗА 2 (v204): срабатывание, дочка, уведомление, целевая --- */
+
+  it('шедулер срабатывания: boot/будильники триггеров + откладывание до спокойного', () => {
+    assert.ok(/function checkPlanFires\(\)/.test(appSrc), 'нет checkPlanFires');
+    assert.ok(/function schedulePlanCheck\(ms\)/.test(appSrc), 'нет schedulePlanCheck');
+    /* Будильники — территория триггеров (граница модуля). */
+    assert.ok(/planCheck: function \(\) \{ schedulePlanCheck\(0\); \}/.test(appSrc),
+      'триггерам не отдан будильник планов');
+    assert.ok(/if \(planCheck\) planCheck\(\);\s*var now = Date\.now\(\);/.test(trigSrc),
+      'возврат на вкладку не будит проверку');
+    assert.ok(/addEventListener\('online'[\s\S]{0,120}planCheck\(\)/.test(trigSrc),
+      'появление сети не будит проверку');
+    assert.ok(/if \(planCheck\) planCheck\(\);\s*if \(!document\.hidden/.test(trigSrc),
+      'тик 60 сек не будит проверку');
+    assert.ok(!appSrc.includes('visibilitychange') && !appSrc.includes('pageshow') &&
+      !appSrc.includes('60000'),
+      'будильники сработали обратно в app.js (граница модуля нарушена)');
+    assert.ok(/schedulePlanCheck\(600\)/.test(appSrc),
+      'правки не будят проверку (save)');
+    assert.ok(/onReady\(\);[\s\S]{0,200}schedulePlanCheck\(0\)/.test(appSrc),
+      'boot не запускает первый проход (догон)');
+    assert.ok(/if \(!planQuiet\(\)\) \{ schedulePlanCheck\(400\); return; \}/.test(appSrc),
+      'нет откладывания до спокойного состояния');
+    assert.ok(/function planQuiet\(\)[\s\S]{0,300}isDragActive\(\)/.test(appSrc),
+      'посреди жеста не откладываемся');
+    assert.ok(/planQuiet[\s\S]{0,300}modalBack/.test(appSrc),
+      'посреди модалки не откладываемся');
+  });
+
+  it('детект внутри mutate, дочка последней, планFired, разворот цели', () => {
+    var iM = appSrc.indexOf('mutate(function () {\n      var q = planFireRead();');
+    assert.ok(iM !== -1, 'детект не внутри mutate (pull подменит цель/дату)');
+    var mBlock = appSrc.slice(iM, appSrc.indexOf('lastAction = created.length', iM));
+    assert.ok(/planBranchLastId\(target\.id\)/.test(mBlock), 'дочка не последняя в ветке');
+    assert.ok(/insertTaskAfter\(prevId, L\.planChildTitle\(p\.title, p\.planDate\)/.test(mBlock),
+      'посадка дочки не через insertTaskAfter');
+    assert.ok(/L\.planChildIndent\(tInd\)/.test(mBlock), 'отступ дочки не min(indent+1, 8)');
+    assert.ok(/p\.planFired = now;\s*p\.ts = now;\s*p\.updatedAt = now;/.test(mBlock),
+      'planFired не с метками ts');
+    assert.ok(/collapsed\[target\.id\]/.test(mBlock), 'свёрнутая цель не разворачивается');
+    assert.ok(/expandForAnchor\(target\.id, tInd\)/.test(mBlock), 'предки цели не разворачиваются');
+    assert.ok(/if \(!pre \|\| !pre\.targetOk\) return;/.test(appSrc),
+      'без рабочей цели идём в mutate вхолостую (писал бы state каждый тик)');
+    var pre = appSrc.slice(appSrc.indexOf('function planFireRead'), appSrc.indexOf('function planBranchLastId'));
+    assert.ok(/target\.status !== 'done'/.test(pre) && /L\.isPlanned\(target\)/.test(pre),
+      'битая цель (выполнена/плановая) не задерживает проверку');
+    assert.ok(/planDueTasks\(state\.tasks, state\.settings/.test(pre),
+      'порог берётся не из state.settings');
+  });
+
+  it('уведомление: одна кнопка «Закрыть», гейт на событие, список экранирован', () => {
+    assert.ok(/function askPlanNotify\(titles\)/.test(appSrc), 'нет askPlanNotify');
+    assert.ok(/ok\.textContent = 'Закрыть';/.test(appSrc), 'кнопка не «Закрыть»');
+    assert.ok(/var html = 'Сработали планы:<br>';[\s\S]{0,500}text\.innerHTML = html;/.test(appSrc),
+      'список дочек не собирается в одну модалку');
+    assert.ok(/\.replace\(\/&\/g, '&amp;'\)/.test(appSrc),
+      'тексты дочек не экранируются перед innerHTML');
+    assert.ok(/planGateKey/.test(appSrc), 'нет гейта');
+    assert.ok(/firedIds\.slice\(\)\.sort\(\)/.test(appSrc),
+      'ключ гейта не из отсортированных id');
+    assert.ok(/planGateKey = '';\s*save\(\);/.test(appSrc),
+      'смена целевой не сбрасывает гейт');
+    assert.ok(/ok\.textContent = 'OK';/.test(appSrc),
+      '«Закрыть» не возвращается в «OK» под askText/askConfirm');
+  });
+
+  it('целевая: селект живых, локальное хранение, повторный проход', () => {
+    assert.ok(/function renderPlanTarget\(\)/.test(appSrc), 'нет renderPlanTarget');
+    assert.ok(/state\.settings\.planTargetId = v;/.test(appSrc),
+      'выбор не пишет planTargetId');
+    assert.ok(/on\('planTargetSel', 'change'/.test(appSrc),
+      'селект не подписан через on()');
+    assert.ok(appSrc.includes("lastAction = 'целевая планов изменена'"),
+      'нет отметки в строке статуса');
+    var iCh = appSrc.indexOf("on('planTargetSel', 'change'");
+    var chBlock = appSrc.slice(iCh, appSrc.indexOf('});', iCh));
+    assert.ok(/schedulePlanCheck\(0\)/.test(chBlock),
+      'после назначения цели нет повторного прохода ждущих');
+    assert.ok(!/planTargetId/.test(syncSrc),
+      'planTargetId не должен уезжать в синк');
+    assert.ok(/textContent/.test(appSrc.slice(appSrc.indexOf('function renderPlanTarget'),
+      appSrc.indexOf('function wire()'))),
+      'заголовки задач кладутся в innerHTML селекта');
+  });
+
+  it('строка цели на странице плана — под формой, без фазы 3', () => {
+    var iRow = html.indexOf('id="planTargetRow"');
+    var iForm = html.indexOf('id="planForm"');
+    var iLines = html.indexOf('id="planLines"');
+    assert.ok(iRow !== -1, 'нет строки целевой');
+    assert.ok(iForm < iRow && iRow < iLines, 'строка цели не между формой и строками');
+    assert.ok(/<label for="planTargetSel">Целевая: <\/label>/.test(html) ||
+      /<label for="planTargetSel">Целевая:<\/label>/.test(html), 'нет подписи строки');
+    assert.ok(/#planTargetRow \{[^}]*display: flex/.test(html), 'строка цели не flex');
+    assert.ok(!html.includes('planFireHour'), 'час — фаза 3, не заехал рано');
   });
 });

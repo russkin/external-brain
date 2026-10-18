@@ -484,6 +484,10 @@ function isPlanned(t) {
 function createPlan(tasks, title, planDate, nowMs, opts) {
   if (!Array.isArray(tasks)) return null;
   var t = normTitle(title);
+  /* Потолок 460 (ФАЗА 2, FR-98): суффикс дочки « (ДД.ММ.ГГГГ)» — ещё
+   * 13 символов, normTitle режет на 500 — дата ушла бы под нож и
+   * заголовок дочки остался бы без неё. */
+  if (t.length > 460) t = t.slice(0, 460);
   var pd = normPlanDate(planDate);
   if (!t || !pd) return null;
   opts = opts || {};
@@ -542,6 +546,26 @@ function planDueTasks(tasks, settings, nowMs) {
     if (py < ty || (py === ty && (pm < tm || (pm === tm && pdd <= td)))) out.push(t);
   }
   return out;
+}
+
+/* Заголовок дочки плана (ФАЗА 2, FR-98): «<Название> (ДД.ММ.ГГГГ)» —
+ * без «до». Название режется до 460 ДО суффикса (см. createPlan):
+ * normTitle обрезает на 500, дата обязана целой. Битая дата или пустое
+ * название → '' (дочку не создаём). */
+function planChildTitle(title, planDate) {
+  var pd = normPlanDate(planDate);
+  var base = String(title == null ? '' : title).trim().slice(0, 460);
+  if (!base || !pd) return '';
+  return normTitle(base + ' (' + pd + ')');
+}
+
+/* Отступ дочки под целевой: +1, потолок 8 (цель на 8 — дочка рядом с
+ * ней на том же уровне, глубже некуда). Битые значения → 1. */
+function planChildIndent(indent) {
+  var v = parseInt(indent, 10);
+  if (!(v >= 0)) v = 0;
+  if (v > 8) v = 8;
+  return v < 8 ? v + 1 : 8;
 }
 
 /* Метка времени для строки: 0 → '', 30 → '30м', 60 → '1ч', 90 → '1ч 30м'. */
@@ -752,6 +776,8 @@ var api = {
   createPlan: createPlan,
   planChipText: planChipText,
   planDueTasks: planDueTasks,
+  planChildTitle: planChildTitle,
+  planChildIndent: planChildIndent,
   normalizeTask: normalizeTask,
   normalizeTasks: normalizeTasks,
   restoreWithTombstones: restoreWithTombstones,

@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v203';
+  var APP_VERSION = 'v204';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -200,6 +200,9 @@
 
   function save() {
     if (!state) return Promise.resolve(false);
+    /* Правка любой задачи может изменить ситуацию плана (цель/дата
+     * ждали) — дешёвая отложенная проверка срабатывания (ФАЗА 2). */
+    schedulePlanCheck(600);
     return window.EBStore.save(state).then(function () {
       scheduleSync();
       return true;
@@ -294,6 +297,8 @@
    * жестах и boot не трогать. */
   function render() {
     if (window.EBRender) window.EBRender.render();
+    /* Опции цели — после строк: селект читает актуальный список (ФАЗА 2). */
+    renderPlanTarget();
   }
   function renderStatus() {
     if (window.EBRender) window.EBRender.renderStatus();
@@ -1048,8 +1053,9 @@
    * (#planLines через renderPlanLines с src 'plan'), правка названия —
    * инлайн (clarifyTask), удаление — askDeleteTask (tombstone,
    * с подтверждением; пустая — сразу). Все мутации — через mutate;
-   * создание + дата — один mutate (один шаг истории). Раздела настроек
-   * (целевая/час) в ФАЗЕ 1 нет — это фаза 3. Индикатор «сработала» —
+   * создание + дата — один mutate (один шаг истории). Выбор цели —
+   * селект #planTargetSel под формой (ФАЗА 2, FR-100); час срабатывания
+   * и краевые цели — фаза 3. Индикатор «сработала» —
    * только отображение (planFired!==0, класс fired у метки). */
 
   /* Скролл-пин основного списка: где были — туда и вернулись. */
@@ -1187,6 +1193,197 @@
     if (window.EBSettings.expCaret) window.EBSettings.expCaret(inp, inp.value, dc - 1);
   }
 
+  /* --- Срабатывание планов (ФАЗА 2, FR-97–98) ---
+   * Локальный шедулер: boot, возврат на вкладку, сеть, тик 60 сек и
+   * каждая правка (save). Работает без сети и ключа. Откладывается до
+   * спокойного состояния — не посреди жеста или открытой модалки.
+   * Детект (L.planDueTasks) читается ПО ЗАМЫКАНИЮ state внутри mutate
+   * (FR-98): между решением и применением ничего не асинхронно, но
+   * свежий взгляд внутри mutate страхует от подмены состояния.
+   * Дочка (FR-98): последней в ветке целевой, слот как у Enter,
+   * планFired — той же точкой истории (↩ отменяет). */
+
+  /* Ключ гейта: показали модалку один раз на это событие (список id
+   * сработавших); сброс — смена целевой. Память, не переживает
+   * перезагрузку — после неё planFired уже стоит, срабатывания нет. */
+  var planGateKey = '';
+  var planTimer = null;
+
+  function planQuiet() {
+    if (isDragActive()) return false;
+    var mb = el('modalBack');
+    if (mb && mb.classList.contains('open')) return false;
+    return true;
+  }
+
+  function schedulePlanCheck(ms) {
+    if (planTimer) return;
+    planTimer = setTimeout(function () {
+      planTimer = null;
+      checkPlanFires();
+    }, ms || 0);
+  }
+
+  /* Ситуация срабатывания (только чтение): ждущие + цель. null —
+   * нечего делать. targetOk=false — ждущие есть, но цели нет/она бита:
+   * по FR-99 планы ждут, мутируем только при РАБОЧЕЙ цели (иначе
+   * каждый тик писал бы state вхолостую). Планы, у которых нечем
+   * делать дочку (пустое имя — мусор данных), выкидываем сразу:
+   * иначе mutate нашёл бы работу пустой и save заводил бы вечную
+   * петлю проверка→save→проверка. */
+  function planFireRead() {
+    if (!state || !state.settings) return null;
+    var all = L.planDueTasks(state.tasks, state.settings, Date.now());
+    var due = [];
+    for (var i = 0; i < all.length; i++) {
+      var p = all[i];
+      if (!p) continue;
+      if (!L.planChildTitle(p.title, p.planDate)) continue;
+      due.push(p);
+    }
+    if (!due.length) return null;
+    var tid = String(state.settings.planTargetId || '');
+    var target = tid ? L.getTask(state.tasks, tid) : null;
+    var ok = !!(target && !target.deleted && !L.isPlanned(target) &&
+      target.status !== 'done');
+    return { due: due, target: target, targetOk: ok };
+  }
+
+  /* Последняя живая строка ветки целевой — под ней и встаёт дочка
+   * («последней»: после всех её живых потомков, done-дети живут в
+   * своей секции и на посадку не влияют). */
+  function planBranchLastId(targetId) {
+    var live = lineTasks(), ti = -1, i;
+    for (i = 0; i < live.length; i++) {
+      if (live[i].id === targetId) { ti = i; break; }
+    }
+    if (ti === -1) return null;
+    var ind = lineIndent(live[ti]), last = targetId;
+    for (i = ti + 1; i < live.length; i++) {
+      if (lineIndent(live[i]) <= ind) break;
+      last = live[i].id;
+    }
+    return last;
+  }
+
+  function checkPlanFires() {
+    if (!state) return;
+    /* Сначала «есть работа» — и только потом ожидание: иначе тихий
+     * 400-мс опрос крутится, когда планов не ждёт. */
+    var pre = planFireRead();
+    if (!pre || !pre.targetOk) return;
+    if (!planQuiet()) { schedulePlanCheck(400); return; }
+    var created = [];
+    var firedIds = [];
+    var now = Date.now();
+    mutate(function () {
+      var q = planFireRead();
+      if (!q || !q.targetOk) return;
+      var target = q.target;
+      var tInd = lineIndent(target);
+      for (var i = 0; i < q.due.length; i++) {
+        var p = q.due[i];
+        if (!p || p.deleted || p.planFired) continue;
+        var prevId = planBranchLastId(target.id);
+        if (!prevId) continue;
+        var child = insertTaskAfter(prevId, L.planChildTitle(p.title, p.planDate),
+          L.planChildIndent(tInd), now, false);
+        if (!child) continue;
+        p.planFired = now;
+        p.ts = now;
+        p.updatedAt = now;
+        created.push(child.title);
+        firedIds.push(p.id);
+      }
+      if (!created.length) return;
+      /* Цель должна дочку показать: свёрнутая группа — развернуть,
+       * предки — тем же ходом (expandForAnchor, как у Enter). */
+      if (collapsed[target.id]) { delete collapsed[target.id]; saveCollapsed(); }
+      expandForAnchor(target.id, tInd);
+      render();
+    });
+    if (!created.length) return;
+    lastAction = created.length === 1 ?
+      'план сработал' : 'планов сработало: ' + created.length;
+    renderStatus();
+    var key = firedIds.slice().sort().join('|');
+    if (key && key !== planGateKey) {
+      planGateKey = key;
+      askPlanNotify(created);
+    }
+  }
+
+  /* Модалка о сработавших планах (FR-98): одна на событие, список
+   * ВСЕХ новых дочек, кнопка «Закрыть». Тексты экранируем — заголовки
+   * приходят из задач. Закрытие возвращает кнопки под askText/askConfirm
+   * (паттерн askInfo) и перепроверяет ждущие. */
+  function askPlanNotify(titles) {
+    var back = el('modalBack'), text = el('modalText'), input = el('modalInput');
+    var ok = el('modalOk'), cancel = el('modalCancel'), clearBtn = el('modalClear');
+    if (!back || !text || !ok) return;
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    var html = 'Сработали планы:<br>';
+    for (var i = 0; i < titles.length; i++) {
+      html += '— ' + esc(titles[i]) + (i < titles.length - 1 ? '<br>' : '');
+    }
+    text.innerHTML = html;
+    if (input) input.style.display = 'none';
+    if (clearBtn) clearBtn.style.display = 'none';
+    if (cancel) cancel.style.display = 'none';
+    ok.textContent = 'Закрыть';
+    back.classList.add('open');
+    ok.onclick = function () {
+      back.classList.remove('open');
+      ok.onclick = null;
+      if (cancel) { cancel.onclick = null; cancel.style.display = ''; }
+      if (input) input.style.display = '';
+      if (clearBtn) clearBtn.style.display = 'none';
+      ok.textContent = 'OK';
+      schedulePlanCheck(0);
+    };
+  }
+
+  /* Опции цели в селекте страницы плана (FR-100): живые задачи в
+   * порядке списка + всегда пункт «(не выбрана)» (пустая цель —
+   * норма: планы ждут). Тексты — через textContent (заголовки —
+   * пользовательские, в innerHTML их не кладём). */
+  function renderPlanTarget() {
+    var sel = el('planTargetSel');
+    if (!sel || !state || !state.settings) return;
+    var cur = String(state.settings.planTargetId || '');
+    var live = lineTasks();
+    var opts = [{ id: '', label: '(не выбрана)' }];
+    var seen = false, i;
+    for (i = 0; i < live.length; i++) {
+      var t = live[i];
+      if (!t.title) continue;
+      opts.push({ id: t.id, label: t.title });
+      if (t.id === cur) seen = true;
+    }
+    if (cur && !seen) {
+      var ct = L.getTask(state.tasks, cur);
+      if (ct && !ct.deleted && !L.isPlanned(ct)) {
+        opts.push({
+          id: cur,
+          label: (ct.title || '(без названия)') + (ct.status === 'done' ? ' ✓' : '')
+        });
+      } else {
+        opts.push({ id: cur, label: '(целевая недоступна)' });
+      }
+    }
+    sel.innerHTML = '';
+    for (i = 0; i < opts.length; i++) {
+      var op = document.createElement('option');
+      op.value = opts[i].id;
+      op.textContent = String(opts[i].label).slice(0, 120);
+      sel.appendChild(op);
+    }
+    try { sel.value = cur; } catch (x) {}
+  }
+
   /* Поиск — отдельным модулем src/search.js (рефакторинг, этап 1):
    * состояние внутри модуля, общее — только через контекст в init.
    * Подсветка дотягивается из render() через EBSearch.currentId(). */
@@ -1223,7 +1420,10 @@
       render: render,
       renderStatus: renderStatus,
       askConfirm: askConfirm,
-      getVersion: function () { return APP_VERSION; }
+      getVersion: function () { return APP_VERSION; },
+      /* Будильник срабатывания планов (ФАЗА 2): триггеры зовут его на
+       * возврате на вкладку, по сети и на тике 60 сек. */
+      planCheck: function () { schedulePlanCheck(0); }
     });
 
     /* ВРЕМЕННЫЕ часы под шапкой (диагностика по скриншотам, до решения
@@ -1310,6 +1510,25 @@
       }
       planDateMaskBackspace(e);
     });
+    /* Выбор цели (ФАЗА 2, FR-100): локально (save пишет settings,
+     * в payload синка они не входят), гейт уведомлений сброшен,
+     * повторный проход ждущих — как в FR-99 после назначения. */
+    on('planTargetSel', 'change', function () {
+      var sel = el('planTargetSel');
+      if (!sel || !state || !state.settings) return;
+      var v = String(sel.value || '');
+      if (v === String(state.settings.planTargetId || '')) return;
+      state.settings.planTargetId = v;
+      planGateKey = '';
+      save();
+      renderPlanTarget();
+      lastAction = 'целевая планов изменена';
+      renderStatus();
+      schedulePlanCheck(0);
+    });
+    /* Будильники срабатывания — модуль триггеров (территория возврата
+     * на вкладку/сети/тика): отдаём ему schedulePlanCheck как planCheck
+     * (ФАЗА 2, FR-97); до загрузки состояния проверка молчит. */
     window.addEventListener('popstate', function (e) {
       var pg = (e && e.state && e.state.page) || '';
       if (pg === 'plan') showPlanPage();
@@ -1493,6 +1712,8 @@
        * триггеров (этап 5); статус строки рисуем после. */
       if (window.EBTriggers) window.EBTriggers.onReady();
       renderStatus();
+      /* Первый проход срабатывания планов (ФАЗА 2): догон за прошлое. */
+      schedulePlanCheck(0);
     }).catch(function (e) {
       bootError = 'ОШИБКА загрузки: ' + String(e && e.message || e);
       var s = el('status');

@@ -867,3 +867,41 @@ describe('планирование ФАЗА 1: создание плана и м
     assert.equal(L.planChipText(null), '');
   });
 });
+
+describe('планирование ФАЗА 2: дочка — заголовок и отступ (FR-98)', () => {
+  it('planChildTitle: суффикс «(ДД.ММ.ГГГГ)» из planDate', () => {
+    assert.equal(L.planChildTitle('Купить масло', '16.10.2026'), 'Купить масло (16.10.2026)');
+    assert.equal(L.planChildTitle('  Проверить  ', '01.01.2027'), 'Проверить (01.01.2027)');
+  });
+  it('planChildTitle: битые дата/название → пусто (дочки нет)', () => {
+    assert.equal(L.planChildTitle('План', ''), '');
+    assert.equal(L.planChildTitle('План', 'мусор'), '');
+    assert.equal(L.planChildTitle('', '16.10.2026'), '');
+    assert.equal(L.planChildTitle(null, '16.10.2026'), '');
+    assert.equal(L.planChildTitle(undefined, undefined), '');
+  });
+  it('planChildTitle: название режется до 460 — дата под нож не идёт', () => {
+    const long = 'х'.repeat(500);
+    const child = L.planChildTitle(long, '16.10.2026');
+    assert.equal(child, 'х'.repeat(460) + ' (16.10.2026)', 'суффикс цел, база 460');
+    assert.ok(child.length <= 500, 'в лимит normTitle');
+    assert.ok(child.endsWith('(16.10.2026)'), 'дата в конце');
+  });
+  it('planChildIndent: под целевой на 1, потолок 8, мусор → 1', () => {
+    assert.equal(L.planChildIndent(0), 1);
+    assert.equal(L.planChildIndent(7), 8);
+    assert.equal(L.planChildIndent(8), 8, 'цель на потолке — дочка рядом с ней');
+    assert.equal(L.planChildIndent(9), 8, 'данные чиним к потолку');
+    assert.equal(L.planChildIndent(-3), 1);
+    assert.equal(L.planChildIndent('мусор'), 1);
+    assert.equal(L.planChildIndent(null), 1);
+  });
+  it('createPlan: заголовок режется до 460 ещё при создании', () => {
+    const t = L.blankTasks();
+    const p = L.createPlan(t, 'х'.repeat(600), '16.10.2026', 1000);
+    assert.ok(p, 'план создан');
+    assert.equal(p.title.length, 460, 'потолок 460 под будущий суффикс');
+    assert.equal(L.planChildTitle(p.title, p.planDate).length, 460 + 13,
+      'дочка влезает целиком');
+  });
+});
