@@ -1480,6 +1480,12 @@ describe('планирование ФАЗА 1: страница плана (FR-9
       html.includes('outline: 2px solid #f44336'),
       'ошибка краснеет только рамкой — чёрный outline фокуса её перекрывает (v193)');
   });
+  it('поле создания плана: высота сбрасывается после создания (v209)', () => {
+    var iC = appSrc.indexOf('function createPlanFromForm');
+    var cBlock = appSrc.slice(iC, appSrc.indexOf('function planDateMaskInput', iC));
+    assert.ok(/ti\.value = '';\s*autosize\(ti\)/.test(cBlock),
+      'после создания высота поля плана не вернулась к однострочной');
+  });
   it('рамка ошибки формы плана — на незаполненном поле (v199)', () => {
     assert.ok(/titleMissing/.test(appSrc), 'выбор виновного поля не по пустому названию');
     assert.ok(/titleMissing \? \(ti2 \|\| di2\) : \(di2 \|\| ti2\)/.test(appSrc),

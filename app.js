@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v208';
+  var APP_VERSION = 'v209';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1252,7 +1252,7 @@
       }
       return;
     }
-    if (ti) ti.value = '';
+    if (ti) { ti.value = ''; autosize(ti); }
     if (di) {
       di.value = '';
       try { di.classList.remove('err'); } catch (x) {}
