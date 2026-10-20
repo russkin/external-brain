@@ -345,7 +345,7 @@ describe('логика вызывается с state.tasks', () => {
       'нет тапа по разделителю для скрытия выполненных');
     assert.ok(appSrc.includes('loadDoneHidden') && appSrc.includes('doneHidden'),
       'состояние скрытия выполненных не сохраняется');
-    assert.ok(rendSrc.includes("'Выполнено · ' + done.length"),
+    assert.ok(rendSrc.includes("'Выполнено · ' + count"),
       'счётчик показывает видимых, а не всех выполненных');
     assert.ok(/sep\.addEventListener\('click'[\s\S]{0,600}e\.collapsed = bvCollapsed/.test(rendSrc),
       'тап по разделителю не пишет шаг истории');
@@ -1522,6 +1522,26 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(html.includes('.planchip'), 'нет стилей метки даты');
     assert.ok(appSrc.includes('function planTasks'), 'нет порядка планов в app.js');
     assert.ok(logicSrc.includes('planChipText: planChipText'), 'planChipText не в api');
+  });
+  it('планы: сортировка по сроку, выполненные внизу, без ⠿ (v212)', () => {
+    assert.ok(/function planDateKey/.test(appSrc), 'нет ключа сортировки плана по сроку');
+    assert.ok(/active\.sort\(function \(a, b\) \{[^}]*planDateKey\(a\)/.test(appSrc),
+      'активные планы не сортируются по дате срока');
+    assert.ok(/return active\.concat\(done\)/.test(appSrc), 'выполненные не уходят вниз');
+    assert.ok(/function doneSepEl/.test(rendSrc) && rendSrc.includes("'Выполнено · ' + count"),
+      'нет общего разделителя выполненных');
+    assert.ok(/doneSepEl\(done\.length, collapsed\)/.test(rendSrc),
+      'живой список не через общий разделитель');
+    var iR = rendSrc.indexOf('function renderPlanLines');
+    var rBlock = rendSrc.slice(iR, rendSrc.indexOf('/* Шапка над клавиатурой', iR));
+    assert.ok(rBlock.includes('doneSepEl(') && rBlock.includes('C.isDoneHidden()'),
+      'на странице плана нет секции выполненных с разделителем');
+    assert.ok(rBlock.includes("src: 'plan'") && rBlock.includes('planRow('),
+      'строки плана не через общий planRow');
+    assert.ok(/if \(src !== 'plan'\) \{\s*grip = makeGrip/.test(rendSrc),
+      'у планов всё ещё строится grip (таскать нечего)');
+    assert.ok(rendSrc.includes('if (grip) C.wireLineDrag(div, grip, inp)'),
+      'drag не привязан к наличию grip (план без ⠿)');
   });
   it('маска даты плана — общие fmtExpDigits/expCaret, не копипаста', () => {
     assert.ok(settingsSrc.includes('fmtExpDigits: fmtExpDigits') &&

@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v211';
+  var APP_VERSION = 'v212';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -450,23 +450,42 @@
     return L.normalizeTasks(state.tasks).filter(function (t) { return !t.deleted; });
   }
 
+  /* Ключ сортировки плана по сроку (v212): ДД.ММ.ГГГГ → ГГГГММДД.
+   * Битая/пустая дата — в конец (валидные планы её не имеют). */
+  function planDateKey(t) {
+    var pd = L.normPlanDate(t && t.planDate);
+    if (!pd) return Infinity;
+    var p = pd.split('.');
+    return (parseInt(p[2], 10) * 10000) + (parseInt(p[1], 10) * 100) + parseInt(p[0], 10);
+  }
+
   /* Планы для #planPage (ФАЗА 1, FR-95–FR-96): все неудалённые с датой
-   * (включая выполненные и пустые), порядок — по createdAt, как у живых. */
+   * (включая выполненные и пустые). v212: активные — по сроку от ранних
+   * к поздним (ближайшая сверху), выполненные — внизу, в порядке
+   * создания (их по дате не сортируем); ручное перетаскивание планов
+   * убрано — порядок задаёт дата. */
   function planTasks() {
     if (!state) return [];
-    var out = [];
+    var active = [], done = [];
     for (var i = 0; i < state.tasks.length; i++) {
       var t = state.tasks[i];
       if (!t || t.deleted) continue;
       if (!L.isPlanned(t)) continue;
-      out.push(t);
+      if (t.status === 'done') done.push(t);
+      else active.push(t);
     }
-    out.sort(function (a, b) {
+    function byCreated(a, b) {
       var ca = a.createdAt || 0, cb = b.createdAt || 0;
       if (ca !== cb) return ca - cb;
       return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
+    }
+    active.sort(function (a, b) {
+      var ka = planDateKey(a), kb = planDateKey(b);
+      if (ka !== kb) return ka - kb;
+      return byCreated(a, b);
     });
-    return out;
+    done.sort(byCreated);
+    return active.concat(done);
   }
 
   /* Есть ли у id ЖИВЫЕ вложенные (v158): треугольник, тап по точкам

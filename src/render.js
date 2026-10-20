@@ -184,8 +184,12 @@ function makeLine(taskId, value, indent, opts) {
   var body = document.createElement('div');
   body.className = 'tbody';
   div.appendChild(body);
-  var grip = makeGrip(opts.arrow);
-  body.appendChild(grip);
+  var grip = null;
+  /* v212: у планов точки ⠿ нет — порядок задаёт дата, таскать нечего. */
+  if (src !== 'plan') {
+    grip = makeGrip(opts.arrow);
+    body.appendChild(grip);
+  }
   var inp = document.createElement('textarea');
   inp.className = 'tinput';
   inp.value = value || '';
@@ -311,7 +315,7 @@ function makeLine(taskId, value, indent, opts) {
     body.appendChild(chip);
   }
   C.wireLineInput(div, inp, taskId, indent, src);
-  C.wireLineDrag(div, grip, inp);
+  if (grip) C.wireLineDrag(div, grip, inp);
   return div;
 }
 
@@ -436,6 +440,30 @@ function refreshDurchips(box) {
   }
 }
 
+/* Разделитель секции выполненных (v212 — общий для списка и планов):
+ * тап скрывает/показывает выполненные разом, это шаг истории (как 📁/
+ * точки). Стрелка показывает состояние (▸ скрыты, ▾ видны), в скрытом
+ * состоянии разделитель остаётся — он же точка возврата и кламп дыры
+ * при перетаскивании. */
+function doneSepEl(count, collapsed) {
+  var sep = document.createElement('div');
+  sep.className = 'done-sep';
+  sep.textContent = 'Выполнено · ' + count + (C.isDoneHidden() ? ' ▸' : ' ▾');
+  sep.setAttribute('title', C.isDoneHidden() ? 'Показать выполненные' : 'Скрыть выполненные');
+  sep.addEventListener('click', function () {
+    var bvCollapsed = {}, bvId;
+    for (bvId in collapsed) if (collapsed[bvId]) bvCollapsed[bvId] = true;
+    var bvHidden = !!C.isDoneHidden();
+    C.toggleDoneHidden();
+    var e = C.snapFull();
+    e.collapsed = bvCollapsed;
+    e.doneHidden = bvHidden;
+    C.pushUndo(e);
+    C.updateHistoryButtons();
+  });
+  return sep;
+}
+
 function renderLines() {
   var state = C.getState();
   var collapsed = C.getCollapsed();
@@ -471,27 +499,7 @@ function renderLines() {
   var done = L.doneList(state.tasks);
   var doneVis = done.slice();
   if (done.length) {
-    var sep = document.createElement('div');
-    sep.className = 'done-sep';
-    /* Тап — скрыть/показать все выполненные разом. Стрелка показывает
-     * состояние (▸ скрыты, ▾ видны), разделитель в скрытом состоянии
-     * остаётся: он же точка возврата и кламп дыры при перетаскивании. */
-    sep.textContent = 'Выполнено · ' + done.length + (C.isDoneHidden() ? ' ▸' : ' ▾');
-    sep.setAttribute('title', C.isDoneHidden() ? 'Показать выполненные' : 'Скрыть выполненные');
-    /* Тап — тоже шаг истории (как 📁/точки): иначе ↩ после показа
-     * секции вернул бы более раннее действие, а не скрытие. */
-    sep.addEventListener('click', function () {
-      var bvCollapsed = {}, bvId;
-      for (bvId in collapsed) if (collapsed[bvId]) bvCollapsed[bvId] = true;
-      var bvHidden = !!C.isDoneHidden();
-      C.toggleDoneHidden();
-      var e = C.snapFull();
-      e.collapsed = bvCollapsed;
-      e.doneHidden = bvHidden;
-      C.pushUndo(e);
-      C.updateHistoryButtons();
-    });
-    box.appendChild(sep);
+    box.appendChild(doneSepEl(done.length, collapsed));
     if (!C.isDoneHidden()) {
       for (var dv = 0; dv < doneVis.length; dv++) {
         box.appendChild(makeLine(doneVis[dv].id, doneVis[dv].title, C.lineIndent(doneVis[dv]), { doneShown: true, estMin: lineEstMin(doneVis[dv]) }));
@@ -515,9 +523,10 @@ function renderLines() {
 
 /* Строки страницы планирования (ФАЗА 1, FR-95): все планы (включая
  * выполненные — с зачёркиванием, и пустые — с «✕ Удалить») плоским
- * списком в #planLines. Свёрнутости/раздела выполненных здесь нет.
- * Поле создания (#planInput/#planDateInput) живёт ВНЕ #planLines —
- * пересборка фокус и черновик не трогает. */
+ * списком в #planLines. v212: активные — по сроку (ранние сверху),
+ * выполненные — внизу за разделителем «Выполнено · N» (как в списке,
+ * тап — скрыть/показать). Поле создания (#planInput/#planDateInput)
+ * живёт ВНЕ #planLines — пересборка фокус и черновик не трогает. */
 function renderPlanLines() {
   var state = C.getState();
   var box = el('planLines');
@@ -534,17 +543,30 @@ function renderPlanLines() {
     sc = scBox ? (scBox.scrollTop || 0) : 0;
   } catch (x) { scBox = null; sc = 0; }
   box.innerHTML = '';
+  /* planTasks уже отдаёт активные (по сроку) и следом выполненные —
+   * разделяем по статусу, чтобы вставить разделитель на границе. */
   var plans = C.planTasks();
+  var active = [], done = [];
   for (var i = 0; i < plans.length; i++) {
-    var t = plans[i];
+    if (plans[i].status === 'done') done.push(plans[i]);
+    else active.push(plans[i]);
+  }
+  function planRow(t) {
     /* Планы плоские (отступов на странице плана нет): отступ всегда 0,
      * что бы ни лежало в данных. В живых задачах разошьёшь при переносе. */
-    box.appendChild(makeLine(t.id, t.title, 0, {
+    return makeLine(t.id, t.title, 0, {
       src: 'plan',
       doneShown: t.status === 'done',
       planDate: t.planDate,
       planFired: t.planFired
-    }));
+    });
+  }
+  for (var ai = 0; ai < active.length; ai++) box.appendChild(planRow(active[ai]));
+  if (done.length) {
+    box.appendChild(doneSepEl(done.length, C.getCollapsed() || {}));
+    if (!C.isDoneHidden()) {
+      for (var di = 0; di < done.length; di++) box.appendChild(planRow(done[di]));
+    }
   }
   var areas = box.querySelectorAll ? box.querySelectorAll('.tinput') : [];
   for (var q = 0; q < areas.length; q++) autosize(areas[q]);
