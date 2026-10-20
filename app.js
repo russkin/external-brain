@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v209';
+  var APP_VERSION = 'v210';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1185,8 +1185,8 @@
     } catch (x) {}
     if (!pg.classList.contains('open')) pg.classList.add('open');
     render();
-    var inp = el('planInput');
-    if (inp && inp.focus) { try { inp.focus(); } catch (x) {} }
+    /* v210: фокус в поле создания НЕ ставим — страница открывается без
+     * клавиатуры (она закрывала полсписка); курсор — по тапу в поле. */
   }
 
   function hidePlanPage() {

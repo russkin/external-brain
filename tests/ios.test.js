@@ -1345,7 +1345,7 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(!/id="planPage"[^>]*style=/.test(html),
       'инлайн display:none бьёт класс (панель откроется невидимкой)');
   });
-  it('навигация: pushState/popstate, history.back, фокус, скролл-пин', () => {
+  it('навигация: pushState/popstate, history.back, без авто-фокуса, скролл-пин', () => {
     assert.ok(appSrc.includes("pushState({ page: 'plan' }, '', '#plan')"),
       'открытие не через pushState #plan');
     assert.ok(appSrc.includes("on('planBack'"), 'Назад не подписана через on()');
@@ -1354,8 +1354,12 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(appSrc.includes('function showPlanPage') && appSrc.includes('function hidePlanPage'),
       'нет показа/скрытия страницы');
     assert.ok(appSrc.includes('planScrollY'), 'скролл основного списка не пинится');
-    assert.ok(/function showPlanPage[\s\S]{0,1500}el\('planInput'\)/.test(appSrc),
-      'фокус при открытии не в поле плана');
+    var iS = appSrc.indexOf('function showPlanPage');
+    var sBlock = appSrc.slice(iS, appSrc.indexOf('function hidePlanPage', iS));
+    assert.ok(/el\('planInput'\)/.test(sBlock),
+      'страница плана не восстанавливает черновик поля');
+    assert.ok(!/\.focus\(\)/.test(sBlock),
+      'открытие страницы плана само ставит фокус (выскакивает клавиатура, v210)');
   });
   it('шапка плана: заголовок + Назад справа, ряд ↩ ↪ ⓘ ⚙, без поиска (v197/v207)', () => {
     for (const id of ['planBack', 'planUndoBtn', 'planRedoBtn', 'planDiagBtn', 'planSetBtn']) {
