@@ -216,27 +216,6 @@ function diagText() {
   lines.push('Данные: ' + (state && state.updatedAt ? fmtDT(state.updatedAt) + ' (изменены)' : '—'));
   lines.push('Локально: выполненные ' + (C.isDoneHidden() ? 'скрыты' : 'видны') +
     ' · свёрнуто групп ' + collapsedN);
-  /* Телеметрия дотяжки шапки (v175): последние замеры offsetTop (off),
-   * скролла (sy), касаний и решения — по ним видно, что отдавал браузер
-   * в момент улёта. Формат времени — с секундами (тут они важны). */
-  try {
-    var hraw = localStorage.getItem('external-brain-headlift-v1');
-    var hlog = hraw ? JSON.parse(hraw) : null;
-    if (hlog && hlog.length) {
-      var rows = [];
-      for (var hi = 0; hi < hlog.length; hi++) {
-        var he = hlog[hi];
-        var hd = new Date(he.t || 0);
-        var hh = (hd.getHours() < 10 ? '0' : '') + hd.getHours();
-        var hm = (hd.getMinutes() < 10 ? '0' : '') + hd.getMinutes();
-        var hs = (hd.getSeconds() < 10 ? '0' : '') + hd.getSeconds();
-        rows.push(hh + ':' + hm + ':' + hs + ' off=' + he.off +
-          ' sy=' + he.sy + ' touch=' + he.touch + ' ' + he.how +
-          (he.same ? '(+' + he.same + ' так же)' : ''));
-      }
-      lines.push('Шапка: ' + rows.join(' | '));
-    }
-  } catch (x) {}
   var h = C.getHistoryCounts();
   lines.push('История: ↩ ' + h.u + ' · ↪ ' + h.r);
   lines.push('Сеть: ' + connLine());
@@ -310,11 +289,12 @@ function diagText() {
 
 function init(ctx) {
   C = ctx;
-  /* Выпил временной телеметрии метки (v186): мёртвые ключи чистим сами,
-   * иначе лежат в localStorage вечно. */
+  /* Выпил временной телеметрии (v186 — метки, v211 — дотяжки шапки):
+   * мёртвые ключи чистим сами, иначе лежат в localStorage вечно. */
   try {
     localStorage.removeItem('external-brain-chipfit-v1');
     localStorage.removeItem('external-brain-chipblur-v1');
+    localStorage.removeItem('external-brain-headlift-v1');
   } catch (x) {}
   ctx.on('diagBtn', 'click', function () {
     diagText().then(function (txt) {

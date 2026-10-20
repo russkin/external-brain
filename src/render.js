@@ -561,21 +561,7 @@ var lastHeadLift = null;
 /* Последний принятый сдвиг (v160): всплески offsetTop в резинке/флике
  * отбрасываем сравнением с ним, а не с нулём. */
 var lastGoodOff = null;
-/* Палец на экране (v162, смягчён в v177): счётчик только для телеметрии
- * (видно, было ли касание в момент замера). Заморозку по нему УБРАЛИ:
- * телеметрия v176 показала, что на Android скролл с клавиатурой панорамит
- * визуальный вьюпорт при замороженной раскладке — заморозка оставляла
- * шапку позади на весь жест. Счётчик, а не флаг — мультитач. */
-var touchDown = 0;
-/* Телеметрия дотяжки (v175): кольцо последних 30 замеров + причина решения.
- * Пишется в localStorage (переживает перезагрузку) и показывается
- * в диагностике («Шапка:») — по ней видно, что Safari/Chrome отдавали
- * в момент улёта, без устройства не разобраться (урок v159–v163).
- * Дёшево: запись в память всегда, в localStorage не чаще раза в 2 сек. */
-var HEADLOG_KEY = 'external-brain-headlift-v1';
-var headLog = [];
-var headLogSaved = 0;
-var headSameN = 0;
+/* Сторож пересчёта дотяжки (v176): таймер, пока фокус в поле. */
 var headWatch = null;
 function headWatchStart() {
   headWatchStop();
@@ -591,23 +577,6 @@ function headWatchStart() {
 }
 function headWatchStop() {
   if (headWatch) { try { clearInterval(headWatch); } catch (x) {} headWatch = null; }
-}
-function headDbg(off, sy, how) {
-  /* Дубли-подтверждения ('same') не пишем каждый (v176): они съедали
-   * кольцо — в прошлый раз 5 из 15 записей были шумом, а начало жеста
-   * ушло. Считаем их счётчиком при следующей значимой записи: видно
-   * и тишину событий, и их наличие. */
-  if (how === 'same') { headSameN++; return; }
-  try {
-    headLog.push({ t: Date.now(), off: off, sy: sy, touch: touchDown, how: how, same: headSameN });
-    headSameN = 0;
-    if (headLog.length > 30) headLog.shift();
-    var now = Date.now();
-    if (now - headLogSaved > 2000) {
-      headLogSaved = now;
-      try { localStorage.setItem(HEADLOG_KEY, JSON.stringify(headLog)); } catch (x) {}
-    }
-  } catch (x) {}
 }
 function syncHeaderLift() {
   var h = null;
@@ -626,7 +595,7 @@ function syncHeaderLift() {
   if (off > 0) {
     /* Оттяжка-резинка (v159): в момент pull-down layout уезжает в минус —
      * тогда дотяжку не трогаем вовсе. */
-    if (sy < 0) { headDbg(off, sy, 'overscroll'); return; }
+    if (sy < 0) { return; }
     /* За краем раскладки (v177): визуальный вьюпорт выехал за границы
      * документа (резинка сверху/снизу) — offsetTop там врёт, а нативная
      * резинка сама везёт содержимое вместе с шапкой. Проверяем по
@@ -640,7 +609,7 @@ function syncHeaderLift() {
         var de = document.documentElement;
         var maxTop = Math.max(0, (de ? de.scrollHeight : 0) - window.visualViewport.height);
         var vvt = window.visualViewport.pageTop;
-        if (vvt < 0 || vvt > maxTop) { headDbg(off, sy, 'edge'); return; }
+        if (vvt < 0 || vvt > maxTop) { return; }
       }
     } catch (x) {}
     /* Всплеск (v160): одиночный прыжок offsetTop на сотни px за одно
@@ -651,7 +620,6 @@ function syncHeaderLift() {
      * меньше, а шапка ~110. Потолка нет специально: честный сдвиг при
      * глубоком скролле больше высоты шапки. */
     if (lastGoodOff !== null && Math.abs(off - lastGoodOff) > 160) {
-      headDbg(off, sy, 'spike');
       return;
     }
     lastGoodOff = off;
@@ -659,10 +627,9 @@ function syncHeaderLift() {
     lastGoodOff = null;
   }
   var lift = off ? 'translateY(' + off + 'px)' : '';
-  if (lift === lastHeadLift) { headDbg(off, sy, 'same'); return; }
+  if (lift === lastHeadLift) { return; }
   lastHeadLift = lift;
   h.style.transform = lift;
-  headDbg(off, sy, off ? 'apply' : 'reset');
 }
 
 /* Активная строка — в центр видимого места: браузер подвозит поле минимумом,
@@ -776,17 +743,9 @@ function init(ctx) {
       if (blurTimer) { try { clearTimeout(blurTimer); } catch (x) {} blurTimer = null; }
     });
     document.addEventListener('focusin', centerActiveLine);
-    /* Счётчик касаний: только для телеметрии (видно, было ли касание
-     * в момент замера) — на дотяжку не влияет с v177. Passive. */
-    try {
-      document.addEventListener('touchstart', function () { touchDown++; }, { passive: true });
-    } catch (x) {
-      try { document.addEventListener('touchstart', function () { touchDown++; }); } catch (e2) {}
-    }
     /* Пересчёт при отпускании: settled-события иногда не приходят вовсе —
      * принудительный пересчёт на touchend лечит без ожидания событий. */
     function touchUp() {
-      if (touchDown > 0) touchDown--;
       try { syncHeaderLift(); } catch (x) {}
     }
     try {
@@ -798,13 +757,6 @@ function init(ctx) {
         document.addEventListener('touchcancel', touchUp);
       } catch (e2) {}
     }
-    /* Метки фокуса для телеметрии (v176): по кольцу видно, когда фокус
-     * ушёл относительно жеста (в прошлый раз к моменту чтения фокуса
-     * уже не было — непонятно, когда именно). */
-    try {
-      document.addEventListener('focusin', function () { headDbg(-1, -1, 'focus'); });
-      document.addEventListener('focusout', function () { headDbg(-1, -1, 'blur'); });
-    } catch (x) {}
     /* Сторож (v176): пока фокус в поле, раз в 500мс принудительно
      * пересчитываем дотяжку. Лечит любое залипание (непришедшие события,
      * пропущенный touchend): хуже не делает — без изменений dedup

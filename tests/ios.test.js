@@ -1103,20 +1103,22 @@ describe('синк: триггеры и протокол', () => {
     assert.ok(rendSrc.includes('lastGoodOff') && rendSrc.includes('> 160'),
       'всплески offsetTop не отсекаются (шапка улетает в середине списка)');
     assert.ok(rendSrc.includes('pageTop') && rendSrc.includes('scrollHeight') &&
-      rendSrc.includes("'edge'"),
+      rendSrc.includes('vvt < 0 || vvt > maxTop'),
       'выезд вида за края не отсекается (резинка уносит шапку)');
     assert.ok(!rendSrc.includes('if (touchDown > 0) return'),
       'заморозка под пальцем осталась (шапка отстаёт весь скролл)');
-    assert.ok(rendSrc.includes('headDbg') && rendSrc.includes('external-brain-headlift-v1'),
-      'нет телеметрии дотяжки для разбора улётов');
+    assert.ok(!rendSrc.includes('headDbg') && !rendSrc.includes('external-brain-headlift-v1'),
+      'телеметрия дотяжки шапки не вычищена (v211)');
+    assert.ok(!rendSrc.includes('touchDown'),
+      'счётчик касаний для телеметрии не вычищен (v211)');
+    assert.ok(!diagSrc.includes('Шапка: ') &&
+      !/getItem\('external-brain-headlift-v1'\)/.test(diagSrc),
+      'диагностика всё ещё показывает телеметрию шапки (v211)');
+    assert.ok(diagSrc.includes("removeItem('external-brain-headlift-v1')"),
+      'мёртвый ключ телеметрии шапки не чистится');
     assert.ok(rendSrc.includes('headWatchStart') && rendSrc.includes('setInterval') &&
       rendSrc.includes(', 500)'),
       'нет сторожа пересчёта дотяжки (залипание нечем лечить)');
-    assert.ok(rendSrc.includes("headDbg(-1, -1, 'focus')") &&
-      rendSrc.includes("headDbg(-1, -1, 'blur')"),
-      'нет меток фокуса в телеметрии');
-    assert.ok(diagSrc.includes('external-brain-headlift-v1') && diagSrc.includes('Шапка: '),
-      'телеметрия дотяжки не видна в диагностике');
     var iTu = rendSrc.indexOf('function touchUp');
     assert.ok(iTu !== -1 && rendSrc.slice(iTu, iTu + 200).includes('syncHeaderLift()'),
       'отпускание пальца не пересчитывает дотяжку');
