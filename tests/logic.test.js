@@ -833,6 +833,25 @@ describe('планирование ФАЗА 0: модель и изоляция 
       false, 'повтор с planFired=0 — активный');
     assert.ok(p && q && r);
   });
+  it('doneShownList: корзина видит и сработавшие планы (v215)', () => {
+    const t = L.blankTasks();
+    mk(t, 'Живая', 1000, { id: 'a' });
+    mk(t, 'Готова', 1000, { id: 'b' });
+    L.completeTask(t, 'b', 2000);
+    mkPlan(t, 'План готов', '16.10.2026', 1000, 'p');
+    L.completeTask(t, 'p', 2000);
+    mkPlan(t, 'План сработал', '16.10.2026', 1000, 'f');
+    L.getTask(t, 'f').planFired = 777;
+    mkPlan(t, 'План ждёт', '16.10.2026', 1000, 'w');
+    mk(t, 'Удалена', 1000, { id: 'd' });
+    L.removeTask(t, 'd', 2000);
+    assert.deepEqual(L.doneShownList(t).map(function (x) { return x.id; }).sort(),
+      ['b', 'f', 'p'],
+      'убираем: выполненную, выполненный план и СРАБОТАВШИЙ; живая/ждущий/могила — нет');
+    assert.deepEqual(L.doneShownList(null), [], 'пусто не падает');
+    assert.deepEqual(L.doneShownList([]), []);
+    assert.ok(t.length >= 6, 'массив не тронут');
+  });
   it('planDueTasks: свой planFireHour, битый → 5', () => {
     const t = L.blankTasks();
     mkPlan(t, 'Сегодня', '16.10.2026', 1000, 'p');

@@ -359,6 +359,19 @@ function doneList(tasks) {
   return byStatus(tasks, 'done').sort(function (a, b) { return b.doneAt - a.doneAt; });
 }
 
+/* Корзина (v215): всё, что ПОКАЗАНО выполненным — вручную отмеченные
+ * задачи И сработавшие планы (planDoneShown). Планы на первой странице
+ * не видны (lineTasks их пропускает), но лежат в «Выполнено» на
+ * второй — без этого списка 🗑 со страницы 1 их не трогал вовсе. */
+function doneShownList(tasks) {
+  var out = [];
+  if (!tasks) return out;
+  for (var i = 0; i < tasks.length; i++) {
+    if (isAlive(tasks[i]) && planDoneShown(tasks[i])) out.push(tasks[i]);
+  }
+  return out;
+}
+
 function todoCount(tasks) {
   return todoList(tasks).filter(function (t) { return !!t.title && !isPlanned(t); }).length;
 }
@@ -1055,6 +1068,7 @@ var api = {
   isHiddenByCollapse: isHiddenByCollapse,
   todoList: todoList,
   doneList: doneList,
+  doneShownList: doneShownList,
   todoCount: todoCount,
   stats: stats,
   shareText: shareText,

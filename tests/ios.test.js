@@ -263,7 +263,7 @@ describe('логика вызывается с state.tasks', () => {
     }
   });
   it('стартовый экран: строки читаются из state.tasks', () => {
-    for (const fn of ['shareText', 'doneList']) {
+    for (const fn of ['shareText', 'doneShownList']) {
       assert.ok(appSrc.includes('L.' + fn + '(state.tasks'), 'нет ' + fn + '(state.tasks');
     }
     assert.ok(rendSrc.includes('L.stats(state.tasks'), 'нет stats(state.tasks');
@@ -324,20 +324,30 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(appSrc.includes('askClearDone'), 'нет удаления выполненных с подтверждением');
     assert.ok(rendSrc.includes('collapsed-kid'), 'нет скрытия вложенных');
   });
-  it('Корзина без выполненных не спрашивает подтверждение', () => {
+  it('Корзина без выполненных не спрашивает подтверждение и убирает планы (v215)', () => {
     var iC = appSrc.indexOf('function askClearDone()');
     assert.ok(iC !== -1, 'нет askClearDone');
     var cBody = appSrc.slice(iC, appSrc.indexOf('function wire()', iC));
-    assert.ok(cBody.includes('if (!L.doneList(state.tasks).length) return;'),
+    assert.ok(cBody.includes('L.doneShownList(state.tasks)'),
+      'корзина не по shown-выполненным (сработавший план не удалялся)');
+    assert.ok(/if \(!L\.doneShownList\(state\.tasks\)\.length\) return;/.test(cBody),
       'нет раннего выхода при пустой секции выполненных');
-    assert.ok(cBody.indexOf('doneList(state.tasks).length') < cBody.indexOf('askConfirm'),
+    assert.ok(/doneShownList\(state\.tasks\)\.forEach/.test(cBody),
+      'удаление идёт не по показанным выполненным');
+    assert.ok(cBody.indexOf('doneShownList(state.tasks).length') < cBody.indexOf('askConfirm'),
       'пустая корзина показывает окно подтверждения');
+    assert.ok(/hasPlan[\s\S]{0,200}задачи и планы/.test(cBody),
+      'окно не предупреждает, что уйдут и планы');
+    assert.ok(!/L\.doneList\(state\.tasks\)/.test(cBody),
+      'остались по doneList — сработавший план корзине не попадает');
   });
   it('свайп-выполнено и секция под полем ввода', () => {
     assert.ok(html.includes('doneflag') || appSrc.includes('doneflag'), 'нет флага выполнено');
     assert.ok(gestSrc.includes('swiped'), 'нет раскрытия свайпом');
     assert.ok(appSrc.includes('toggleDoneSlide'), 'нет завершения со слайдом');
-    assert.ok(appSrc.includes('L.doneList(state.tasks)'), 'нет секции выполненных');
+    assert.ok(rendSrc.includes('L.doneList(state.tasks)') &&
+      appSrc.includes('L.doneShownList(state.tasks)'),
+      'нет секции выполненных (render) или корзина не по показанным выполненным');
     assert.ok(rendSrc.includes('done-sep'), 'нет разделителя выполненных');
     assert.ok(rendSrc.includes('if (done.length)'),
       'разделитель пропадает, когда все выполненные спрятаны в свёрнутых группах');

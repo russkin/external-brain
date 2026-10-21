@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v214';
+  var APP_VERSION = 'v215';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1244,12 +1244,23 @@
   /* Удалить выполненные — с подтверждением (кнопка в шапке и в ⚙). */
   function askClearDone() {
     /* Выполненных нет — и корзина, и пункт меню ничего не удаляют:
-     * пустое окно подтверждения только мешает (тап по 🗑 в шапке). */
-    if (!L.doneList(state.tasks).length) return;
-    askConfirm('Удалить все выполненные задачи?').then(function (ok) {
+     * пустое окно подтверждения только мешает (тап по 🗑 в шапке).
+     * v215: сметаем всё, что показано выполненным — обычные задачи
+     * (первая страница) И сработавшие планы (вторая, секция
+     * «Выполнено»): раньше брался doneList (status === 'done') и
+     * сработавший план, показанный выполненным с v214, корзине не
+     * попадал. Дочки сработавших — независимые задачи, их не трогаем. */
+    if (!L.doneShownList(state.tasks).length) return;
+    var shown = L.doneShownList(state.tasks);
+    var hasPlan = false;
+    for (var i = 0; i < shown.length; i++) {
+      if (L.isPlanned(shown[i])) { hasPlan = true; break; }
+    }
+    askConfirm(hasPlan ? 'Удалить все выполненные задачи и планы?'
+      : 'Удалить все выполненные задачи?').then(function (ok) {
       if (!ok) return;
       mutate(function () {
-        L.doneList(state.tasks).forEach(function (t) { L.removeTask(state.tasks, t.id); });
+        L.doneShownList(state.tasks).forEach(function (t) { L.removeTask(state.tasks, t.id); });
       });
     });
   }
