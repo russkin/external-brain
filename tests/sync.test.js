@@ -300,3 +300,64 @@ describe('план едет через merge (ФАЗА 0)', () => {
     assert.equal(L.mergeTasks(l, same)[0].planDate, '05.10.2026', 'равные ts — локальный план не теряется');
   });
 });
+
+describe('повтор едет через синк (v213)', () => {
+  const full = () => ({
+    id: 'p', title: 'План', status: 'todo', estMin: 0, sumKids: true,
+    planDate: '17.10.2026', planFired: 0, indent: 0,
+    createdAt: 1, updatedAt: 3, doneAt: 0, ts: 3, deleted: false,
+    repeatEvery: 2, repeatUnit: 'weekday', repeatOrdinal: 3, repeatWeekday: 6
+  });
+  it('поля повтора выживают в normalizeTask (белый список)', () => {
+    const n = L.normalizeTask(full());
+    assert.equal(n.repeatEvery, 2, 'repeatEvery выкинут белым списком');
+    assert.equal(n.repeatUnit, 'weekday', 'repeatUnit выкинут');
+    assert.equal(n.repeatOrdinal, 3, 'repeatOrdinal выкинут');
+    assert.equal(n.repeatWeekday, 6, 'repeatWeekday выкинут');
+    /* Точно так же ведёт себя путь pull → normalizeTask (sync.js:165):
+     * иначе каждая перезагрузка устройства стирала бы повтор. */
+    const rt = L.normalizeTask(JSON.parse(JSON.stringify(n)));
+    assert.equal(L.getRepeat(rt).unit, 'weekday', 'JSON-раундтрип повтор не потерял');
+    assert.equal(rt.repeatEvery, 2);
+  });
+  it('без повтора полей нет — файл не пухнет', () => {
+    const plain = full();
+    delete plain.repeatEvery; delete plain.repeatUnit;
+    delete plain.repeatOrdinal; delete plain.repeatWeekday;
+    const n = L.normalizeTask(plain);
+    assert.equal('repeatEvery' in n, false, 'пустое поле протекло в normalized');
+    assert.equal(L.getRepeat(n), null, 'getRepeat должен вернуть null, а не фантом');
+  });
+  it('битый повтор (нет every/неверный unit) не даёт фантомного повтора', () => {
+    const bad = full();
+    bad.repeatEvery = 0;
+    assert.equal(L.getRepeat(bad), null, 'repeatEvery=0 — не повтор');
+    bad.repeatEvery = 2; bad.repeatUnit = 'минуты';
+    assert.equal(L.getRepeat(bad), null, 'неизвестный unit — не повтор');
+    /* normalize не должен чинить битое в валидное: чужой мусор из
+     * старой версии превращается в отсутствие повтора, а не в «каждый
+     * день» (молча план перестал бы повторяться неверно). */
+    const n = L.normalizeTask(bad);
+    assert.equal(L.getRepeat(n), null, 'normalize не выдумал повтор из мусора');
+  });
+  it('mergeTasks: свежая с повтором побеждает и несёт повтор, локальная держит', () => {
+    const remoteNew = full(); // ts: 3
+    const localOld = full();  // ts: 2, без повтора
+    delete localOld.repeatEvery; delete localOld.repeatUnit;
+    delete localOld.repeatOrdinal; delete localOld.repeatWeekday;
+    localOld.ts = 2; localOld.updatedAt = 2;
+    assert.equal(L.mergeTasks([localOld], [remoteNew])[0].repeatUnit, 'weekday',
+      'свежий снимок с сервера повтор унёс');
+    const localNew = full(); // ts: 5, повтор изменился
+    localNew.repeatUnit = 'week'; localNew.repeatEvery = 5;
+    const remoteStale = full(); // ts: 3
+    const m = L.mergeTasks([localNew], [remoteStale]);
+    assert.equal(m[0].repeatUnit, 'week', 'равных/старых ts — локальная версия повтора');
+    assert.equal(m[0].repeatEvery, 5);
+    /* Пустые (ts=0) не затирают: отдельная задача без ts и повтора
+     * не должна сносить чужой повтор (правило merge «пустое не топит»). */
+    const empty = [{ id: 'p', title: '', ts: 0, createdAt: 1, updatedAt: 1 }];
+    assert.equal(L.mergeTasks([full()], empty)[0].repeatUnit, 'weekday',
+      'ts=0 стёр повтор');
+  });
+});

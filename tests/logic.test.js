@@ -789,6 +789,18 @@ describe('планирование ФАЗА 0: модель и изоляция 
     L.removeTask(t, 'd', 2000);
     assert.deepEqual(ids(L.planDueTasks(t, {}, localMs(2026, 10, 16, 12, 0))), ['w']);
   });
+  it('planDueTasks: выполненный план не срабатывает (v213)', () => {
+    const t = L.blankTasks();
+    const p = mkPlan(t, 'Готов', '16.10.2026', 1000, 'p');
+    L.completeTask(t, 'p', 2000);
+    assert.equal(L.getTask(t, 'p').status, 'done');
+    assert.deepEqual(L.planDueTasks(t, {}, localMs(2026, 10, 16, 12, 0)), [],
+      'done-план не в очереди срабатывания');
+    L.reopenTask(t, 'p', 3000);
+    assert.deepEqual(ids(L.planDueTasks(t, {}, localMs(2026, 10, 16, 12, 0))), ['p'],
+      '↩ Не выполнено — снова ждёт срока');
+    assert.ok(p, 'mkPlan вернул задачу');
+  });
   it('planDueTasks: свой planFireHour, битый → 5', () => {
     const t = L.blankTasks();
     mkPlan(t, 'Сегодня', '16.10.2026', 1000, 'p');
@@ -800,6 +812,143 @@ describe('планирование ФАЗА 0: модель и изоляция 
     assert.equal(L.normFireHour(0), 0);
     assert.equal(L.normFireHour(23), 23);
     assert.deepEqual(ids(L.planDueTasks(t, { planFireHour: 'мусор' }, localMs(2026, 10, 16, 5, 0))), ['p']);
+  });
+  it('repeat: нормализация и getRepeat (v213)', () => {
+    assert.equal(L.normRepeatEvery(5), 5);
+    assert.equal(L.normRepeatEvery(0), 0, '0 — повтора нет');
+    assert.equal(L.normRepeatEvery(150), 99, 'потолок 99');
+    assert.equal(L.normRepeatEvery('x'), 0);
+    assert.equal(L.normRepeatUnit('week'), 'week');
+    assert.equal(L.normRepeatUnit('bogus'), '');
+    assert.equal(L.normRepeatUnit(undefined), '');
+    assert.equal(L.normRepeatOrdinal(9), 5, '5 = последняя');
+    assert.equal(L.normRepeatOrdinal(0), 1);
+    assert.equal(L.normRepeatWeekday(9), 0);
+    assert.equal(L.normRepeatDay(40), 31);
+    assert.equal(L.normRepeatObj({ every: 2, unit: 'week' }).every, 2);
+    assert.equal(L.normRepeatObj({ every: 0, unit: 'week' }), null, 'без every — нет');
+    assert.equal(L.normRepeatObj({ every: 2, unit: 'bogus' }), null, 'без unit — нет');
+    assert.equal(L.normRepeatObj(null), null);
+    assert.equal(L.getRepeat({}), null, 'без полей — null');
+    assert.equal(L.getRepeat({ repeatEvery: 2, repeatUnit: 'week' }).unit, 'week');
+  });
+  it('repeat: nextPlanDate день/неделя — фиксированный сдвиг', () => {
+    assert.equal(L.nextPlanDate('16.10.2026', { every: 5, unit: 'day' }, localMs(2026, 10, 16, 12, 0)), '21.10.2026');
+    assert.equal(L.nextPlanDate('16.10.2026', { every: 2, unit: 'week' }, localMs(2026, 10, 16, 12, 0)), '30.10.2026');
+    assert.equal(L.nextPlanDate('16.10.2026', { every: 1, unit: 'week' }, localMs(2026, 10, 16, 12, 0)), '23.10.2026');
+    assert.equal(L.nextPlanDate('', { every: 1, unit: 'day' }, Date.now()), '', 'без даты — пусто');
+    assert.equal(L.nextPlanDate('16.10.2026', null, Date.now()), '', 'без повтора — пусто');
+  });
+  it('repeat: месяц — якорный день без дрейфа 31-го', () => {
+    const m31 = { every: 1, unit: 'month', day: 31 };
+    assert.equal(L.nextPlanDate('31.01.2026', m31, localMs(2026, 1, 31, 12, 0)), '28.02.2026', 'февраль клампит');
+    assert.equal(L.nextPlanDate('28.02.2026', m31, localMs(2026, 2, 28, 12, 0)), '31.03.2026', 'без дрейфа — якорь 31');
+    assert.equal(L.nextPlanDate('31.03.2026', m31, localMs(2026, 3, 31, 12, 0)), '30.04.2026', 'апрель 30 дней');
+    const m15 = { every: 2, unit: 'month', day: 15 };
+    assert.equal(L.nextPlanDate('15.01.2026', m15, localMs(2026, 1, 15, 12, 0)), '15.03.2026', 'каждые 2 месяца');
+  });
+  it('repeat: год — 29.02 в невисокосный → 28, в високосный → 29', () => {
+    const y = { every: 1, unit: 'year', day: 29 };
+    assert.equal(L.nextPlanDate('29.02.2024', y, localMs(2024, 2, 29, 12, 0)), '28.02.2025', '2025 не високосный');
+    assert.equal(L.nextPlanDate('28.02.2027', y, localMs(2027, 2, 28, 12, 0)), '29.02.2028', '2028 високосный → 29');
+    const y2 = { every: 2, unit: 'year', day: 1 };
+    assert.equal(L.nextPlanDate('01.01.2026', y2, localMs(2026, 1, 1, 12, 0)), '01.01.2028', 'каждые 2 года');
+  });
+  it('repeat: weekday — 3-я суббота / 1-я суббота месяца', () => {
+    const w3 = { every: 1, unit: 'weekday', ordinal: 3, weekday: 6 };
+    assert.equal(L.nextPlanDate('17.10.2026', w3, localMs(2026, 10, 17, 12, 0)), '21.11.2026');
+    const w1 = { every: 1, unit: 'weekday', ordinal: 1, weekday: 6 };
+    assert.equal(L.nextPlanDate('03.10.2026', w1, localMs(2026, 10, 3, 12, 0)), '07.11.2026');
+    const wf = { every: 1, unit: 'weekday', ordinal: 5, weekday: 5 };
+    assert.equal(L.nextPlanDate('30.10.2026', wf, localMs(2026, 10, 30, 12, 0)), '27.11.2026', 'последняя пятница ноя');
+    assert.equal(L.weekdayOccurrence(2026, 10, 6, 3), 17, '3-я сбта 2026-10');
+    assert.equal(L.weekdayOccurrence(2026, 10, 1, 1), 5, '1-й понедельник 2026-10');
+  });
+  it('repeat: nextPlanDate пропускает до будущего (Вариант А)', () => {
+    const wk = { every: 1, unit: 'week' };
+    // 25.09 + 1н → 02.10, 09.10, 16.10 (все <= 16.10) → 23.10
+    assert.equal(L.nextPlanDate('25.09.2026', wk, localMs(2026, 10, 16, 12, 0)), '23.10.2026',
+      'пропущенные за простой не плодят — ближайшая будущая');
+  });
+  it('repeat: snapToWeekdayPattern — подгибка даты к паттерну', () => {
+    const w3 = { every: 1, unit: 'weekday', ordinal: 3, weekday: 6 };
+    // 10.10.2026 (до 3-й сбты 17.10) → 17.10.2026
+    assert.equal(L.snapToWeekdayPattern('10.10.2026', w3), '17.10.2026');
+    // уже 3-я сбта → остаётся
+    assert.equal(L.snapToWeekdayPattern('17.10.2026', w3), '17.10.2026');
+    // после 3-й сбты → следующий месяц (21.11)
+    assert.equal(L.snapToWeekdayPattern('25.10.2026', w3), '21.11.2026');
+  });
+  it('repeat: repeatLabel — склонения и согласование weekday', () => {
+    assert.equal(L.repeatLabel({ every: 1, unit: 'day' }), 'каждый день');
+    assert.equal(L.repeatLabel({ every: 2, unit: 'day' }), 'каждые 2 дня');
+    assert.equal(L.repeatLabel({ every: 5, unit: 'day' }), 'каждые 5 дней');
+    assert.equal(L.repeatLabel({ every: 11, unit: 'day' }), 'каждые 11 дней');
+    assert.equal(L.repeatLabel({ every: 1, unit: 'week' }), 'каждую неделю');
+    assert.equal(L.repeatLabel({ every: 2, unit: 'week' }), 'каждые 2 недели');
+    assert.equal(L.repeatLabel({ every: 1, unit: 'month' }), 'каждый месяц');
+    assert.equal(L.repeatLabel({ every: 3, unit: 'month' }), 'каждые 3 месяца');
+    assert.equal(L.repeatLabel({ every: 1, unit: 'year' }), 'каждый год');
+    assert.equal(L.repeatLabel({ every: 2, unit: 'year' }), 'каждые 2 года');
+    assert.equal(L.repeatLabel({ every: 1, unit: 'weekday', ordinal: 3, weekday: 6 }), '3-я суббота месяца');
+    assert.equal(L.repeatLabel({ every: 1, unit: 'weekday', ordinal: 1, weekday: 1 }), '1-й понедельник месяца', 'муж. род → «-й»');
+    assert.equal(L.repeatLabel({ every: 1, unit: 'weekday', ordinal: 1, weekday: 0 }), '1-е воскресенье месяца', 'сред. род → «-е»');
+    assert.equal(L.repeatLabel({ every: 1, unit: 'weekday', ordinal: 5, weekday: 5 }), 'последняя пятница месяца');
+    assert.equal(L.repeatLabel({ every: 2, unit: 'weekday', ordinal: 3, weekday: 6 }), '3-я суббота месяца · раз в 2 мес.');
+    assert.equal(L.repeatLabel(null), '');
+  });
+  it('repeat: applyRepeatToTask — якорь, weekday-подгибка, снятие', () => {
+    const t = L.blankTasks();
+    const p = mkPlan(t, 'П', '31.01.2026', 1000, 'p');
+    L.applyRepeatToTask(p, { every: 1, unit: 'month' }, 2000);
+    assert.equal(p.repeatUnit, 'month', 'unit записан');
+    assert.equal(p.repeatDay, 31, 'якорный день из даты');
+    L.applyRepeatToTask(p, { every: 1, unit: 'weekday', ordinal: 3, weekday: 6 }, 3000);
+    assert.equal(p.repeatUnit, 'weekday');
+    assert.equal(p.repeatOrdinal, 3, 'ordinal записан');
+    // 31.01 — 5-я сбта; первая «3-я сбта» НЕ РАНЬШЕ неё — 21.02.2026
+    assert.equal(p.planDate, '21.02.2026', 'дата подтянута вперёд к паттерну');
+    L.applyRepeatToTask(p, null, 4000);
+    assert.equal(p.repeatUnit, undefined, 'null снимает повтор');
+    assert.equal(p.repeatDay, undefined, 'поля очищены');
+  });
+  it('repeat: applyRepeatToTask — сработавший с прошедшей датой подвигается', () => {
+    const t = L.blankTasks();
+    const p = mkPlan(t, 'П', '10.10.2026', 1000, 'p');
+    p.planFired = 555; // уже сработал
+    L.applyRepeatToTask(p, { every: 1, unit: 'week' }, localMs(2026, 10, 16, 12, 0));
+    assert.equal(p.planDate, '17.10.2026', 'подвинул: 10.10+1н=17.10 > 16.10 (сегодня)');
+    assert.equal(p.planFired, 0, 'перевооружён');
+  });
+  it('repeat: normalizeTask/cloneTask не теряют повтор', () => {
+    const t = L.blankTasks();
+    const p = mkPlan(t, 'П', '17.10.2026', 1000, 'p');
+    L.applyRepeatToTask(p, { every: 2, unit: 'weekday', ordinal: 3, weekday: 6 }, 2000);
+    const n = L.normalizeTask(p);
+    assert.equal(n.repeatEvery, 2, 'normalize сохранил');
+    assert.equal(n.repeatUnit, 'weekday');
+    assert.equal(n.repeatOrdinal, 3);
+    const c = L.cloneTask(p);
+    assert.equal(c.repeatEvery, 2, 'clone сохранил');
+    assert.equal(c.repeatWeekday, 6);
+    const plain = L.normalizeTask({ id: 'x', title: 'Обычная', status: 'todo' });
+    assert.equal(plain.repeatEvery, undefined, 'без повтора полей нет (файл не пухнет)');
+    assert.equal(L.getRepeat(plain), null);
+  });
+  it('repeat: clarifyTask patch.repeat выставляет и снимает', () => {
+    const t = L.blankTasks();
+    mkPlan(t, 'П', '17.10.2026', 1000, 'p');
+    L.clarifyTask(t, 'p', { repeat: { every: 3, unit: 'day' } }, 2000);
+    let task = L.getTask(t, 'p');
+    assert.equal(task.repeatEvery, 3);
+    assert.equal(task.repeatUnit, 'day');
+    L.clarifyTask(t, 'p', { repeat: { every: 2, unit: 'year' } }, 3000);
+    task = L.getTask(t, 'p');
+    assert.equal(task.repeatUnit, 'year', 'смена unit');
+    assert.equal(task.repeatDay, 17, 'якорный день 17 из даты');
+    L.clarifyTask(t, 'p', { repeat: null }, 4000);
+    task = L.getTask(t, 'p');
+    assert.equal(task.repeatUnit, undefined, 'null снимает');
   });
   it('planDueTasks: чистый (не мутирует), не-массив — пусто', () => {
     const t = L.blankTasks();

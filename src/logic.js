@@ -116,6 +116,10 @@ function clarifyTask(tasks, id, patch, nowMs) {
       task.planFired = 0;
     }
   }
+  /* Повтор (v213): patch.repeat = объект (выставить/пересчитать) | null
+   * (снять). Идёт ПОСЛЕ planDate — weekday-подгибка и якорный день
+   * считают от уже записанной даты; сама подгибка сбрасывает planFired. */
+  if (patch.repeat !== undefined) applyRepeatToTask(task, patch.repeat, now);
   task.updatedAt = now;
   task.ts = now;
   return task;
@@ -507,6 +511,9 @@ function createPlan(tasks, title, planDate, nowMs, opts) {
     ts: now,
     deleted: false
   };
+  /* Повтор (v213): opts.repeat = {every, unit, ...} (подгибка weekday/
+   * якорный день идут внутри applyRepeatToTask). */
+  if (opts.repeat !== undefined) applyRepeatToTask(task, opts.repeat, now);
   tasks.push(task);
   return task;
 }
@@ -519,6 +526,257 @@ function planChipText(t) {
   var pd = normPlanDate(t.planDate);
   if (!pd) return '';
   return toInt(t.planFired, 0) !== 0 ? pd + ' ✓' : pd;
+}
+
+/* ===================== Повторение планов (v213) =====================
+ * Модель: repeatEvery 1..99 + repeatUnit ('day'|'week'|'month'|'year'|
+ * 'weekday') + для month/year — repeatDay (якорный день, без дрейфа
+ * 31-го) + для weekday — repeatOrdinal (1..4, 5=последняя) и
+ * repeatWeekday (0=Вс..6=Сб, как Date.getDay). Поля пишутся ТОЛЬКО когда
+ * повтор есть (файл не пухнет у невозвращающихся задач), поэтому идут в
+ * белый список normalizeTask/cloneTask/clarifyTask. */
+var REPEAT_UNITS = { day: 1, week: 1, month: 1, year: 1, weekday: 1 };
+
+function normRepeatEvery(v) {
+  var n = toInt(v, 0);
+  if (n < 1) return 0;
+  if (n > 99) return 99;
+  return n;
+}
+function normRepeatUnit(v) {
+  var s = String(v == null ? '' : v);
+  return REPEAT_UNITS[s] ? s : '';
+}
+function normRepeatOrdinal(v) {
+  var n = toInt(v, 1);
+  if (n < 1) return 1;
+  if (n > 5) return 5;
+  return n;
+}
+function normRepeatWeekday(v) {
+  var n = toInt(v, 0);
+  if (n < 0 || n > 6) return 0;
+  return n;
+}
+function normRepeatDay(v) {
+  var n = toInt(v, 0);
+  if (n < 1) return 0;
+  if (n > 31) return 31;
+  return n;
+}
+
+/* Нормализация объекта повтора. Невалидно (нет every или unit) → null. */
+function normRepeatObj(r) {
+  if (!r || typeof r !== 'object') return null;
+  var every = normRepeatEvery(r.every);
+  var unit = normRepeatUnit(r.unit);
+  if (!every || !unit) return null;
+  var o = { every: every, unit: unit, ordinal: 1, weekday: 0, day: 0 };
+  if (unit === 'weekday') {
+    o.ordinal = normRepeatOrdinal(r.ordinal);
+    o.weekday = normRepeatWeekday(r.weekday);
+  } else if (unit === 'month' || unit === 'year') {
+    o.day = normRepeatDay(r.day);
+  }
+  return o;
+}
+
+/* Повтор задачи или null (повтора нет / битый). */
+function getRepeat(t) {
+  if (!t) return null;
+  return normRepeatObj({
+    every: t.repeatEvery, unit: t.repeatUnit,
+    ordinal: t.repeatOrdinal, weekday: t.repeatWeekday, day: t.repeatDay
+  });
+}
+
+/* Даты чистыми компонентами (без TZ-сюрпризов): 'ДД.ММ.ГГГГ' ↔ дней. */
+function ymdParts(s) {
+  var p = String(s == null ? '' : s).split('.');
+  return { y: parseInt(p[2], 10), m: parseInt(p[1], 10), d: parseInt(p[0], 10) };
+}
+function ymdStr(o) {
+  function p(n) { return (n < 10 ? '0' : '') + n; }
+  return p(o.d) + '.' + p(o.m) + '.' + o.y;
+}
+function daysInMonth(y, m) { return new Date(Date.UTC(y, m, 0)).getUTCDate(); }
+function ymdToDays(o) { return Math.floor(Date.UTC(o.y, o.m - 1, o.d) / 86400000); }
+function strToDays(s) { var o = ymdParts(s); return o.y ? ymdToDays(o) : 0; }
+function daysToYmd(n) {
+  var dt = new Date(n * 86400000);
+  return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+}
+function msToYmd(ms) {
+  var d = new Date(ms);
+  return { y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() };
+}
+
+/* День месяца для k-го (1..4) или последнего (5) заданного дня недели. */
+function weekdayOccurrence(y, m, weekday, ordinal) {
+  var first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
+  var firstOcc = 1 + ((weekday - first + 7) % 7);
+  var dim = daysInMonth(y, m);
+  if (ordinal >= 5) return firstOcc + 7 * Math.floor((dim - firstOcc) / 7);
+  var day = firstOcc + (ordinal - 1) * 7;
+  return day > dim ? 0 : day;
+}
+
+/* Один шаг повтора от текущей даты. */
+function addRepeatStep(dateStr, r) {
+  var o = ymdParts(dateStr);
+  var n = r.every;
+  if (r.unit === 'day') return ymdStr(daysToYmd(ymdToDays(o) + n));
+  if (r.unit === 'week') return ymdStr(daysToYmd(ymdToDays(o) + n * 7));
+  if (r.unit === 'month') {
+    var tm = o.y * 12 + (o.m - 1) + n;
+    var y = Math.floor(tm / 12), m = tm % 12 + 1;
+    var d = r.day || o.d;
+    if (d > daysInMonth(y, m)) d = daysInMonth(y, m);
+    return ymdStr({ y: y, m: m, d: d });
+  }
+  if (r.unit === 'year') {
+    var y2 = o.y + n;
+    var d2 = r.day || o.d;
+    if (d2 > daysInMonth(y2, o.m)) d2 = daysInMonth(y2, o.m);
+    return ymdStr({ y: y2, m: o.m, d: d2 });
+  }
+  if (r.unit === 'weekday') {
+    var tm2 = o.y * 12 + (o.m - 1) + n;
+    var y3 = Math.floor(tm2 / 12), m3 = tm2 % 12 + 1;
+    var day = weekdayOccurrence(y3, m3, r.weekday, r.ordinal);
+    if (!day) return dateStr;
+    return ymdStr({ y: y3, m: m3, d: day });
+  }
+  return dateStr;
+}
+
+/* Следующая дата строго ПОСЛЕ локального дня nowMs (Вариант А: пропущенные
+ * за простой не плодят дочек — прыжок на ближайшую будущую). Пусто на
+ * битых входе. */
+function nextPlanDate(dateStr, r, nowMs) {
+  if (!r || !dateStr) return '';
+  var today = ymdToDays(msToYmd(toInt(nowMs, Date.now())));
+  var cur = dateStr, guard = 0;
+  while (guard++ < 100000) {
+    cur = addRepeatStep(cur, r);
+    var o = ymdParts(cur);
+    if (!o.y) return '';
+    if (ymdToDays(o) > today) return cur;
+  }
+  return cur;
+}
+
+/* Первое вхождение weekday-паттерна НЕ РАНЬШЕ dateStr (подгибка даты). */
+function snapToWeekdayPattern(dateStr, r) {
+  var o = ymdParts(dateStr);
+  if (!o.y || !r) return dateStr;
+  var from = ymdToDays(o), y = o.y, m = o.m;
+  for (var i = 0; i < 1200; i++) {
+    var day = weekdayOccurrence(y, m, r.weekday, r.ordinal);
+    if (day && ymdToDays({ y: y, m: m, d: day }) >= from) return ymdStr({ y: y, m: m, d: day });
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+  return dateStr;
+}
+
+/* Склонение числительного: 1 день / 2 дня / 5 дней. */
+function plural(n, one, few, many) {
+  var a = n % 10, b = n % 100;
+  if (a === 1 && b !== 11) return one;
+  if (a >= 2 && a <= 4 && (b < 10 || b >= 20)) return few;
+  return many;
+}
+
+/* Дни недели: имя (им. п.) + род (м/ж/с) для согласования порядкового. */
+var WD = [
+  { n: 'воскресенье', g: 'n' }, { n: 'понедельник', g: 'm' },
+  { n: 'вторник', g: 'm' }, { n: 'среда', g: 'f' },
+  { n: 'четверг', g: 'm' }, { n: 'пятница', g: 'f' },
+  { n: 'суббота', g: 'f' }
+];
+
+/* Понятная метка повтора: «каждый день», «каждые 5 дней», «3-я суббота
+ * месяца», «последний вторник месяца». */
+function repeatLabel(r) {
+  r = normRepeatObj(r);
+  if (!r) return '';
+  var n = r.every;
+  if (r.unit === 'day') return n === 1 ? 'каждый день'
+    : 'каждые ' + n + ' ' + plural(n, 'день', 'дня', 'дней');
+  if (r.unit === 'week') return n === 1 ? 'каждую неделю'
+    : 'каждые ' + n + ' ' + plural(n, 'неделю', 'недели', 'недель');
+  if (r.unit === 'month') return n === 1 ? 'каждый месяц'
+    : 'каждые ' + n + ' ' + plural(n, 'месяц', 'месяца', 'месяцев');
+  if (r.unit === 'year') return n === 1 ? 'каждый год'
+    : 'каждые ' + n + ' ' + plural(n, 'год', 'года', 'лет');
+  /* weekday */
+  var wd = WD[r.weekday] || WD[0];
+  var suf = r.ordinal >= 5 ? (wd.g === 'f' ? 'последняя' : wd.g === 'n' ? 'последнее' : 'последний')
+    : r.ordinal + '-' + (wd.g === 'f' ? 'я' : wd.g === 'n' ? 'е' : 'й');
+  var base = suf + ' ' + wd.n + ' месяца';
+  return n === 1 ? base : base + ' · раз в ' + n + ' мес.';
+}
+
+/* Копия повтора в задачу-приёмник (нормализованный белый список). */
+function copyRepeat(src, dst) {
+  var r = getRepeat(src);
+  if (!r) return;
+  dst.repeatEvery = r.every;
+  dst.repeatUnit = r.unit;
+  if (r.unit === 'weekday') {
+    dst.repeatOrdinal = r.ordinal;
+    dst.repeatWeekday = r.weekday;
+  } else if (r.unit === 'month' || r.unit === 'year') {
+    dst.repeatDay = r.day;
+  }
+}
+
+function clearRepeat(task) {
+  delete task.repeatEvery;
+  delete task.repeatUnit;
+  delete task.repeatOrdinal;
+  delete task.repeatWeekday;
+  delete task.repeatDay;
+}
+
+/* Применить patch.repeat к задаче: weekday подгибает дату к паттерну,
+ * month/year проставляют якорный день из даты, уже сработавший план с
+ * прошедшей датой подвигается вперёд (иначе повтор «повисит» навсегда).
+ * rp: объект → выставить; null/0/пустое → снять. */
+function applyRepeatToTask(task, rp, nowMs) {
+  if (rp === undefined) return;
+  var now = toInt(nowMs, Date.now());
+  if (!rp || typeof rp !== 'object') { clearRepeat(task); return; }
+  var r = normRepeatObj(rp);
+  if (!r) { clearRepeat(task); return; }
+  var pd = normPlanDate(task.planDate);
+  if (r.unit === 'weekday' && pd) {
+    var snapped = snapToWeekdayPattern(pd, r);
+    if (snapped && snapped !== pd) { task.planDate = snapped; task.planFired = 0; pd = snapped; }
+  }
+  if ((r.unit === 'month' || r.unit === 'year') && pd) {
+    r.day = parseInt(pd.split('.')[0], 10) || 0;
+  }
+  task.repeatEvery = r.every;
+  task.repeatUnit = r.unit;
+  if (r.unit === 'weekday') {
+    task.repeatOrdinal = r.ordinal;
+    task.repeatWeekday = r.weekday;
+    delete task.repeatDay;
+  } else if (r.unit === 'month' || r.unit === 'year') {
+    task.repeatDay = r.day;
+    delete task.repeatOrdinal;
+    delete task.repeatWeekday;
+  } else {
+    delete task.repeatDay;
+    delete task.repeatOrdinal;
+    delete task.repeatWeekday;
+  }
+  if (task.planFired && pd && strToDays(pd) <= ymdToDays(msToYmd(now))) {
+    var np = nextPlanDate(pd, r, now);
+    if (np) { task.planDate = np; task.planFired = 0; }
+  }
 }
 
 /* Чистый детект сроков (без побочек — само срабатывание НЕ здесь):
@@ -540,6 +798,11 @@ function planDueTasks(tasks, settings, nowMs) {
     if (!t || t.deleted) continue;
     var pd = normPlanDate(t.planDate);
     if (!pd) continue;
+    /* Выполненный план не срабатывает и не создаёт живых задач
+     * (v213, требование хозяина 20.10.2026): done-строка — она уже
+     * закрыта, дочка из неё не нужна. Возврат ↩ (status todo) снова
+     * ставит план в очередь. */
+    if (t.status === 'done') continue;
     if (toInt(t.planFired, 0) !== 0) continue;
     var p = pd.split('.');
     var py = parseInt(p[2], 10), pm = parseInt(p[1], 10) - 1, pdd = parseInt(p[0], 10);
@@ -621,6 +884,7 @@ function normalizeTask(t) {
    * с deepEqual целы). Старые версии флаг вычищают — их сжатые могилы
    * считаются полными, лечится повторным сжатием на новой версии. */
   if (t.min === true) n.min = true;
+  copyRepeat(t, n);
   return n;
 }
 
@@ -684,6 +948,7 @@ function cloneTask(t) {
     updatedAt: t.updatedAt, doneAt: t.doneAt, ts: t.ts || 0, deleted: !!t.deleted
   };
   if (t.min === true) c.min = true;
+  copyRepeat(t, c);
   return c;
 }
 
@@ -772,6 +1037,18 @@ var api = {
   tokenWarnLevel: tokenWarnLevel,
   normPlanDate: normPlanDate,
   normFireHour: normFireHour,
+  normRepeatEvery: normRepeatEvery,
+  normRepeatUnit: normRepeatUnit,
+  normRepeatOrdinal: normRepeatOrdinal,
+  normRepeatWeekday: normRepeatWeekday,
+  normRepeatDay: normRepeatDay,
+  normRepeatObj: normRepeatObj,
+  getRepeat: getRepeat,
+  applyRepeatToTask: applyRepeatToTask,
+  nextPlanDate: nextPlanDate,
+  snapToWeekdayPattern: snapToWeekdayPattern,
+  weekdayOccurrence: weekdayOccurrence,
+  repeatLabel: repeatLabel,
   isPlanned: isPlanned,
   createPlan: createPlan,
   planChipText: planChipText,
@@ -780,6 +1057,7 @@ var api = {
   planChildIndent: planChildIndent,
   normalizeTask: normalizeTask,
   normalizeTasks: normalizeTasks,
+  cloneTask: cloneTask,
   restoreWithTombstones: restoreWithTombstones,
   mergeTask: mergeTask,
   mergeTasks: mergeTasks,

@@ -1412,14 +1412,69 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(html.includes('#modalInput.err'), 'нет красной рамки битой даты в модалке');
     var iD = appSrc.indexOf('function openPlanDate');
     var dBlock = appSrc.slice(iD, appSrc.indexOf('function save()', iD));
-    assert.ok(/L\.clarifyTask\(state\.tasks, taskId, \{ planDate: nd \}\)/.test(dBlock),
+    assert.ok(/L\.clarifyTask\(state\.tasks, taskId, patch\)/.test(dBlock),
       'дата не пишется через clarifyTask (planFired не сбросится)');
+    /* Патч (v213): дата и повтор идут вместе — иначе applyRepeatToTask
+     * не пересчитает якорный день у месяца и не подгонит weekday. */
+    assert.ok(/if \(r\.date !== cur\) patch\.planDate = r\.date;/.test(dBlock) &&
+      /patch\.repeat = r\.repeat;/.test(dBlock) &&
+      /patch\.repeat = null;/.test(dBlock),
+      'патч без даты/повтора — якорь и weekday-подгибка не считаются');
     assert.ok(/planGateKey = '';/.test(dBlock), 'смена даты не сбрасывает гейт (FR-98)');
     assert.ok(dBlock.includes("lastAction = 'дата плана изменена'"),
       'нет отметки в строке статуса');
-    assert.ok(/if \(!nd \|\| !state\) return;/.test(dBlock) &&
-      /if \(nd === cur\) return;/.test(dBlock),
-      'отмена/тот же день пишут мёртвую мутацию');
+    assert.ok(/if \(!r \|\| !state\) return;/.test(dBlock) &&
+      /patch\.planDate === undefined && patch\.repeat === undefined/.test(dBlock),
+      'отмена/ничего не поменяли пишут мёртвую мутацию');
+  });
+  it('повтор: форма создания — чекбокс, шаг, единица, weekday-ряд (v213)', () => {
+    assert.ok(html.includes('id="planRepeatChk"') && html.includes('id="planRepeatEvery"'),
+      'нет строки повтора в форме');
+    assert.ok(/id="planRepeatUnit"[\s\S]{0,500}value="weekday"/.test(html),
+      'в единицах нет «день недели в месяце»');
+    assert.ok(html.includes('id="planRepeatOrdinal"') && html.includes('id="planRepeatWeekday"'),
+      'нет ряда «N-я суббота»');
+    assert.ok(/id="planRepeatWd"[\s\S]{0,1600}id="planRepeatHint"/.test(html),
+      'нет подсказки «раз в N мес.» (weekday: N — интервал месяцев)');
+    /* Фабрика: один комплект логики на два id-префикса. */
+    assert.ok(/function makeRepeatControls\(prefix\)/.test(appSrc) &&
+      appSrc.includes("makeRepeatControls('planRepeat')") &&
+      appSrc.includes("makeRepeatControls('dateRepeat')"),
+      'контролы повтора не собраны фабрикой на два префикса');
+    assert.ok(/return L\.normRepeatObj\(rp\);/.test(appSrc),
+      'get() не нормализует повтор той же функцией, что store/sync');
+    assert.ok(/repeat: rp \}\)/.test(appSrc) || /\{ repeat: rp \}/.test(appSrc),
+      'createPlan не получает повтор из формы');
+    assert.ok(/formRepeatCtl\.set\(null\)/.test(appSrc),
+      'после создания повтор не сброшен (следующий план унаследует)');
+  });
+  it('повтор: модалка даты — блок только в ней, предзаполнение, снятие (v213)', () => {
+    assert.ok(html.includes('id="planDateRepeatBox"'), 'нет блока повтора в модалке');
+    assert.ok(html.includes('id="dateRepeatChk"') && html.includes('id="dateRepeatUnit"'),
+      'второй комплект контролов отсутствует');
+    var iA = appSrc.indexOf('function askPlanDate');
+    var aBlock = appSrc.slice(iA, appSrc.indexOf('function openPlanDate', iA));
+    assert.ok(/repBox\.style\.display = 'block'/.test(aBlock) &&
+      /dateRepeatCtl\.set\(repeatObj\)/.test(aBlock),
+      'окно не показывает/не заполняет повтор');
+    assert.ok(/repBox\.style\.display = '';/.test(aBlock),
+      'при закрытии блок повтора не спрятан (следующий askText унаследует)');
+    assert.ok(/done\(\{ date: nd, repeat:/.test(aBlock), 'OK не отдаёт повтор');
+    assert.ok(/askPlanDate\(cur, curRep\)/.test(appSrc), 'openPlanDate не отдаёт текущий повтор');
+    assert.ok(/dateRepeatCtl\.set\(null\)/.test(aBlock),
+      'закрытие не обнуляет контролы (предзаполнение следующего окна)');
+  });
+  it('повтор: строка плана — бейдж ↻ из repeatLabel (v213)', () => {
+    assert.ok(/repeat: L\.getRepeat\(t\)/.test(rendSrc), 'renderPlanLines не передаёт повтор');
+    assert.ok(/opts\.repeat/.test(rendSrc) && /repeatbadge/.test(rendSrc),
+      'нет метки повтора в строке плана');
+    assert.ok(/'↻ ' \+ rlab/.test(rendSrc), 'бейдж без ↻ или без repeatLabel');
+    assert.ok(/body\.insertBefore\(rchip, inp\)/.test(rendSrc),
+      'бейдж не в потоке .tbody (абсолют перекрыл бы поле)');
+    assert.ok(/\.repeatbadge \{[^}]*text-overflow: ellipsis/.test(html),
+      'нет CSS бейджа с обрезкой длинного ярлыка');
+    assert.ok(/pointer-events: none/.test(html.slice(html.indexOf('.repeatbadge'))),
+      'тап по бейджу не проходит в поле');
   });
   it('модалка даты: центр над клавиатурой (v208)', () => {
     assert.ok(/function modalKbSync\(\)/.test(appSrc) && /function modalKbWatch\(on\)/.test(appSrc),
@@ -1441,7 +1496,7 @@ describe('планирование ФАЗА 1: страница плана (FR-9
   it('шапка плана вне скроллера — как у живого списка (v200)', () => {
     assert.ok(html.includes('id="planScroll"'), 'нет скроллера #planScroll');
     assert.ok(/id="planScroll"[\s\S]{0,400}id="planForm"/.test(html) &&
-      /id="planScroll"[\s\S]{0,1200}id="planLines"/.test(html),
+      /id="planScroll"[\s\S]{0,2600}id="planLines"/.test(html),
       'форма/строки не внутри #planScroll');
     assert.ok(/#planPage\.open \{ display: flex/.test(html),
       'план не flex-колонка (шапка не отделена от скроллера)');
@@ -1602,8 +1657,15 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(/insertTaskAfter\(prevId, L\.planChildTitle\(p\.title, p\.planDate\)/.test(mBlock),
       'посадка дочки не через insertTaskAfter');
     assert.ok(/L\.planChildIndent\(tInd\)/.test(mBlock), 'отступ дочки не min(indent+1, 8)');
-    assert.ok(/p\.planFired = now;\s*p\.ts = now;\s*p\.updatedAt = now;/.test(mBlock),
-      'planFired не с метками ts');
+    /* Огонь v213: повтор гасит nextPlanDate (сдвиг/перевооружение), без
+     * повтора — до ручной перестановки; метки ts ставятся после. */
+    assert.ok(/var rp = L\.getRepeat\(p\)/.test(mBlock), 'повтор не читается при огне');
+    assert.ok(/var np = L\.nextPlanDate\(p\.planDate, rp, now\);[\s\S]{0,200}p\.planDate = np;[\s\S]{0,80}p\.planFired = 0;/.test(mBlock),
+      'повтор не перевооружается (nextPlanDate)');
+    assert.ok(/else \{\s*p\.planFired = now;\s*\}/.test(mBlock),
+      'план без повтора не гасится до ручной перестановки');
+    assert.ok(/p\.planFired = now;[\s\S]{0,200}p\.ts = now;\s*p\.updatedAt = now;/.test(mBlock),
+      'метки ts не после огня');
     assert.ok(/collapsed\[target\.id\]/.test(mBlock), 'свёрнутая цель не разворачивается');
     assert.ok(/expandForAnchor\(target\.id, tInd\)/.test(mBlock), 'предки цели не разворачиваются');
     assert.ok(/if \(!pre\) return;/.test(appSrc), 'нет раннего выхода без ждущих');

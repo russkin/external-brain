@@ -292,6 +292,19 @@ function makeLine(taskId, value, indent, opts) {
       pchip.setAttribute('aria-label', 'Дата плана: ' + ptext);
       body.appendChild(pchip);
     }
+    /* Метка повтора (v213): СЛЕВА перед полем (flex, не абсолют — поле
+     * просто сжимается, отступы с padding'ом не сводим). pointer-events
+     * выключены: тап идёт в поле, как у .planchip. */
+    if (opts.repeat) {
+      var rlab = L.repeatLabel(opts.repeat);
+      if (rlab) {
+        var rchip = document.createElement('span');
+        rchip.className = 'repeatbadge';
+        rchip.textContent = '↻ ' + rlab;
+        rchip.setAttribute('aria-label', 'Повтор: ' + rlab);
+        body.insertBefore(rchip, inp);
+      }
+    }
   } else if (taskId && opts.estMin > 0) {
   /* Метка времени — НАЛОЖЕНИЕ в правом нижнем углу поля задачи
    * (position: absolute против .tline): тап — та же модалка, что свайп
@@ -558,7 +571,8 @@ function renderPlanLines() {
       src: 'plan',
       doneShown: t.status === 'done',
       planDate: t.planDate,
-      planFired: t.planFired
+      planFired: t.planFired,
+      repeat: L.getRepeat(t)
     });
   }
   for (var ai = 0; ai < active.length; ai++) box.appendChild(planRow(active[ai]));

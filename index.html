@@ -212,6 +212,26 @@
       padding: 8px 10px; border: 2px solid #4a90e2; border-radius: 10px; }
     #planAddBtn { flex: none; min-width: 52px; font-size: 22px; padding: 8px 0;
       border: 2px solid #4a90e2; border-radius: 10px; background: #4a90e2; color: #fff; }
+    /* Повтор (v213): строка под формой + второй комплект в модалке даты
+     * (оба по .reprow-идиоме — селекторы парные). Контролы спрятаны в CSS
+     * и раскрываются инлайн (паттерн #planSetBox), пока не отмечен чекбокс. */
+    #planRepeatRow, #dateRepeatRow { display: flex; flex-wrap: wrap;
+      align-items: center; gap: 6px 10px; font-size: 14px; color: #444;
+      margin-top: 4px; }
+    #planRepeatLbl, #dateRepeatLbl { flex: none; display: inline-flex;
+      align-items: center; gap: 6px; font-size: 15px; }
+    #planRepeatStep, #planRepeatWd,
+    #dateRepeatStep, #dateRepeatWd { display: none; align-items: center; gap: 6px; }
+    #planRepeatWd, #dateRepeatWd { font-size: 13px; }
+    #planDateRepeatBox { display: none; }
+    .repstep { min-width: 30px; height: 30px; font-size: 17px; line-height: 1;
+      border: 1px solid #ccc; border-radius: 8px; background: #fff; color: #333; }
+    #planRepeatEvery, #dateRepeatEvery { min-width: 22px; text-align: center;
+      font-size: 15px; }
+    #planRepeatRow select, #dateRepeatRow select { font-family: inherit;
+      font-size: 14px; padding: 5px 6px; border: 1px solid #ccc;
+      border-radius: 8px; background: #fff; color: #333; }
+    #planRepeatHint, #dateRepeatHint { font-size: 13px; color: #888; }
     /* Ошибка формы плана (v199): краснеет НЕЗАПОЛНЕННОЕ поле — название
      * или дата. Краснеет и рамка, и outline фокуса (дефолтный чёрный
      * перекрывал бы рамку, пока поле активно). Снимается при вводе. */
@@ -248,6 +268,14 @@
       border-radius: 999px; white-space: nowrap; pointer-events: none; }
     .planchip.fired { background: #4caf50; border-color: #4caf50; color: #fff; }
     .tline[data-src="plan"] .tinput { padding-right: 112px; }
+    /* Метка повтора (v213): слева в потоке .tbody (не абсолют — поле
+     * сжимается само), длинный ярлык обрезается многоточием (полный
+     * текст — в aria-label/title). */
+    .repeatbadge { flex: none; display: inline-block;
+      max-width: 148px; padding: 3px 8px; font-size: 12px; line-height: 1.3;
+      color: #7a4fa3; background: #f6f0fd; border: 1px solid #dcc9f2;
+      border-radius: 999px; white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis; pointer-events: none; }
     /* ВРЕМЕННАЯ плашка времени (диагностика по скриншотам, до решения
      * хозяина): тонкая строка под шапкой, ЧЧ:ММ:СС локального времени,
      * обновляется раз в секунду. */
@@ -327,6 +355,38 @@
           <input id="planDateInput" autocomplete="off" inputmode="numeric" maxlength="10" placeholder="ДД.ММ.ГГГГ" aria-label="Дата плана" />
           <button id="planAddBtn" title="Добавить план" aria-label="Добавить план">＋</button>
         </div>
+        <!-- Повтор (v213): [x] Повторять [− N +] [единица]. При «день
+             недели в месяце» второй ряд — какой по счёту + день недели,
+             N в нём читается как «раз в N мес.» (подсказка). -->
+        <div id="planRepeatRow">
+          <label id="planRepeatLbl"><input type="checkbox" id="planRepeatChk" /> Повторять</label>
+          <span id="planRepeatStep">
+            <button type="button" id="planRepeatMinus" class="repstep" aria-label="Меньше">−</button>
+            <b id="planRepeatEvery">1</b>
+            <button type="button" id="planRepeatPlus" class="repstep" aria-label="Больше">+</button>
+            <select id="planRepeatUnit" aria-label="Единица повтора">
+              <option value="day">дни</option>
+              <option value="week">недели</option>
+              <option value="month">месяцы</option>
+              <option value="year">годы</option>
+              <option value="weekday">день недели в месяце</option>
+            </select>
+          </span>
+          <span id="planRepeatWd">
+            <select id="planRepeatOrdinal" aria-label="Какой по счёту в месяце">
+              <option value="1">1-я</option><option value="2">2-я</option>
+              <option value="3">3-я</option><option value="4">4-я</option>
+              <option value="5">последняя</option>
+            </select>
+            <select id="planRepeatWeekday" aria-label="День недели">
+              <option value="1">понедельник</option><option value="2">вторник</option>
+              <option value="3">среда</option><option value="4">четверг</option>
+              <option value="5">пятница</option><option value="6">суббота</option>
+              <option value="0">воскресенье</option>
+            </select>
+            <span id="planRepeatHint"></span>
+          </span>
+        </div>
       </div>
       <div id="planLines"></div>
     </div>
@@ -383,6 +443,40 @@
           <label for="planHourInput">Срабатывает в:</label>
           <input id="planHourInput" autocomplete="off" inputmode="numeric" maxlength="2" aria-label="Час срабатывания планов" />
           <span id="planHourHint">ч (0–23, по умолчанию 5)</span>
+        </div>
+      </div>
+      <!-- Повтор плана (v213): второй комплект тех же контролов (префикс
+           dateRepeat), показывается только в модалке даты и предзаполняется
+           текущим повтором плана; прячется инлайн при закрытии. -->
+      <div id="planDateRepeatBox">
+        <div id="dateRepeatRow">
+          <label id="dateRepeatLbl"><input type="checkbox" id="dateRepeatChk" /> Повторять</label>
+          <span id="dateRepeatStep">
+            <button type="button" id="dateRepeatMinus" class="repstep" aria-label="Меньше">−</button>
+            <b id="dateRepeatEvery">1</b>
+            <button type="button" id="dateRepeatPlus" class="repstep" aria-label="Больше">+</button>
+            <select id="dateRepeatUnit" aria-label="Единица повтора">
+              <option value="day">дни</option>
+              <option value="week">недели</option>
+              <option value="month">месяцы</option>
+              <option value="year">годы</option>
+              <option value="weekday">день недели в месяце</option>
+            </select>
+          </span>
+          <span id="dateRepeatWd">
+            <select id="dateRepeatOrdinal" aria-label="Какой по счёту в месяце">
+              <option value="1">1-я</option><option value="2">2-я</option>
+              <option value="3">3-я</option><option value="4">4-я</option>
+              <option value="5">последняя</option>
+            </select>
+            <select id="dateRepeatWeekday" aria-label="День недели">
+              <option value="1">понедельник</option><option value="2">вторник</option>
+              <option value="3">среда</option><option value="4">четверг</option>
+              <option value="5">пятница</option><option value="6">суббота</option>
+              <option value="0">воскресенье</option>
+            </select>
+            <span id="dateRepeatHint"></span>
+          </span>
         </div>
       </div>
       <div class="row">

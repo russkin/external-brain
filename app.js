@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v212';
+  var APP_VERSION = 'v213';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -236,7 +236,69 @@
       vv._ebKb = null;
     }
   }
-  function askPlanDate(initial) {
+  /* ===================== Контролы повтора (v213) =====================
+   * Два комплекта одинаковой механики на разные id-префиксы: форма
+   * создания (#planRepeat*) и модалка даты (#dateRepeat*). Логика одна —
+   * здесь, чтобы «каждая среда» не расходилась в двух местах.
+   *   get()  → {every, unit[, ordinal, weekday]} | null (чекбокс выкл)
+   *   set(rp)→ предзаполнить из повтора плана (null — выключить)
+   * Нормализация — L.normRepeatObj (та же, что в store/sync). */
+  function makeRepeatControls(prefix) {
+    var chk = on(prefix + 'Chk', 'change', function () { refresh(); });
+    if (!chk) return null;
+    var step = el(prefix + 'Step'), wd = el(prefix + 'Wd');
+    var every = el(prefix + 'Every'), unit = el(prefix + 'Unit');
+    var ord = el(prefix + 'Ordinal'), wkd = el(prefix + 'Weekday');
+    var hint = el(prefix + 'Hint');
+    function everyNum() {
+      var n = every ? parseInt(every.textContent, 10) : 0;
+      return n > 0 ? n : 1;
+    }
+    function refresh() {
+      var onFlag = !!chk.checked;
+      var isWd = !!unit && unit.value === 'weekday';
+      if (step) step.style.display = onFlag ? 'inline-flex' : 'none';
+      if (wd) wd.style.display = onFlag && isWd ? 'inline-flex' : 'none';
+      /* N в weekday-режиме — интервал «раз в N мес.», подсказка его и
+       * оговаривает (в обычных режимах единицу называет select). */
+      if (hint) hint.textContent = isWd ? 'раз в ' + everyNum() + ' мес.' : '';
+    }
+    function bump(delta) {
+      var n = everyNum() + delta;
+      if (n < 1) n = 1;
+      if (n > 99) n = 99;
+      if (every) every.textContent = String(n);
+      refresh();
+    }
+    on(prefix + 'Minus', 'click', function () { bump(-1); });
+    on(prefix + 'Plus', 'click', function () { bump(1); });
+    on(prefix + 'Unit', 'change', function () { refresh(); });
+    refresh();
+    return {
+      get: function () {
+        if (!chk.checked) return null;
+        var rp = { every: everyNum(), unit: unit ? unit.value : 'day' };
+        if (rp.unit === 'weekday') {
+          rp.ordinal = ord ? ord.value : 1;
+          rp.weekday = wkd ? String(wkd.value) : 0;
+        }
+        return L.normRepeatObj(rp);
+      },
+      set: function (rp) {
+        chk.checked = !!rp;
+        if (every) every.textContent = String(rp && rp.every ? rp.every : 1);
+        var u = rp ? L.normRepeatUnit(rp.unit) : '';
+        if (unit) unit.value = u || 'day';
+        if (ord) ord.value = String(rp && rp.ordinal ? rp.ordinal : 1);
+        if (wkd) wkd.value = String(rp && rp.weekday != null ? rp.weekday : 1);
+        refresh();
+      },
+      refresh: refresh
+    };
+  }
+  var formRepeatCtl = null, dateRepeatCtl = null;
+
+  function askPlanDate(initial, repeatObj) {
     return new Promise(function (resolve) {
       var back = el('modalBack'), text = el('modalText'), input = el('modalInput');
       var ok = el('modalOk'), cancel = el('modalCancel'), clearBtn = el('modalClear');
@@ -248,6 +310,15 @@
       input.setAttribute('placeholder', 'ДД.ММ.ГГГГ');
       input.classList.remove('err');
       if (clearBtn) { clearBtn.style.display = 'none'; }
+      /* Повтор (v213): блок виден только в этом окне, предзаполнен
+       * текущим повтором плана; на закрытии прячется обратно (иначе
+       * следующий askText/askConfirm унаследовал бы чужой блок, как
+       * mask/Enter у input). */
+      var repBox = el('planDateRepeatBox');
+      if (repBox) {
+        repBox.style.display = 'block';
+        if (dateRepeatCtl) dateRepeatCtl.set(repeatObj);
+      }
       /* Маска — та же, что в форме: input форматирует, Backspace не
        * прилипает к авто-точке, Enter работает как OK (старый iOS
        * Chrome Enter из поля сам не превратит). */
@@ -276,6 +347,7 @@
         input.oninput = null;
         input.onkeydown = null;
         if (clearBtn) clearBtn.onclick = null;
+        if (repBox) { repBox.style.display = ''; if (dateRepeatCtl) dateRepeatCtl.set(null); }
         input.removeAttribute('placeholder');
         input.removeAttribute('inputmode');
         input.classList.remove('err');
@@ -284,7 +356,7 @@
       ok.onclick = function () {
         var nd = L.normPlanDate(input.value);
         if (!nd) { input.classList.add('err'); return; }
-        done(nd);
+        done({ date: nd, repeat: dateRepeatCtl ? dateRepeatCtl.get() : null });
       };
       cancel.onclick = function () { done(null); };
     });
@@ -295,12 +367,21 @@
     var task = L.getTask(state.tasks, taskId);
     if (!task || task.deleted) return;
     var cur = L.normPlanDate(task.planDate);
-    askPlanDate(cur).then(function (nd) {
-      if (!nd || !state) return;
-      if (nd === cur) return;
+    var curRep = L.getRepeat(task);
+    askPlanDate(cur, curRep).then(function (r) {
+      if (!r || !state) return;
+      /* Патч собираем так, чтобы applyRepeatToTask пересчитал якорь
+       * (repeatDay у месяца) и подогнул дату под weekday-паттерн, а
+       * отменённый повтор уехал в null (снятие полей). Без изменений —
+       * тихо выходим (как раньше, когда вернулась та же дата). */
+      var patch = {};
+      if (r.date !== cur) patch.planDate = r.date;
+      if (r.repeat) patch.repeat = r.repeat;
+      else if (curRep) patch.repeat = null;
+      if (patch.planDate === undefined && patch.repeat === undefined) return;
       planGateKey = '';
       lastAction = 'дата плана изменена';
-      mutate(function () { L.clarifyTask(state.tasks, taskId, { planDate: nd }); });
+      mutate(function () { L.clarifyTask(state.tasks, taskId, patch); });
       renderStatus();
     });
   }
@@ -1246,8 +1327,9 @@
     var title = ti ? ti.value : '', dateStr = di ? di.value : '';
     lastAction = 'план создан';
     var made = null;
+    var rp = formRepeatCtl ? formRepeatCtl.get() : null;
     mutate(function () {
-      made = L.createPlan(state.tasks, title, dateStr, Date.now());
+      made = L.createPlan(state.tasks, title, dateStr, Date.now(), { repeat: rp });
     });
     if (!made) {
       lastAction = 'план: нужны название и дата ДД.ММ.ГГГГ';
@@ -1278,6 +1360,9 @@
     }
     try { var ti3 = el('planInput'); if (ti3) ti3.classList.remove('err'); } catch (x) {}
     clearPlanDraft();
+    /* Повтор — на один план: после создания гасим чекбокс, чтобы не
+     * накапливался молча (следующий план — без повтора, как раньше). */
+    if (formRepeatCtl) formRepeatCtl.set(null);
     renderStatus();
     var f = el('planInput');
     if (f && f.focus) { try { f.focus(); } catch (x) {} }
@@ -1420,7 +1505,18 @@
         var child = insertTaskAfter(prevId, L.planChildTitle(p.title, p.planDate),
           L.planChildIndent(tInd), now, false);
         if (!child) continue;
-        p.planFired = now;
+        /* Огонь. Дочка уже построена по СТАРОЙ дате (см. выше), дальше
+         * либо перевооружаем (повтор v213: nextPlanDate строго после
+         * сегодняшнего дня — пропущенные за простой не плодят дочек,
+         * Вариант А), либо гасим план до ручной перестановки. */
+        var rp = L.getRepeat(p);
+        if (rp) {
+          var np = L.nextPlanDate(p.planDate, rp, now);
+          if (np) { p.planDate = np; p.planFired = 0; }
+          else p.planFired = now; // битый/исчерпанный повтор — гасим
+        } else {
+          p.planFired = now;
+        }
         p.ts = now;
         p.updatedAt = now;
         created.push(child.title);
@@ -1773,6 +1869,10 @@
       }
       planDateMaskBackspace(e);
     });
+    /* Повтор (v213): два комплекта контролов — форма создания и модалка
+     * даты (заполняется там же при открытии). */
+    formRepeatCtl = makeRepeatControls('planRepeat');
+    dateRepeatCtl = makeRepeatControls('dateRepeat');
     /* Выбор цели (ФАЗА 2, FR-100): локально (save пишет settings,
      * в payload синка они не входят), гейт уведомлений сброшен,
      * повторный проход ждущих — как в FR-99 после назначения. */
