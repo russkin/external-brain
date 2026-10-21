@@ -1598,6 +1598,24 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(rendSrc.includes('if (grip) C.wireLineDrag(div, grip, inp)'),
       'drag не привязан к наличию grip (план без ⠿)');
   });
+  it('планы: сработавший показан выполненным — вниз и с зачёркиванием (v214)', () => {
+    /* Одна метрика на всё: разбиение секций, зачёркивание строки,
+     * направление переключения. Иначе «↩ Не выполнено» помечал бы
+     * сработавший план выполненным, а кнопка на нём была бы мёртвой. */
+    assert.ok(/function planDoneShown\(t\)[\s\S]{0,200}t\.status === 'done' \|\| toInt\(t\.planFired/.test(logicSrc),
+      'нет метрики planDoneShown');
+    assert.ok(logicSrc.includes('planDoneShown: planDoneShown'), 'planDoneShown не в api');
+    assert.ok(/L\.planDoneShown\(t\)[\s\S]{0,80}done\.push\(t\)/.test(appSrc),
+      'planTasks всё ещё разбивает по status === done');
+    assert.ok(/L\.planDoneShown\(plans\[i\]\)[\s\S]{0,80}done\.push\(plans\[i\]\)/.test(rendSrc),
+      'renderPlanLines разбивает по status');
+    assert.ok(/doneShown: L\.planDoneShown\(t\)/.test(rendSrc),
+      'строка плана не зачёркивается по planDoneShown');
+    assert.ok(/L\.isPlanned\(task\) \? !L\.planDoneShown\(task\) : task\.status !== 'done'/.test(gestSrc),
+      'направление переключения не по planDoneShown');
+    assert.ok(/if \(planned && toInt\(task\.planFired, 0\) !== 0\)[\s\S]{0,200}return task;/.test(logicSrc),
+      'reopenTask не перевооружает сработавший план (кнопка ↩ мёртвая)');
+  });
   it('маска даты плана — общие fmtExpDigits/expCaret, не копипаста', () => {
     assert.ok(settingsSrc.includes('fmtExpDigits: fmtExpDigits') &&
       settingsSrc.includes('expCaret: expCaret'), 'маска не вынесена в общий доступ');

@@ -167,9 +167,25 @@ function reopenTask(tasks, id, nowMs) {
   var task = getTask(tasks, id);
   if (!task || task.deleted) return null;
   var now = toInt(nowMs, Date.now());
-  if (task.status !== 'done') return task;
+  var planned = isPlanned(task);
+  if (task.status !== 'done') {
+    /* Сработавший план (v214): status остался todo, но строка показана
+     * выполненной (planDoneShown). Без сброса planFired кнопка была бы
+     * мёртвой (ранний return) и строка не ушла бы из секции выполненных:
+     * «↩ Не выполнено» = вернуть в ожидание, как смена даты (FR-97). */
+    if (planned && toInt(task.planFired, 0) !== 0) {
+      task.planFired = 0;
+      task.updatedAt = now;
+      task.ts = now;
+      return task;
+    }
+    return task;
+  }
   task.status = 'todo';
   task.doneAt = 0;
+  /* План снимаем и с галочки огня: выполненный вручную и сработавший
+   * одновременно (старые версии) тоже должен снова ждать. */
+  if (planned && toInt(task.planFired, 0) !== 0) task.planFired = 0;
   task.updatedAt = now;
   task.ts = now;
   return task;
@@ -481,6 +497,16 @@ function isPlanned(t) {
   return !!t && !t.deleted && normPlanDate(t.planDate) !== '';
 }
 
+/* План показывается выполненным (v214): вручную (status done) ИЛИ уже
+ * сработал (planFired !== 0 — дочка уже положена). Повтор после огня
+ * перевооружён и planFired=0 → снова активен, пока не наступит новая
+ * дата. Одна метрика на всё: разбиение секций, зачёркивание, кнопка
+ * флага и направление переключения в жестах (иначе «↩ Не выполнено»
+ * помечало бы сработавший план выполненным). */
+function planDoneShown(t) {
+  return !!t && (t.status === 'done' || toInt(t.planFired, 0) !== 0);
+}
+
 /* Создать план (ФАЗА 1, FR-95): название + дата ОБЯЗАТЕЛЬНЫ — планов
  * без даты не бывает, пустой title не создаётся. Невалидно → null,
  * массив не трогаем. Запись плоская (indent 0), в конец списка
@@ -688,16 +714,18 @@ function plural(n, one, few, many) {
   return many;
 }
 
-/* Дни недели: имя (им. п.) + род (м/ж/с) для согласования порядкового. */
+/* Дни недели: 2-буквое сокращение (метка повтора узкая, v214) + род
+ * (м/ж/с) для согласования порядкового («3-я сб», «1-й пн», «1-е вс»). */
 var WD = [
-  { n: 'воскресенье', g: 'n' }, { n: 'понедельник', g: 'm' },
-  { n: 'вторник', g: 'm' }, { n: 'среда', g: 'f' },
-  { n: 'четверг', g: 'm' }, { n: 'пятница', g: 'f' },
-  { n: 'суббота', g: 'f' }
+  { n: 'вс', g: 'n' }, { n: 'пн', g: 'm' },
+  { n: 'вт', g: 'm' }, { n: 'ср', g: 'f' },
+  { n: 'чт', g: 'm' }, { n: 'пт', g: 'f' },
+  { n: 'сб', g: 'f' }
 ];
 
-/* Понятная метка повтора: «каждый день», «каждые 5 дней», «3-я суббота
- * месяца», «последний вторник месяца». */
+/* Понятная метка повтора (короткая, v214): «каждый день», «каждые 5
+ * дней», «3-я сб мес.», «последний вт мес.» — дни недели 2 буквы,
+ * месяц → «мес.» (просьба хозяина 21.10.2026). */
 function repeatLabel(r) {
   r = normRepeatObj(r);
   if (!r) return '';
@@ -706,15 +734,15 @@ function repeatLabel(r) {
     : 'каждые ' + n + ' ' + plural(n, 'день', 'дня', 'дней');
   if (r.unit === 'week') return n === 1 ? 'каждую неделю'
     : 'каждые ' + n + ' ' + plural(n, 'неделю', 'недели', 'недель');
-  if (r.unit === 'month') return n === 1 ? 'каждый месяц'
-    : 'каждые ' + n + ' ' + plural(n, 'месяц', 'месяца', 'месяцев');
+  if (r.unit === 'month') return n === 1 ? 'каждый мес.'
+    : 'каждые ' + n + ' мес.';
   if (r.unit === 'year') return n === 1 ? 'каждый год'
     : 'каждые ' + n + ' ' + plural(n, 'год', 'года', 'лет');
   /* weekday */
   var wd = WD[r.weekday] || WD[0];
   var suf = r.ordinal >= 5 ? (wd.g === 'f' ? 'последняя' : wd.g === 'n' ? 'последнее' : 'последний')
     : r.ordinal + '-' + (wd.g === 'f' ? 'я' : wd.g === 'n' ? 'е' : 'й');
-  var base = suf + ' ' + wd.n + ' месяца';
+  var base = suf + ' ' + wd.n + ' мес.';
   return n === 1 ? base : base + ' · раз в ' + n + ' мес.';
 }
 
@@ -1050,6 +1078,7 @@ var api = {
   weekdayOccurrence: weekdayOccurrence,
   repeatLabel: repeatLabel,
   isPlanned: isPlanned,
+  planDoneShown: planDoneShown,
   createPlan: createPlan,
   planChipText: planChipText,
   planDueTasks: planDueTasks,

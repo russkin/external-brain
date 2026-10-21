@@ -561,7 +561,8 @@ function renderPlanLines() {
   var plans = C.planTasks();
   var active = [], done = [];
   for (var i = 0; i < plans.length; i++) {
-    if (plans[i].status === 'done') done.push(plans[i]);
+    /* Та же метрика, что в planTasks (v214): сработавший = выполненный. */
+    if (L.planDoneShown(plans[i])) done.push(plans[i]);
     else active.push(plans[i]);
   }
   function planRow(t) {
@@ -569,7 +570,7 @@ function renderPlanLines() {
      * что бы ни лежало в данных. В живых задачах разошьёшь при переносе. */
     return makeLine(t.id, t.title, 0, {
       src: 'plan',
-      doneShown: t.status === 'done',
+      doneShown: L.planDoneShown(t),
       planDate: t.planDate,
       planFired: t.planFired,
       repeat: L.getRepeat(t)

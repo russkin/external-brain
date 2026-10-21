@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v213';
+  var APP_VERSION = 'v214';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -552,7 +552,9 @@
       var t = state.tasks[i];
       if (!t || t.deleted) continue;
       if (!L.isPlanned(t)) continue;
-      if (t.status === 'done') done.push(t);
+      /* v214: сработавший план (planFired) показывается выполненным —
+       * уходит вниз, в секцию с зачёркиванием, как вручную выполненный. */
+      if (L.planDoneShown(t)) done.push(t);
       else active.push(t);
     }
     function byCreated(a, b) {

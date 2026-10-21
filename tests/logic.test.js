@@ -801,6 +801,38 @@ describe('планирование ФАЗА 0: модель и изоляция 
       '↩ Не выполнено — снова ждёт срока');
     assert.ok(p, 'mkPlan вернул задачу');
   });
+  it('план: сработавший показан выполненным, ↩ возвращает в ожидание (v214)', () => {
+    const t = L.blankTasks();
+    const p = mkPlan(t, 'Молоко', '16.10.2026', 1000, 'p');
+    assert.equal(L.planDoneShown(p), false, 'свежий план — активный');
+    p.planFired = 555;
+    assert.equal(p.status, 'todo', 'огонь не ставит status (только planFired)');
+    assert.equal(L.planDoneShown(p), true, 'сработавший = выполненный (строке грозит)');
+    L.completeTask(t, 'p', 2000);
+    assert.equal(L.planDoneShown(L.getTask(t, 'p')), true, 'вручную выполненный');
+    L.reopenTask(t, 'p', 3000);
+    assert.equal(L.getTask(t, 'p').status, 'todo', '↩ снял галочку');
+    assert.equal(L.getTask(t, 'p').planFired, 0, 'и перевооружил план');
+    /* Сработавший: status всё ещё todo — раньше ранний return reopenTask
+     * его морозил (кнопка ↩ была мёртвой и строка не уходила вниз). */
+    const q = mkPlan(t, 'Свет', '16.10.2026', 4000, 'q');
+    q.planFired = 666;
+    L.reopenTask(t, 'q', 5000);
+    assert.equal(L.getTask(t, 'q').status, 'todo', '↩ сработавшему: status не тронут');
+    assert.equal(L.getTask(t, 'q').planFired, 0, 'planFired сброшен');
+    assert.equal(L.planDoneShown(L.getTask(t, 'q')), false, 'снова активный');
+    /* Выполненный вручную план со следом огня (писали старые версии). */
+    const r = mkPlan(t, 'Газ', '16.10.2026', 6000, 'r');
+    L.completeTask(t, 'r', 7000);
+    r.planFired = 777;
+    L.reopenTask(t, 'r', 8000);
+    assert.equal(L.getTask(t, 'r').planFired, 0, '↩ по выполненному гасит и огонь');
+    /* Повтор после огня перевооружён (nextPlanDate в огне обнуляет
+     * planFired) → снова активен, пока не наступит новая дата. */
+    assert.equal(L.planDoneShown({ status: 'todo', planDate: '16.10.2026', planFired: 0 }),
+      false, 'повтор с planFired=0 — активный');
+    assert.ok(p && q && r);
+  });
   it('planDueTasks: свой planFireHour, битый → 5', () => {
     const t = L.blankTasks();
     mkPlan(t, 'Сегодня', '16.10.2026', 1000, 'p');
@@ -886,15 +918,15 @@ describe('планирование ФАЗА 0: модель и изоляция 
     assert.equal(L.repeatLabel({ every: 11, unit: 'day' }), 'каждые 11 дней');
     assert.equal(L.repeatLabel({ every: 1, unit: 'week' }), 'каждую неделю');
     assert.equal(L.repeatLabel({ every: 2, unit: 'week' }), 'каждые 2 недели');
-    assert.equal(L.repeatLabel({ every: 1, unit: 'month' }), 'каждый месяц');
-    assert.equal(L.repeatLabel({ every: 3, unit: 'month' }), 'каждые 3 месяца');
+    assert.equal(L.repeatLabel({ every: 1, unit: 'month' }), 'каждый мес.');
+    assert.equal(L.repeatLabel({ every: 3, unit: 'month' }), 'каждые 3 мес.', 'месяц → «мес.» (v214)');
     assert.equal(L.repeatLabel({ every: 1, unit: 'year' }), 'каждый год');
     assert.equal(L.repeatLabel({ every: 2, unit: 'year' }), 'каждые 2 года');
-    assert.equal(L.repeatLabel({ every: 1, unit: 'weekday', ordinal: 3, weekday: 6 }), '3-я суббота месяца');
-    assert.equal(L.repeatLabel({ every: 1, unit: 'weekday', ordinal: 1, weekday: 1 }), '1-й понедельник месяца', 'муж. род → «-й»');
-    assert.equal(L.repeatLabel({ every: 1, unit: 'weekday', ordinal: 1, weekday: 0 }), '1-е воскресенье месяца', 'сред. род → «-е»');
-    assert.equal(L.repeatLabel({ every: 1, unit: 'weekday', ordinal: 5, weekday: 5 }), 'последняя пятница месяца');
-    assert.equal(L.repeatLabel({ every: 2, unit: 'weekday', ordinal: 3, weekday: 6 }), '3-я суббота месяца · раз в 2 мес.');
+    assert.equal(L.repeatLabel({ every: 1, unit: 'weekday', ordinal: 3, weekday: 6 }), '3-я сб мес.', 'день — 2 буквы (v214)');
+    assert.equal(L.repeatLabel({ every: 1, unit: 'weekday', ordinal: 1, weekday: 1 }), '1-й пн мес.', 'муж. род → «-й»');
+    assert.equal(L.repeatLabel({ every: 1, unit: 'weekday', ordinal: 1, weekday: 0 }), '1-е вс мес.', 'сред. род → «-е»');
+    assert.equal(L.repeatLabel({ every: 1, unit: 'weekday', ordinal: 5, weekday: 5 }), 'последняя пт мес.');
+    assert.equal(L.repeatLabel({ every: 2, unit: 'weekday', ordinal: 3, weekday: 6 }), '3-я сб мес. · раз в 2 мес.');
     assert.equal(L.repeatLabel(null), '');
   });
   it('repeat: applyRepeatToTask — якорь, weekday-подгибка, снятие', () => {

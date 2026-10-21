@@ -256,7 +256,10 @@ function toggleDoneSlide(taskId) {
   if (aeF && aeF.blur && (aeF.tagName === 'TEXTAREA' || aeF.tagName === 'INPUT')) {
     try { aeF.blur(); } catch (x) {}
   }
-  var toDone = task.status !== 'done';
+  /* Направление переключения. Для плана считаем по ТОЙ ЖЕ метрике, что
+   * отрисовка (planDoneShown): сработавший показан выполненным при
+   * status todo — иначе «↩ Не выполнено» помечал бы его ВЫПОЛНЕННЫМ. */
+  var toDone = L.isPlanned(task) ? !L.planDoneShown(task) : task.status !== 'done';
   /* Строку ищем сначала в основном списке, затем на странице плана. */
   var box = el('lines');
   var row = findRow(box, taskId);
