@@ -1474,13 +1474,19 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(/dateRepeatCtl\.set\(null\)/.test(aBlock),
       'закрытие не обнуляет контролы (предзаполнение следующего окна)');
   });
-  it('повтор: строка плана — бейдж ↻ из repeatLabel (v213)', () => {
+  it('повтор: строка плана — бейдж ↻ из repeatLabel над меткой времени (v216)', () => {
     assert.ok(/repeat: L\.getRepeat\(t\)/.test(rendSrc), 'renderPlanLines не передаёт повтор');
     assert.ok(/opts\.repeat/.test(rendSrc) && /repeatbadge/.test(rendSrc),
       'нет метки повтора в строке плана');
     assert.ok(/'↻ ' \+ rlab/.test(rendSrc), 'бейдж без ↻ или без repeatLabel');
-    assert.ok(/body\.insertBefore\(rchip, inp\)/.test(rendSrc),
-      'бейдж не в потоке .tbody (абсолют перекрыл бы поле)');
+    assert.ok(/body\.appendChild\(rchip\)/.test(rendSrc),
+      'бейдж не добавлен в строку (старое место — слева в потоке)');
+    assert.ok(/inp\.classList\.add\('has-repeat'\)/.test(rendSrc),
+      'поле не помечено под две метки — однострочная строка не растёт');
+    assert.ok(/\.repeatbadge \{[^}]*bottom: 34px/.test(html),
+      'бейдж не над меткой времени (bottom: 34 = 6 + 24 + 4)');
+    assert.ok(/\.tinput\.has-repeat \{[^}]*min-height: 60px/.test(html),
+      'нет min-height: 60px — метки вылезают из поля');
     assert.ok(/\.repeatbadge \{[^}]*text-overflow: ellipsis/.test(html),
       'нет CSS бейджа с обрезкой длинного ярлыка');
     assert.ok(/pointer-events: none/.test(html.slice(html.indexOf('.repeatbadge'))),

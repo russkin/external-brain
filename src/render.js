@@ -292,8 +292,10 @@ function makeLine(taskId, value, indent, opts) {
       pchip.setAttribute('aria-label', 'Дата плана: ' + ptext);
       body.appendChild(pchip);
     }
-    /* Метка повтора (v213): СЛЕВА перед полем (flex, не абсолют — поле
-     * просто сжимается, отступы с padding'ом не сводим). pointer-events
+    /* Метка повтора (v216): НАД меткой времени в правом нижнем углу,
+     * обе — внутри поля (абсолют против .tline, как .planchip). Поле с
+     * повтором растёт по min-height (.tinput.has-repeat), чтобы
+     * однострочная строка вместила обе метки. pointer-events
      * выключены: тап идёт в поле, как у .planchip. */
     if (opts.repeat) {
       var rlab = L.repeatLabel(opts.repeat);
@@ -302,7 +304,8 @@ function makeLine(taskId, value, indent, opts) {
         rchip.className = 'repeatbadge';
         rchip.textContent = '↻ ' + rlab;
         rchip.setAttribute('aria-label', 'Повтор: ' + rlab);
-        body.insertBefore(rchip, inp);
+        body.appendChild(rchip);
+        inp.classList.add('has-repeat');
       }
     }
   } else if (taskId && opts.estMin > 0) {

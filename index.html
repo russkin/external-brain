@@ -268,14 +268,20 @@
       border-radius: 999px; white-space: nowrap; pointer-events: none; }
     .planchip.fired { background: #4caf50; border-color: #4caf50; color: #fff; }
     .tline[data-src="plan"] .tinput { padding-right: 112px; }
-    /* Метка повтора (v213): слева в потоке .tbody (не абсолют — поле
-     * сжимается само), длинный ярлык обрезается многоточием (полный
-     * текст — в aria-label/title). */
-    .repeatbadge { flex: none; display: inline-block;
-      max-width: 148px; padding: 3px 8px; font-size: 12px; line-height: 1.3;
+    /* Метка повтора (v216): НАД меткой времени (bottom: 34 = 6 низа
+     * планшипа + 24 его высота + 4 зазора), обе метки внутри поля.
+     * Поле с повтором растёт по min-height — однострочная строка
+     * вместит текст и две метки. Длинный ярлык обрезается многоточием
+     * (полный — в aria-label). */
+    .repeatbadge { position: absolute; right: 2px; bottom: 34px; z-index: 1;
+      display: inline-block; min-height: 24px; max-width: 148px;
+      padding: 0 9px; font-size: 12px; line-height: 22px;
       color: #7a4fa3; background: #f6f0fd; border: 1px solid #dcc9f2;
       border-radius: 999px; white-space: nowrap; overflow: hidden;
       text-overflow: ellipsis; pointer-events: none; }
+    /* Однострочное поле с меткой повтора: 60px = текст (одна строка)
+     * сверху + бейдж (34..58) над планшипом (6..30) внутри рамки. */
+    .tinput.has-repeat { min-height: 60px; }
     /* ВРЕМЕННАЯ плашка времени (диагностика по скриншотам, до решения
      * хозяина): тонкая строка под шапкой, ЧЧ:ММ:СС локального времени,
      * обновляется раз в секунду. */
