@@ -930,22 +930,22 @@ describe('планирование ФАЗА 0: модель и изоляция 
     // после 3-й сбты → следующий месяц (21.11)
     assert.equal(L.snapToWeekdayPattern('25.10.2026', w3), '21.11.2026');
   });
-  it('repeat: repeatLabel — склонения и согласование weekday', () => {
-    assert.equal(L.repeatLabel({ every: 1, unit: 'day' }), 'каждый день');
-    assert.equal(L.repeatLabel({ every: 2, unit: 'day' }), 'каждые 2 дня');
-    assert.equal(L.repeatLabel({ every: 5, unit: 'day' }), 'каждые 5 дней');
-    assert.equal(L.repeatLabel({ every: 11, unit: 'day' }), 'каждые 11 дней');
-    assert.equal(L.repeatLabel({ every: 1, unit: 'week' }), 'каждую неделю');
-    assert.equal(L.repeatLabel({ every: 2, unit: 'week' }), 'каждые 2 недели');
-    assert.equal(L.repeatLabel({ every: 1, unit: 'month' }), 'каждый мес.');
-    assert.equal(L.repeatLabel({ every: 3, unit: 'month' }), 'каждые 3 мес.', 'месяц → «мес.» (v214)');
-    assert.equal(L.repeatLabel({ every: 1, unit: 'year' }), 'каждый год');
-    assert.equal(L.repeatLabel({ every: 2, unit: 'year' }), 'каждые 2 года');
+  it('repeat: repeatLabel — короткие метки v217 и согласование weekday', () => {
+    assert.equal(L.repeatLabel({ every: 1, unit: 'day' }), 'кажд. д.', 'день → «д.» (v217)');
+    assert.equal(L.repeatLabel({ every: 2, unit: 'day' }), 'кажд. 2 дн.');
+    assert.equal(L.repeatLabel({ every: 5, unit: 'day' }), 'кажд. 5 дн.');
+    assert.equal(L.repeatLabel({ every: 11, unit: 'day' }), 'кажд. 11 дн.');
+    assert.equal(L.repeatLabel({ every: 1, unit: 'week' }), 'кажд. нед.');
+    assert.equal(L.repeatLabel({ every: 2, unit: 'week' }), 'кажд. 2 нед.');
+    assert.equal(L.repeatLabel({ every: 1, unit: 'month' }), 'кажд. мес.');
+    assert.equal(L.repeatLabel({ every: 3, unit: 'month' }), 'кажд. 3 мес.');
+    assert.equal(L.repeatLabel({ every: 1, unit: 'year' }), 'кажд. г.', 'год → «г.» (v217)');
+    assert.equal(L.repeatLabel({ every: 2, unit: 'year' }), 'кажд. 2 г.');
     assert.equal(L.repeatLabel({ every: 1, unit: 'weekday', ordinal: 3, weekday: 6 }), '3-я сб мес.', 'день — 2 буквы (v214)');
     assert.equal(L.repeatLabel({ every: 1, unit: 'weekday', ordinal: 1, weekday: 1 }), '1-й пн мес.', 'муж. род → «-й»');
     assert.equal(L.repeatLabel({ every: 1, unit: 'weekday', ordinal: 1, weekday: 0 }), '1-е вс мес.', 'сред. род → «-е»');
-    assert.equal(L.repeatLabel({ every: 1, unit: 'weekday', ordinal: 5, weekday: 5 }), 'последняя пт мес.');
-    assert.equal(L.repeatLabel({ every: 2, unit: 'weekday', ordinal: 3, weekday: 6 }), '3-я сб мес. · раз в 2 мес.');
+    assert.equal(L.repeatLabel({ every: 1, unit: 'weekday', ordinal: 5, weekday: 5 }), 'посл. пт мес.', 'последняя → «посл.» (v217)');
+    assert.equal(L.repeatLabel({ every: 2, unit: 'weekday', ordinal: 3, weekday: 6 }), '3-я сб мес. · 2 мес.', '«раз в» убрано (v217)');
     assert.equal(L.repeatLabel(null), '');
   });
   it('repeat: applyRepeatToTask — якорь, weekday-подгибка, снятие', () => {

@@ -692,7 +692,8 @@ describe('логика вызывается с state.tasks', () => {
     var mkBlock = rendSrc.slice(iMk, rendSrc.indexOf('function autosize'));
     assert.ok(mkBlock.includes('durchip'), 'строка не рисует метку времени');
     assert.ok(mkBlock.includes('L.fmtDur(opts.estMin)'), 'метка без формата из логики');
-    assert.ok(mkBlock.includes('openDuration(id)'), 'тап по метке не открывает модалку');
+    assert.ok(!mkBlock.includes('openDuration'),
+      'тап по метке не должен открывать модалку (v217) — только свайп вправо');
     var iW = gestSrc.indexOf('function wireLineSwipe');
     var swBlock = gestSrc.slice(iW, gestSrc.indexOf('function toggleDoneSlide'));
     assert.ok(swBlock.includes('dx > 48'), 'нет порога свайпа вправо');

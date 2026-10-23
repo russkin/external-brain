@@ -277,11 +277,11 @@ function makeLine(taskId, value, indent, opts) {
   C.wireLineSwipe(div, taskId);
   /* Метка даты плана — отдельный .planchip, НЕ .durchip (решение ФАЗЫ 1):
    * длительность план не показывает, поэтому замер накрытия (fitChipRow),
-   * фон-зеркало (updateDurchip) и модалка по тапу длительности его
-   * не трогают; текст даты всегда цел статичным отступом поля справа
-   * (CSS .tline[data-src="plan"] .tinput). Тап сквозь метку — в поле
-   * (pointer-events: none): индикатор срабатывания только отображается
-   * (planFired!==0 → класс fired), кнопок нет. */
+   * фон-зеркало (updateDurchip) и модалка длительности (открывается
+   * свайпом вправо) его не трогают; текст даты всегда цел статичным
+   * отступом поля справа (CSS .tline[data-src="plan"] .tinput). Тап
+   * сквозь метку — в поле (pointer-events: none): индикатор
+   * срабатывания только отображается (planFired!==0 → класс fired). */
   if (src === 'plan') {
     var ptext = L.planChipText({ planDate: opts.planDate, planFired: opts.planFired });
     if (ptext) {
@@ -310,24 +310,16 @@ function makeLine(taskId, value, indent, opts) {
     }
   } else if (taskId && opts.estMin > 0) {
   /* Метка времени — НАЛОЖЕНИЕ в правом нижнем углу поля задачи
-   * (position: absolute против .tline): тап — та же модалка, что свайп
-   * вправо. Фон прозрачный, пока текст не доходит до метки (см.
-   * updateDurchip — при пересчёте становится непрозрачным). Пустое
-   * время (estMin=0) — метки нет, угол поля свободен. */
-    var chip = document.createElement('button');
+   * (position: absolute против .tline): индикатор, НЕ кнопка — модалка
+   * открывается ТОЛЬКО свайпом вправо (просьба хозяина 21.10.2026,
+   * v217: тап по метке убран — не работал и не нужен). Фон прозрачный,
+   * пока текст не доходит до метки (см. updateDurchip — при пересчёте
+   * становится непрозрачным). Пустое время (estMin=0) — метки нет,
+   * угол поля свободен. */
+    var chip = document.createElement('span');
     chip.className = 'durchip';
-    chip.type = 'button';
     chip.textContent = L.fmtDur(opts.estMin);
     chip.setAttribute('aria-label', 'Время задачи: ' + L.fmtDur(opts.estMin));
-    (function (id, c) {
-      c.addEventListener('click', function (ev) {
-        ev.stopPropagation();
-        /* Сквозной click после удаления выше (под палец подъехала чужая
-         * метка) — модалку не открываем (см. clickBlocked). */
-        if (clickBlocked()) return;
-        C.openDuration(id);
-      });
-    })(taskId, chip);
     body.appendChild(chip);
   }
   C.wireLineInput(div, inp, taskId, indent, src);

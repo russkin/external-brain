@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v216';
+  var APP_VERSION = 'v217';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -113,7 +113,7 @@
     });
   }
 
-  /* --- Время задачи (estMin, минуты): свайп вправо / тап по метке --- */
+  /* --- Время задачи (estMin, минуты): свайп вправо (тап по метке убран) --- */
   var durTot = 0;
   var durSum = true;
   function durRender() {
@@ -185,7 +185,7 @@
     var task = L.getTask(state.tasks, taskId);
     if (!task || task.deleted) return;
     /* Родитель: метка — авто-сумма, но флаг можно снять и поставить время
-     * вручную (свайп вправо и тап по метке ведут сюда). Листу флаг
+     * вручную (свайп вправо ведёт сюда). Листу флаг
      * не показываем — суммировать нечего. */
     var parent = hasLiveKids(taskId);
     var sum = parent ? task.sumKids !== false : false;
