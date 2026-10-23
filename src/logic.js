@@ -552,7 +552,12 @@ function createPlan(tasks, title, planDate, nowMs, opts) {
   };
   /* Повтор (v213): opts.repeat = {every, unit, ...} (подгибка weekday/
    * якорный день идут внутри applyRepeatToTask). */
-  if (opts.repeat !== undefined) applyRepeatToTask(task, opts.repeat, now);
+  if (opts.repeat !== undefined) {
+    applyRepeatToTask(task, opts.repeat, now);
+    if (task.repeatUnit === 'week' && !task.repeatWeekday) {
+      task.repeatWeekday = computeWeekday(task.planDate);
+    }
+  }
   tasks.push(task);
   return task;
 }
@@ -616,6 +621,8 @@ function normRepeatObj(r) {
     o.weekday = normRepeatWeekday(r.weekday);
   } else if (unit === 'month' || unit === 'year') {
     o.day = normRepeatDay(r.day);
+  } else if (unit === 'week') {
+    o.weekday = normRepeatWeekday(r.weekday);
   }
   return o;
 }
@@ -627,6 +634,16 @@ function getRepeat(t) {
     every: t.repeatEvery, unit: t.repeatUnit,
     ordinal: t.repeatOrdinal, weekday: t.repeatWeekday, day: t.repeatDay
   });
+}
+
+/* Вычислить день недели для еженедельного повтора из даты плана. */
+function computeWeekday(planDate) {
+  var pd = normPlanDate(planDate);
+  if (!pd) return 0;
+  var parts = pd.split('.');
+  if (parts.length !== 3) return 0;
+  var dt = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+  return dt.getDay();
 }
 
 /* Даты чистыми компонентами (без TZ-сюрпризов): 'ДД.ММ.ГГГГ' ↔ дней. */
@@ -739,8 +756,13 @@ function repeatLabel(r) {
   var n = r.every;
   if (r.unit === 'day') return n === 1 ? 'кажд. д.'
     : 'кажд. ' + n + ' дн.';
-  if (r.unit === 'week') return n === 1 ? 'кажд. нед.'
-    : 'кажд. ' + n + ' нед.';
+  if (r.unit === 'week') {
+    if (n === 1 && r.weekday >= 0) {
+      var wd = WD[r.weekday] || WD[0];
+      return 'кажд. ' + wd.n;
+    }
+    return 'кажд. ' + n + ' нед.';
+  }
   if (r.unit === 'month') return n === 1 ? 'кажд. мес.'
     : 'кажд. ' + n + ' мес.';
   if (r.unit === 'year') return n === 1 ? 'кажд. г.'
@@ -803,6 +825,14 @@ function applyRepeatToTask(task, rp, nowMs) {
     task.repeatDay = r.day;
     delete task.repeatOrdinal;
     delete task.repeatWeekday;
+  } else if (r.unit === 'week' && pd) {
+    var parts = pd.split('.');
+    if (parts.length === 3) {
+      var dt = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+      task.repeatWeekday = dt.getDay();
+    }
+    delete task.repeatDay;
+    delete task.repeatOrdinal;
   } else {
     delete task.repeatDay;
     delete task.repeatOrdinal;

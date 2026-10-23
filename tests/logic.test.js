@@ -935,7 +935,7 @@ describe('планирование ФАЗА 0: модель и изоляция 
     assert.equal(L.repeatLabel({ every: 2, unit: 'day' }), 'кажд. 2 дн.');
     assert.equal(L.repeatLabel({ every: 5, unit: 'day' }), 'кажд. 5 дн.');
     assert.equal(L.repeatLabel({ every: 11, unit: 'day' }), 'кажд. 11 дн.');
-    assert.equal(L.repeatLabel({ every: 1, unit: 'week' }), 'кажд. нед.');
+    assert.equal(L.repeatLabel({ every: 1, unit: 'week', weekday: 4 }), 'кажд. чт');
     assert.equal(L.repeatLabel({ every: 2, unit: 'week' }), 'кажд. 2 нед.');
     assert.equal(L.repeatLabel({ every: 1, unit: 'month' }), 'кажд. мес.');
     assert.equal(L.repeatLabel({ every: 3, unit: 'month' }), 'кажд. 3 мес.');
