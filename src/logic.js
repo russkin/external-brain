@@ -1114,6 +1114,7 @@ var api = {
   nextPlanDate: nextPlanDate,
   snapToWeekdayPattern: snapToWeekdayPattern,
   weekdayOccurrence: weekdayOccurrence,
+  computeWeekday: computeWeekday,
   repeatLabel: repeatLabel,
   isPlanned: isPlanned,
   planDoneShown: planDoneShown,

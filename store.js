@@ -1,6 +1,5 @@
 /* store.js — локальное хранилище: IndexedDB с fallback на localStorage.
  * Ключ: 'external-brain-v1' -> { tasks, settings, updatedAt }.
- * Методология позаимствована из alex/purchases (store.js).
  */
 'use strict';
 
@@ -179,6 +178,15 @@
       state.settings.planFireHour = (ph >= 0 && ph <= 23) ? ph : 5;
     }
     if (!state.updatedAt) state.updatedAt = Date.now();
+    /* Миграция v220: еженедельные повторы без weekday — вычислить из planDate. */
+    if (Array.isArray(state.tasks) && window.EBLogic && window.EBLogic.computeWeekday) {
+      for (var i = 0; i < state.tasks.length; i++) {
+        var t = state.tasks[i];
+        if (t && t.repeatUnit === 'week' && (t.repeatWeekday == null || t.repeatWeekday < 0)) {
+          t.repeatWeekday = window.EBLogic.computeWeekday(t.planDate);
+        }
+      }
+    }
     return state;
   }
 
