@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v217';
+  var APP_VERSION = 'v218';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1806,7 +1806,8 @@
         if (!c) return;
         var d = new Date();
         function p(n) { return (n < 10 ? '0' : '') + n; }
-        c.textContent = p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+        c.textContent = p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear() + ' '
+          + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
       } catch (x) {}
     }
     try {

@@ -282,11 +282,10 @@
     /* Однострочное поле с меткой повтора: 60px = текст (одна строка)
      * сверху + бейдж (34..58) над планшипом (6..30) внутри рамки. */
     .tinput.has-repeat { min-height: 60px; }
-    /* ВРЕМЕННАЯ плашка времени (диагностика по скриншотам, до решения
-     * хозяина): тонкая строка под шапкой, ЧЧ:ММ:СС локального времени,
-     * обновляется раз в секунду. */
+    /* Плашка даты и времени внутри sticky-header: ДД.ММ.ГГГГ ЧЧ:ММ:СС,
+     * обновляется раз в секунду. Внутри header — всегда видна при прокрутке. */
     #clockBar { font-size: 11px; line-height: 1.2; color: #999; text-align: center;
-      padding: 1px 0; background: #fff; border-bottom: 1px solid #f0f0f0; }
+      padding: 1px 0; margin: 2px -14px -10px; background: #fff; border-bottom: 1px solid #f0f0f0; }
   </style>
 </head>
 <body>
@@ -307,9 +306,8 @@
       <button id="redoBtn" class="hbtn" title="Вернуть" aria-label="Вернуть">↪</button>
       <button id="deleteDoneBtn" class="hbtn" title="Удалить выполненные" aria-label="Удалить выполненные">🗑</button>
     </div>
+    <div id="clockBar" title="Дата и время устройства">--.--.---- --:--:--</div>
   </header>
-
-  <div id="clockBar" title="Время устройства (временно, для диагностики)">--:--:--</div>
 
   <div id="gearMenu">
     <button id="diagBtn">ⓘ Информация для диагностики</button>
