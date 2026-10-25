@@ -257,12 +257,12 @@ function gotoSearch(i) {
   
   ensureSearchVisible(searchIds[i], isPlanPage);
   
-  // Используем requestAnimationFrame для плановой страницы, чтобы дать DOM обновиться после render()
+  // Используем setTimeout для плановой страницы, чтобы дать DOM обновиться после render()
   if (isPlanPage) {
-    requestAnimationFrame(function() {
+    setTimeout(function() {
       scrollToSearchRow(searchIds[i], isPlanPage);
       applySearchHit(searchIds[i], isPlanPage);
-    });
+    }, 50);
   } else {
     scrollToSearchRow(searchIds[i], isPlanPage);
     applySearchHit(searchIds[i], isPlanPage);
