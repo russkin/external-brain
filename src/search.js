@@ -174,21 +174,30 @@ function scrollToSearchRow(id, isPlanPage) {
     // Для плановой страницы: скроллим #planScroll, а не window
     var scroller = el('planScroll');
     if (!scroller) return;
-    var headH = 0, barTop = 0, rh = 0;
-    try {
-      var hd = document.querySelector('header');
-      headH = hd ? hd.getBoundingClientRect().height : 0;
-      var bar = el('searchBar');
-      barTop = bar ? window.innerHeight - bar.getBoundingClientRect().height : 0;
-      rh = row.getBoundingClientRect().height;
-    } catch (x) {}
-    // Центр видимой области = (низ шапки + верх панели поиска) / 2
-    var visibleCenter = headH + (barTop - headH) / 2;
+    
+    var hd = document.querySelector('header');
+    var headBottom = hd ? hd.getBoundingClientRect().bottom : 0;
+    var bar = el('searchBar');
+    var barTop = bar ? bar.getBoundingClientRect().top : window.innerHeight;
+    var rh = row.getBoundingClientRect().height;
+    
+    // Видимая высота между шапкой и панелью поиска
+    var visibleHeight = barTop - headBottom;
+    
     // Позиция строки относительно скроллера
-    var rowTop = row.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+    var rowTopInScroller = row.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+    
     // Целевая позиция скролла: строка должна быть в центре видимой области
-    var targetScroll = rowTop - visibleCenter + rh / 2;
+    // Для этого нужно, чтобы верх строки был на расстоянии (visibleHeight / 2 - rh / 2) от верха видимой области
+    var targetRowTop = headBottom + (visibleHeight / 2) - (rh / 2);
+    var currentRowTop = row.getBoundingClientRect().top;
+    var scrollDelta = currentRowTop - targetRowTop;
+    
+    var targetScroll = scroller.scrollTop + scrollDelta;
     if (targetScroll < 0) targetScroll = 0;
+    var maxScroll = scroller.scrollHeight - scroller.clientHeight;
+    if (targetScroll > maxScroll) targetScroll = maxScroll;
+    
     try { scroller.scrollTop = targetScroll; } catch (x) {}
     return;
   }
@@ -247,8 +256,18 @@ function gotoSearch(i) {
   } catch (x) {}
   
   ensureSearchVisible(searchIds[i], isPlanPage);
-  scrollToSearchRow(searchIds[i], isPlanPage);
-  applySearchHit(searchIds[i], isPlanPage);
+  
+  // Используем requestAnimationFrame для плановой страницы, чтобы дать DOM обновиться после render()
+  if (isPlanPage) {
+    requestAnimationFrame(function() {
+      scrollToSearchRow(searchIds[i], isPlanPage);
+      applySearchHit(searchIds[i], isPlanPage);
+    });
+  } else {
+    scrollToSearchRow(searchIds[i], isPlanPage);
+    applySearchHit(searchIds[i], isPlanPage);
+  }
+  
   updateSearchUI();
 }
 
