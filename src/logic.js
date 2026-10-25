@@ -908,6 +908,14 @@ function planChildTitle(title, planDate) {
 
 /* Отступ дочки под целевой: +1, потолок 8 (цель на 8 — дочка рядом с
  * ней на том же уровне, глубже некуда). Битые значения → 1. */
+/* Ключ сортировки планов по дате: YYYYMMDD как число, пустая дата → Infinity. */
+function planDateKey(t) {
+  var pd = normPlanDate(t && t.planDate);
+  if (!pd) return Infinity;
+  var p = pd.split('.');
+  return (parseInt(p[2], 10) * 10000) + (parseInt(p[1], 10) * 100) + parseInt(p[0], 10);
+}
+
 /* Планы для #planPage (ФАЗА 1, FR-95–FR-96): все неудалённые с датой
  * (поэтому плановые скрыты из основного списка, FR-96). Порядок:
  * активные — по сроку от ранних к поздним (тай-брейк `createdAt`),
