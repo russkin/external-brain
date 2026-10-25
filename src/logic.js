@@ -646,6 +646,16 @@ function computeWeekday(planDate) {
   return dt.getDay();
 }
 
+/* Имя дня недели для даты (бейдж в поле даты плана, v221): 'пн'…'вс',
+ * '' для пустой/неполной/битой даты — бейдж показываем ТОЛЬКО при
+ * календарно верной полной дате (normPlanDate: 31.02 не пропускает). */
+function weekdayName(dateStr) {
+  var pd = normPlanDate(dateStr);
+  if (!pd) return '';
+  var wd = WD[computeWeekday(pd)];
+  return wd ? wd.n : '';
+}
+
 /* Даты чистыми компонентами (без TZ-сюрпризов): 'ДД.ММ.ГГГГ' ↔ дней. */
 function ymdParts(s) {
   var p = String(s == null ? '' : s).split('.');
@@ -1115,6 +1125,7 @@ var api = {
   snapToWeekdayPattern: snapToWeekdayPattern,
   weekdayOccurrence: weekdayOccurrence,
   computeWeekday: computeWeekday,
+  weekdayName: weekdayName,
   repeatLabel: repeatLabel,
   isPlanned: isPlanned,
   planDoneShown: planDoneShown,

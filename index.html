@@ -119,7 +119,8 @@
     #modalBox { background: #fff; border-radius: 10px; padding: 18px; width: 100%; max-width: 380px; }
     #modalText { margin-bottom: 10px; white-space: pre-wrap; word-break: break-word;
       max-height: 50vh; overflow-y: auto; font-size: 14px; }
-    #modalInput { width: 100%; font-size: 18px; padding: 10px; margin-bottom: 12px; }
+    #modalInputWrap { position: relative; margin-bottom: 12px; }
+    #modalInput { width: 100%; font-size: 18px; padding: 10px; }
     /* Ошибка ввода даты в модалке (v205): краснеют рамка и outline —
      * как у формы плана (v199), толщина не меняется (макет не дёргает). */
     #modalInput.err { border-color: #f44336; outline: 2px solid #f44336; outline-offset: 1px; }
@@ -208,10 +209,25 @@
     #planInput { width: 100%; box-sizing: border-box; font-size: 18px; font-family: inherit;
       line-height: 1.3; padding: 8px 10px; border: 2px solid #4a90e2; border-radius: 10px;
       resize: none; overflow-y: hidden; }
-    #planDateInput { flex: 1; min-width: 0; font-size: 18px; font-family: inherit;
+    #planDateWrap { position: relative; flex: 1 1 auto; min-width: 0; display: flex; }
+    #planDateInput { width: 100%; min-width: 0; font-size: 18px; font-family: inherit;
       padding: 8px 10px; border: 2px solid #4a90e2; border-radius: 10px; }
     #planAddBtn { flex: none; min-width: 52px; font-size: 22px; padding: 8px 0;
       border: 2px solid #4a90e2; border-radius: 10px; background: #4a90e2; color: #fff; }
+    /* Бейдж дня недели в поле даты (v221): пилюля как у метки повтора,
+     * справа внутри поля (форма #planDateWd и модалка #modalDateWd —
+     * общий класс). Виден только при полной верной дате — тогда поле
+     * получает .has-wd и отступает справа (цифры не уезжают под
+     * бейдж). pointer-events: none — тап/каретка идут в поле. */
+    .wdbadge { position: absolute; right: 6px; top: 50%; z-index: 1;
+      -webkit-transform: translateY(-50%); transform: translateY(-50%);
+      display: none; min-height: 24px; max-width: 72px;
+      padding: 0 9px; font-size: 12px; line-height: 22px;
+      color: #7a4fa3; background: #f6f0fd; border: 1px solid #dcc9f2;
+      border-radius: 999px; white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis; pointer-events: none; }
+    .wdbadge.on { display: inline-block; }
+    #planDateInput.has-wd, #modalInput.has-wd { padding-right: 54px; }
     /* Повтор (v213): строка под формой + второй комплект в модалке даты
      * (оба по .reprow-идиоме — селекторы парные). Контролы спрятаны в CSS
      * и раскрываются инлайн (паттерн #planSetBox), пока не отмечен чекбокс. */
@@ -356,7 +372,10 @@
       <div id="planForm">
         <textarea id="planInput" rows="1" autocomplete="off" placeholder="Новый план…" aria-label="Название плана"></textarea>
         <div id="planFormRow">
-          <input id="planDateInput" autocomplete="off" inputmode="numeric" maxlength="10" placeholder="ДД.ММ.ГГГГ" aria-label="Дата плана" />
+          <div id="planDateWrap">
+            <input id="planDateInput" autocomplete="off" inputmode="numeric" maxlength="10" placeholder="ДД.ММ.ГГГГ" aria-label="Дата плана" />
+            <span id="planDateWd" class="wdbadge" aria-hidden="true"></span>
+          </div>
           <button id="planAddBtn" title="Добавить план" aria-label="Добавить план">＋</button>
         </div>
         <!-- Повтор (v213): [x] Повторять [− N +] [единица]. При «день
@@ -423,7 +442,10 @@
   <div id="modalBack">
     <div id="modalBox">
       <div id="modalText"></div>
-      <input id="modalInput" autocomplete="off" />
+      <div id="modalInputWrap">
+        <input id="modalInput" autocomplete="off" />
+        <span id="modalDateWd" class="wdbadge" aria-hidden="true"></span>
+      </div>
       <div id="durCtl">
         <div class="durrow"><span>Часы</span>
           <button id="durHm" aria-label="Меньше часов">−</button>

@@ -724,6 +724,21 @@ describe('планирование ФАЗА 0: модель и изоляция 
     assert.equal(L.normPlanDate('2026-13-01'), '');
     assert.equal(L.normPlanDate('2026-02-30'), '');
   });
+  it('weekdayName: день недели полной верной даты, пусто для неполной/битой (бейдж v221)', () => {
+    assert.equal(L.weekdayName('05.10.2026'), 'пн');
+    assert.equal(L.weekdayName('11.10.2026'), 'вс');
+    assert.equal(L.weekdayName('01.01.2026'), 'чт');
+    assert.equal(L.weekdayName('29.02.2024'), 'чт', 'високосный проходит');
+    assert.equal(L.weekdayName('2026-10-05'), 'пн', 'старый ISO приводим');
+    assert.equal(L.weekdayName('05.10.20'), '', 'год не добит — бейджа нет');
+    assert.equal(L.weekdayName('05.10'), '', 'нет года — бейджа нет');
+    assert.equal(L.weekdayName('5.10.2026'), '', 'без ведущих нулей — бейджа нет');
+    assert.equal(L.weekdayName('31.02.2026'), '', 'календарно битая — бейджа нет');
+    assert.equal(L.weekdayName('29.02.2025'), '', '29.02 невисокосного — бейджа нет');
+    assert.equal(L.weekdayName(''), '', 'пусто');
+    assert.equal(L.weekdayName(null), '', 'null');
+    assert.equal(L.weekdayName('мусор'), '', 'мусор');
+  });
   it('whitelist: normalizeTask держит planDate/planFired', () => {
     const n = L.normalizeTask({ id: 'x', title: 'П', planDate: '05.10.2026', planFired: 777 });
     assert.equal(n.planDate, '05.10.2026');

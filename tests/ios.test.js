@@ -1642,6 +1642,37 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(html.includes('id="planDateInput"') &&
       /id="planDateInput"[^>]*inputmode="numeric"/.test(html), 'нет цифровой клавиатуры у даты');
   });
+  it('бейдж дня недели в поле даты: форма и модалка, только верная дата (v221)', () => {
+    /* Разметка: поле завёрнуто (input детей не умеет держать), бейджи в
+     * форме и в модалке смены даты. */
+    assert.ok(/id="planDateWrap"[\s\S]{0,300}id="planDateWd"/.test(html) &&
+      html.indexOf('id="planDateWd"') > html.indexOf('id="planDateInput"'),
+      'нет бейджа дня недели в форме даты');
+    assert.ok(/id="modalInputWrap"[\s\S]{0,300}id="modalDateWd"/.test(html),
+      'нет бейджа дня недели в модалке даты');
+    assert.ok(/class="wdbadge"[^>]*aria-hidden="true"/.test(html),
+      'бейдж без aria-hidden (скринридер прочитает мусор)');
+    /* День недели — из логики (гейт normPlanDate: неполная/битая → ''). */
+    assert.ok(logicSrc.includes('function weekdayName(dateStr)') &&
+      logicSrc.includes('weekdayName: weekdayName'), 'нет weekdayName в логике');
+    assert.ok(/weekdayName\(inp\.value\)/.test(appSrc), 'бейдж не читает weekdayName');
+    /* Обновление: ввод (форма и модалка через одну маску), Backspace. */
+    assert.ok(/function setWdBadge\(inp\)/.test(appSrc) &&
+      /function hideWdBadge\(inp\)/.test(appSrc), 'нет set/hide бейджа');
+    assert.ok(/function planDateMaskInput\(inp\)[\s\S]{0,400}setWdBadge\(inp\)/.test(appSrc),
+      'ввод не обновляет бейдж');
+    assert.ok(/fmtExpDigits\(digits[\s\S]{0,200}setWdBadge\(inp\)/.test(appSrc),
+      'Backspace не обновляет бейдж');
+    /* Открытие модалки — бейдж по текущей дате, закрытие — гасит. */
+    assert.ok(/setWdBadge\(input\)/.test(appSrc), 'модалка не показывает бейдж на старте');
+    assert.ok(/hideWdBadge\(input\)/.test(appSrc), 'закрытие модалки не гасит бейдж');
+    assert.ok(/hideWdBadge\(di\)/.test(appSrc), 'после создания плана бейдж не гаснет');
+    /* Тап идут в поле, цифры не уезжают под бейдж. */
+    assert.ok(/\.wdbadge\s*\{[\s\S]{0,600}pointer-events: none/.test(html),
+      'бейдж перехватывает тапы');
+    assert.ok(/#planDateInput\.has-wd,\s*#modalInput\.has-wd\s*\{\s*padding-right/.test(html),
+      'нет отступа поля под бейдж');
+  });
   it('жесты на плане — те же функции, коробка своя, план выполняется одиночкой', () => {
     assert.ok(gestSrc.includes('planLines'), 'жесты не знают коробку плана');
     assert.ok(gestSrc.includes('function boxOf'), 'нет выбора коробки по строке');

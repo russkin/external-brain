@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v220';
+  var APP_VERSION = 'v221';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -309,6 +309,7 @@
       input.setAttribute('inputmode', 'numeric');
       input.setAttribute('placeholder', 'ДД.ММ.ГГГГ');
       input.classList.remove('err');
+      setWdBadge(input);
       if (clearBtn) { clearBtn.style.display = 'none'; }
       /* Повтор (v213): блок виден только в этом окне, предзаполнен
        * текущим повтором плана; на закрытии прячется обратно (иначе
@@ -351,6 +352,7 @@
         input.removeAttribute('placeholder');
         input.removeAttribute('inputmode');
         input.classList.remove('err');
+        hideWdBadge(input);
         resolve(v);
       }
       ok.onclick = function () {
@@ -1370,6 +1372,7 @@
     if (di) {
       di.value = '';
       try { di.classList.remove('err'); } catch (x) {}
+      hideWdBadge(di);
     }
     try { var ti3 = el('planInput'); if (ti3) ti3.classList.remove('err'); } catch (x) {}
     clearPlanDraft();
@@ -1381,6 +1384,33 @@
     if (f && f.focus) { try { f.focus(); } catch (x) {} }
   }
 
+  /* Бейдж дня недели в поле даты (v221): пилюля справа внутри поля
+   * (форма #planDateWd, модалка #modalDateWd — по id поля). Показываем
+   * ТОЛЬКО при календарно верной полной дате: L.weekdayName возвращает
+   * '' и для неполной («05.10.20»), и для битой («31.02.2026»). Вместе
+   * с текстом поле получает .has-wd — padding-right, чтобы цифры не
+   * уезжали под бейдж. */
+  function wdBadgeEl(inp) {
+    if (!inp) return null;
+    return el(inp.id === 'modalInput' ? 'modalDateWd' : 'planDateWd');
+  }
+
+  function setWdBadge(inp) {
+    var b = wdBadgeEl(inp);
+    if (!b) return;
+    var txt = '';
+    try { txt = (L && L.weekdayName) ? L.weekdayName(inp.value) : ''; } catch (x) { txt = ''; }
+    b.textContent = txt;
+    if (txt) { b.classList.add('on'); inp.classList.add('has-wd'); }
+    else { b.classList.remove('on'); inp.classList.remove('has-wd'); }
+  }
+
+  function hideWdBadge(inp) {
+    var b = wdBadgeEl(inp);
+    if (b) { b.textContent = ''; b.classList.remove('on'); }
+    if (inp) inp.classList.remove('has-wd');
+  }
+
   /* Маска даты плана — те же fmtExpDigits/expCaret, что у срока токена
    * (общий доступ через window.EBSettings, не копипаста). Поле можно
    * передать аргументом: одна маска обслуживает и форму (#planDateInput),
@@ -1390,6 +1420,7 @@
     if (!inp) return;
     /* Раз пользователь правит — красную ошибку гасим. */
     try { inp.classList.remove('err'); } catch (x) {}
+    setWdBadge(inp);
     if (!window.EBSettings || !window.EBSettings.fmtExpDigits) return;
     var pos = null;
     try { pos = inp.selectionStart; } catch (x) { pos = null; }
@@ -1417,6 +1448,7 @@
     var dc = inp.value.slice(0, s).replace(/\D/g, '').length;
     inp.value = window.EBSettings.fmtExpDigits(digits.slice(0, dc - 1) + digits.slice(dc));
     if (window.EBSettings.expCaret) window.EBSettings.expCaret(inp, inp.value, dc - 1);
+    setWdBadge(inp);
   }
 
   /* --- Срабатывание планов (ФАЗА 2, FR-97–98) ---
