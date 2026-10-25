@@ -68,7 +68,12 @@ function render() {
    * в модуле поиска (этап 1), модуля может не быть — гард. */
   if (window.EBSearch) {
     var sid = window.EBSearch.currentId();
-    if (sid) window.EBSearch.applySearchHit(sid);
+    if (sid) {
+      // Проверяем, находимся ли мы на плановой странице
+      var planPage = document.getElementById('planPage');
+      var isPlanPage = !!(planPage && planPage.classList.contains('open'));
+      window.EBSearch.applySearchHit(sid, isPlanPage);
+    }
   }
   try {
     var curY = window.pageYOffset || 0;

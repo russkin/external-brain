@@ -169,6 +169,30 @@ function scrollToSearchRow(id, isPlanPage) {
     if (rows[i].getAttribute('data-id') === id) { row = rows[i]; break; }
   }
   if (!row) return;
+  
+  if (isPlanPage) {
+    // Для плановой страницы: скроллим #planScroll, а не window
+    var scroller = el('planScroll');
+    if (!scroller) return;
+    var headH = 0, barTop = 0, rh = 0;
+    try {
+      var hd = document.querySelector('header');
+      headH = hd ? hd.getBoundingClientRect().height : 0;
+      var bar = el('searchBar');
+      barTop = bar ? window.innerHeight - bar.getBoundingClientRect().height : 0;
+      rh = row.getBoundingClientRect().height;
+    } catch (x) {}
+    // Центр видимой области = (низ шапки + верх панели поиска) / 2
+    var visibleCenter = headH + (barTop - headH) / 2;
+    // Позиция строки относительно скроллера
+    var rowTop = row.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+    // Целевая позиция скролла: строка должна быть в центре видимой области
+    var targetScroll = rowTop - visibleCenter + rh / 2;
+    if (targetScroll < 0) targetScroll = 0;
+    try { scroller.scrollTop = targetScroll; } catch (x) {}
+    return;
+  }
+  
   var headB = 0, barTop = 0, rh = 0;
   try {
     var hd = document.querySelector('header');
