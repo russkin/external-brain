@@ -214,10 +214,35 @@ function doSearch() {
   var q = inp ? inp.value : '';
   /* Скрываем клавиатуру — дальше прыжок к первому совпадению. */
   if (inp) { try { inp.blur(); } catch (x) {} }
+  
+  // Проверяем, находимся ли мы на вкладке планирования
+  var isPlanPage = false;
+  try {
+    var planPage = el('planPage');
+    if (planPage && planPage.classList.contains('open')) {
+      isPlanPage = true;
+    }
+  } catch (x) {}
+  
   var live = [], dn = [];
-  try { live = C.lineTasks(); } catch (x) { live = []; }
-  try { dn = C.L.doneList(state.tasks); } catch (x) { dn = []; }
-  searchIds = C.L.searchTasks(live.concat(dn), q);
+  try { 
+    if (isPlanPage) {
+      // Для вкладки планирования ищем по всем задачам (включая плановые)
+      live = C.L.planTasks(state.tasks);
+    } else {
+      // Для основной вкладки ищем только по живым задачам
+      live = C.lineTasks(); 
+    }
+  } catch (x) { live = []; }
+  
+  try { 
+    if (!isPlanPage) {
+      dn = C.L.doneList(state.tasks); 
+    }
+  } catch (x) { dn = []; }
+  
+  var searchOpts = isPlanPage ? { searchPlans: true } : {};
+  searchIds = C.L.searchTasks(live.concat(dn), q, searchOpts);
   searchIdx = searchIds.length ? 0 : -1;
   if (searchIds.length) gotoSearch(0);
   else { applySearchHit(null); updateSearchUI(); }

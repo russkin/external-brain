@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v221';
+  var APP_VERSION = 'v222';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1884,6 +1884,9 @@
     on('planBtn', 'click', function () { openPlanPage(); });
     on('planBack', 'click', function () {
       try { window.history.back(); } catch (x) { hidePlanPage(); }
+    });
+    on('planSearchBtn', 'click', function () { 
+      if (window.EBSearch) window.EBSearch.openSearch(); 
     });
     on('planInput', 'input', function () {
       /* Раз пользователь правит — красную ошибку гасим (v199). */

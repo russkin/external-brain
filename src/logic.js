@@ -332,15 +332,24 @@ function normSearch(s) {
   return String(s == null ? '' : s).toLowerCase().replace(/ё/g, 'е');
 }
 
-function searchTasks(tasks, query) {
+function searchTasks(tasks, query, opts) {
   var q = normSearch(query).trim();
   if (!q || !Array.isArray(tasks)) return [];
   var out = [];
+  var searchPlans = opts && opts.searchPlans;
   for (var i = 0; i < tasks.length; i++) {
     var t = tasks[i];
     if (!t || t.deleted || !t.title) continue;
-    if (isPlanned(t)) continue;
-    if (normSearch(t.title).indexOf(q) !== -1) out.push(t.id);
+    // Если ищем по планам, то исключаем только удаленные
+    // Если ищем по живым задачам, то исключаем плановые
+    if (searchPlans) {
+      // Для поиска по планам: показываем все задачи кроме удаленных
+      if (normSearch(t.title).indexOf(q) !== -1) out.push(t.id);
+    } else {
+      // Для поиска по живым задачам: исключаем плановые
+      if (isPlanned(t)) continue;
+      if (normSearch(t.title).indexOf(q) !== -1) out.push(t.id);
+    }
   }
   return out;
 }
@@ -899,6 +908,33 @@ function planChildTitle(title, planDate) {
 
 /* Отступ дочки под целевой: +1, потолок 8 (цель на 8 — дочка рядом с
  * ней на том же уровне, глубже некуда). Битые значения → 1. */
+/* Планы для #planPage (ФАЗА 1, FR-95–FR-96): все неудалённые с датой
+ * (поэтому плановые скрыты из основного списка, FR-96). Порядок:
+ * активные — по сроку от ранних к поздним (тай-брейк `createdAt`),
+ * выполненные (вручную отмеченные и сработавшие — `planDoneShown`, v214)
+ * — внизу за разделителем «Выполнено · N». */
+function planTasks(tasks) {
+  if (!Array.isArray(tasks)) return [];
+  var active = [], done = [];
+  for (var i = 0; i < tasks.length; i++) {
+    var t = tasks[i];
+    if (!t || t.deleted || !isPlanned(t)) continue;
+    if (planDoneShown(t)) done.push(t);
+    else active.push(t);
+  }
+  /* Активные — по сроку от ранних к поздним (тай-брейк `createdAt`).
+   * Выполненные — по времени срабатывания (planFired) внизу. */
+  active.sort(function (a, b) {
+    var pa = planDateKey(a), pb = planDateKey(b);
+    if (pa !== pb) return pa - pb;
+    return a.createdAt - b.createdAt;
+  });
+  done.sort(function (a, b) {
+    return (b.planFired || 0) - (a.planFired || 0);
+  });
+  return active.concat(done);
+}
+
 function planChildIndent(indent) {
   var v = parseInt(indent, 10);
   if (!(v >= 0)) v = 0;
@@ -1134,6 +1170,7 @@ var api = {
   planDueTasks: planDueTasks,
   planChildTitle: planChildTitle,
   planChildIndent: planChildIndent,
+  planTasks: planTasks,
   normalizeTask: normalizeTask,
   normalizeTasks: normalizeTasks,
   cloneTask: cloneTask,
