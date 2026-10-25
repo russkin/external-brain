@@ -1374,11 +1374,10 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(!/\.focus\(\)/.test(sBlock),
       'открытие страницы плана само ставит фокус (выскакивает клавиатура, v210)');
   });
-  it('шапка плана: заголовок + Назад справа, ряд ↩ ↪ ⓘ ⚙, без поиска (v197/v207)', () => {
-    for (const id of ['planBack', 'planUndoBtn', 'planRedoBtn', 'planDiagBtn', 'planSetBtn']) {
+  it('шапка плана: заголовок + Назад справа, ряд ↩ ↪ ⓘ ⚙, с поиском (v222)', () => {
+    for (const id of ['planBack', 'planUndoBtn', 'planRedoBtn', 'planDiagBtn', 'planSetBtn', 'planSearchBtn']) {
       assert.ok(html.includes('id="' + id + '"'), 'нет ' + id + ' в шапке плана');
     }
-    assert.ok(!html.includes('id="planSearchBtn"'), 'поиск с плана не убран');
     assert.ok(html.includes('id="planHeadTop"') && html.includes('id="planHeadRow"'),
       'шапка плана не двухрядная');
     assert.ok(html.indexOf('id="planBack"') > html.indexOf('<h2>'),
@@ -1387,6 +1386,8 @@ describe('планирование ФАЗА 1: страница плана (FR-9
       '↩ плана не ведёт на отмену');
     assert.ok(appSrc.includes("on('planRedoBtn'") || historySrc.includes("on('planRedoBtn'"),
       '↪ плана не ведёт на возврат');
+    assert.ok(appSrc.includes("on('planSearchBtn'"),
+      '🔍 плана ведёт на открытие поиска');
     assert.ok(diagSrc.includes("on('planDiagBtn'"), 'ⓘ плана не открывает диагностику');
   });
   it('форма плана в две строки, название с переносом (v196)', () => {
