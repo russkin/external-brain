@@ -115,11 +115,22 @@ function closeSearch(restore) {
 
 /* Цель видна: разворачиваем предков (свёрнутые группы) и секцию
  * выполненных, если совпадение там. */
-function ensureSearchVisible(id) {
+function ensureSearchVisible(id, isPlanPage) {
   var state = C.getState();
   if (!state) return;
   var t = C.L.getTask(state.tasks, id);
   if (!t) return;
+  
+  if (isPlanPage) {
+    // Для плановой страницы: если план выполнен (planDoneShown), показываем секцию выполненных
+    if (C.L.planDoneShown(t)) {
+      if (C.isDoneHidden()) C.toggleDoneHidden();
+    }
+    // Планы не имеют сворачиваемых групп, поэтому просто рендерим
+    C.render();
+    return;
+  }
+  
   if (t.status === 'done') {
     if (C.isDoneHidden()) C.toggleDoneHidden();
   } else {
@@ -149,8 +160,8 @@ function ensureSearchVisible(id) {
 }
 
 /* Строка — в середину между шапкой и верхом окна поиска. */
-function scrollToSearchRow(id) {
-  var box = el('lines');
+function scrollToSearchRow(id, isPlanPage) {
+  var box = el(isPlanPage ? 'planLines' : 'lines');
   if (!box || !box.querySelectorAll) return;
   var rows = box.querySelectorAll('.tline[data-id]');
   var row = null, i;
@@ -176,8 +187,8 @@ function scrollToSearchRow(id) {
 /* Подсветка текущего совпадения: снять со старой, поставить на новую.
  * Только классы — вёрстка не едет. Вызывать после каждого render(),
  * иначе фоновый синк снесут подсветку вместе со строками. */
-function applySearchHit(id) {
-  var box = el('lines');
+function applySearchHit(id, isPlanPage) {
+  var box = el(isPlanPage ? 'planLines' : 'lines');
   if (!box || !box.querySelectorAll) return;
   var marked = box.querySelectorAll('.tline.search-hit');
   var i;
@@ -201,9 +212,19 @@ function gotoSearch(i) {
   if (i > searchIds.length - 1) i = searchIds.length - 1;
   searchIdx = i;
   searchLanded = true;
-  ensureSearchVisible(searchIds[i]);
-  scrollToSearchRow(searchIds[i]);
-  applySearchHit(searchIds[i]);
+  
+  // Проверяем, находимся ли мы на вкладке планирования
+  var isPlanPage = false;
+  try {
+    var planPage = el('planPage');
+    if (planPage && planPage.classList.contains('open')) {
+      isPlanPage = true;
+    }
+  } catch (x) {}
+  
+  ensureSearchVisible(searchIds[i], isPlanPage);
+  scrollToSearchRow(searchIds[i], isPlanPage);
+  applySearchHit(searchIds[i], isPlanPage);
   updateSearchUI();
 }
 
