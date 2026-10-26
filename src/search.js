@@ -159,6 +159,19 @@ function ensureSearchVisible(id, isPlanPage) {
   C.render();
 }
 
+/* Низ зоны центровки — верх ПОЛОЖИВШЕЙСЯ панели поиска. Живой
+ * getBoundingClientRect().top врёт сразу после «Поиск»: blur спрятал
+ * клавиатуру, но панель ещё поднята (searchLift) — клавиатура доезжает
+ * за 200–300 мс, панель опускается, задача остаётся выше центра.
+ * Отдых = bottom:0, верх = innerHeight − высота панели (v223). */
+function restingBarTop() {
+  var bar = el('searchBar');
+  var h = 0;
+  try { h = bar ? bar.offsetHeight : 0; } catch (x) { h = 0; }
+  if (!(h > 0)) return window.innerHeight || 800;
+  return (window.innerHeight || 0) - h;
+}
+
 /* Строка — в середину между шапкой и верхом окна поиска. */
 function scrollToSearchRow(id, isPlanPage) {
   var box = el(isPlanPage ? 'planLines' : 'lines');
@@ -175,10 +188,11 @@ function scrollToSearchRow(id, isPlanPage) {
     var scroller = el('planScroll');
     if (!scroller) return;
     
-    var hd = document.querySelector('header');
+    // Верхняя граница — #planHead (двухрядная шапка страницы), НЕ
+    // основная <header>: та под оверлеем плана и по высоте другая (v223).
+    var hd = el('planHead');
     var headBottom = hd ? hd.getBoundingClientRect().bottom : 0;
-    var bar = el('searchBar');
-    var barTop = bar ? bar.getBoundingClientRect().top : window.innerHeight;
+    var barTop = restingBarTop();
     var rh = row.getBoundingClientRect().height;
     
     // Видимая высота между шапкой и панелью поиска
@@ -202,12 +216,10 @@ function scrollToSearchRow(id, isPlanPage) {
     return;
   }
   
-  var headB = 0, barTop = 0, rh = 0;
+  var headB = 0, barTop = restingBarTop(), rh = 0;
   try {
     var hd = document.querySelector('header');
     headB = hd ? hd.getBoundingClientRect().bottom : 0;
-    var bar = el('searchBar');
-    barTop = bar ? bar.getBoundingClientRect().top : (window.innerHeight || 800);
     rh = row.getBoundingClientRect().height;
   } catch (x) {}
   var want = headB + (barTop - headB) / 2 - rh / 2;
@@ -219,15 +231,25 @@ function scrollToSearchRow(id, isPlanPage) {
 
 /* Подсветка текущего совпадения: снять со старой, поставить на новую.
  * Только классы — вёрстка не едет. Вызывать после каждого render(),
- * иначе фоновый синк снесут подсветку вместе со строками. */
+ * иначе фоновый синк снесут подсветку вместе со строками.
+ * Снятие (id=null) чистит ОБА контейнера — closeSearch не знает,
+ * откуда пришли, и обводка на плане не должна пережить отмену (v223). */
 function applySearchHit(id, isPlanPage) {
+  if (!id) {
+    var boxes = ['lines', 'planLines'], bi;
+    for (bi = 0; bi < boxes.length; bi++) {
+      var bx = el(boxes[bi]);
+      if (!bx || !bx.querySelectorAll) continue;
+      var all = bx.querySelectorAll('.tline.search-hit');
+      var ai;
+      for (ai = 0; ai < all.length; ai++) all[ai].classList.remove('search-hit');
+    }
+    return;
+  }
   var box = el(isPlanPage ? 'planLines' : 'lines');
   if (!box || !box.querySelectorAll) return;
-  var marked = box.querySelectorAll('.tline.search-hit');
-  var i;
-  for (i = 0; i < marked.length; i++) marked[i].classList.remove('search-hit');
-  if (!id) return;
   var rows = box.querySelectorAll('.tline[data-id]');
+  var i;
   for (i = 0; i < rows.length; i++) {
     if (rows[i].getAttribute('data-id') === id) { rows[i].classList.add('search-hit'); break; }
   }

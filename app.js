@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v222';
+  var APP_VERSION = 'v223';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1001,6 +1001,18 @@
       autosize(inp);
       fitChipRow(div, 'comp');
     });
+    /* Вставка из буфера (v223): на части мобильных WebView scrollHeight
+     * textarea с overflow-y:hidden к моменту input ещё не пересчитан —
+     * autosize меряет вчерашнюю высоту, текст обрезается. Повторный
+     * замер на следующем кадре (после paste) догоняет. */
+    inp.addEventListener('paste', function () {
+      if (inputClosed) return;
+      setTimeout(function () {
+        if (inputClosed) return;
+        autosize(inp);
+        fitChipRow(div, 'paste');
+      }, 0);
+    });
     inp.addEventListener('keydown', function (e) {
       if (e.key === 'Backspace' && taskId &&
           inp.selectionStart === 0 && inp.selectionEnd === 0) {
@@ -1893,6 +1905,11 @@
       var t = el('planInput');
       if (t) { try { t.classList.remove('err'); } catch (x) {} }
       savePlanDraft();
+    });
+    /* Вставка из буфера (v223): как у строк списка — отложенный замер,
+     * иначе scrollHeight к моменту input врёт и текст обрезается. */
+    on('planInput', 'paste', function () {
+      setTimeout(function () { savePlanDraft(); }, 0);
     });
     on('planInput', 'keydown', function (e) {
       if (!e || e.key !== 'Enter') return;

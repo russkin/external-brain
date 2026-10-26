@@ -896,6 +896,26 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(html.includes('src/search.js') && swSrc.includes('src/search.js'),
       'модуль не подключён (index.html / sw.js)');
   });
+  it('поиск v223: подсветка снимается с обоих контейнеров; центровка по #planHead и положившейся панели; paste растит поле', () => {
+    /* Отмена на плане: applySearchHit(null) чистит и #lines, и #planLines —
+     * иначе зелёная обводка переживает закрытие оверлея. */
+    assert.ok(/if \(!id\) \{[\s\S]{0,400}planLines[\s\S]{0,400}search-hit/.test(searchSrc),
+      'снятие подсветки не чистит planLines');
+    /* Центровка: план меряет свой #planHead, не скрытую под оверлеем
+     * основную <header>; обе ветки идут по restingBarTop (гонка с
+     * клавиатурой после blur «Поиск»). */
+    assert.ok(searchSrc.includes('function restingBarTop') &&
+      searchSrc.includes("el('planHead')"),
+      'центровка не по #planHead / без restingBarTop');
+    assert.ok(!/scrollToSearchRow[\s\S]{0,1200}querySelectorAll\('.tline'\)[\s\S]{0,800}querySelector\('header'\)\s*;\s*var headBottom/.test(searchSrc) ||
+      searchSrc.indexOf("el('planHead')") < searchSrc.indexOf('function applySearchHit'),
+      'плановая ветка scrollToSearchRow всё ещё меряет header');
+    /* Paste: отложенный autosize у строк списка и поля создания плана. */
+    assert.ok(/inp\.addEventListener\('paste'[\s\S]{0,200}autosize\(inp\)/.test(appSrc),
+      'paste не растит строку списка');
+    assert.ok(/on\('planInput', 'paste'[\s\S]{0,120}savePlanDraft/.test(appSrc),
+      'paste не растит поле создания плана');
+  });
   it('восстановление хоронит пропавших (синк не воскрешает)', () => {
     assert.ok(appSrc.includes('L.restoreWithTombstones(state.tasks, restored.tasks'),
       'восстановление без tombstone — синк вернёт удалённое');
