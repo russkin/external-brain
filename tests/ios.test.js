@@ -796,27 +796,26 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(!/autosizeMirror[\s\S]{0,800}border:/.test(mBlock),
       'у зеркала скопирована рамка (перенос разойдётся с полем, грабль 48)');
   });
-  it('поле плана: в фокусе только рост, ужимание на blur, scrollTop гасится (v225)', () => {
+  it('поле плана на строковом пути: схлоп-замер, compositionend, без rAF/blur (v226)', () => {
     var iA = rendSrc.indexOf('function autosize(');
     var aBlock = rendSrc.slice(iA, rendSrc.indexOf('function updateDurchip'));
-    var iG = aBlock.indexOf('if (growOnly)');
-    assert.ok(iG !== -1, 'нет режима только-рост у autosize');
-    var iCollapse = aBlock.indexOf("ta.style.height = 'auto'");
-    assert.ok(iG < iCollapse, 'режим только-рост идёт после схлоп-пути');
-    var gBlock = aBlock.slice(iG, iCollapse);
-    assert.ok(!gBlock.includes("height = 'auto'") && !gBlock.includes('autosizeMirror'),
-      'режим только-рост схлопает поле под кареткой (внутренняя прокрутка поля)');
-    assert.ok(gBlock.includes('scrollHeight') && gBlock.includes('scrollTop'),
-      'режим только-рост не меряет scrollHeight и не гасит прокрутку');
-    var sc = (aBlock.match(/ta\.scrollTop = 0/g) || []).length;
-    assert.ok(sc >= 2, 'scrollTop не гасится в обоих режимах (текст прилипает выше верха)');
-    assert.ok(/autosize\(pi, true\)/.test(appSrc) &&
-      /autosize\(pi2, true\)/.test(appSrc),
-      'поле плана при вводе схлопается (не режим только-рост)');
-    assert.ok(/on\('planInput', 'blur'[\s\S]{0,160}autosize\(/.test(appSrc),
-      'после расфокуса поле плана не ужимается точно');
-    assert.ok(/d != null\) \{ pi\.value = d; autosize\(pi\); \}/.test(appSrc),
-      'восстановление черновика меряет вне фокуса — схлоп-путь');
+    assert.ok(!/function autosize\(ta,/.test(aBlock) && !aBlock.includes('growOnly'),
+      'остался режим только-рост (v225: на телефоне отстающий scrollHeight — поле не растёт)');
+    assert.ok(aBlock.includes("ta.style.height = 'auto'") &&
+      aBlock.includes('ta.scrollTop = 0') && aBlock.includes('autosizeMirror'),
+      'нет строкового схлоп-замера, сброса прокрутки или fit-страховки');
+    var iD = appSrc.indexOf('function savePlanDraft');
+    var dBlock = appSrc.slice(iD, appSrc.indexOf('function clearPlanDraft', iD));
+    assert.ok(/localStorage\.setItem\(PLANFIELD_KEY, pi\.value\);\s*(\/\*[\s\S]*?\*\/\s*)?autosize\(pi\);/.test(dBlock),
+      'поле плана растёт не строковым autosize (без второго аргумента)');
+    assert.ok(!dBlock.includes('requestAnimationFrame'),
+      'лишний кадровый повтор у поля плана (у строк его нет)');
+    assert.ok(!/on\('planInput', 'blur'/.test(appSrc),
+      'лишний blur-обработчик (у строк его нет)');
+    assert.ok(/on\('planInput', 'compositionend', function \(\) \{ savePlanDraft\(\); \}\)/.test(appSrc),
+      'нет финального замера на compositionend (как у строк)');
+    assert.ok(/autosize\(inp\)/.test(rendSrc) && /autosize\(areas\[q\]\)/.test(rendSrc),
+      'строки потеряли свой автозамер');
   });
   it('групповой drag: дети прячутся под родителя и едут с ним', () => {
     assert.ok(gestSrc.includes('kids'), 'дети не собираются при drag');
@@ -1136,7 +1135,7 @@ describe('синк: триггеры и протокол', () => {
       appSrc.includes('window.EBRender.renderStatus()') &&
       !appSrc.includes('window.EBRender.focusTrailing()') &&
       appSrc.includes('window.EBRender.expandForAnchor(anchorId, indent)') &&
-      appSrc.includes('window.EBRender.autosize(ta, growOnly)') &&
+      appSrc.includes('window.EBRender.autosize(ta)') &&
       appSrc.includes('window.EBRender.fitChipRow(div, src)') &&
       appSrc.includes('window.EBRender.updateDurchip(inp, chip)') &&
       appSrc.includes('window.EBRender.refreshDurchips(box)'),
@@ -1455,7 +1454,7 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(/<textarea[^>]*id="planInput"/.test(html), 'название не textarea (нет переноса)');
     assert.ok(!/id="planInput"[^>]*wrap="off"/.test(html), 'перенос выключен');
     assert.ok(html.includes('id="planFormRow"'), 'дата и ＋ не во второй строке');
-    assert.ok(/savePlanDraft[\s\S]{0,400}autosize\(/.test(appSrc), 'поле не растёт за текстом');
+    assert.ok(/savePlanDraft[\s\S]{0,700}autosize\(/.test(appSrc), 'поле не растёт за текстом');
     /* v224: восстановленный черновик растит поле сразу при открытии —
      * строго ПОСЛЕ показа страницы (иначе autosize меряет display:none
      * и поле схлопывается), и после каждого ввода замер повторяется на
@@ -1467,9 +1466,10 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(showBlock.indexOf("classList.add('open')") !== -1 &&
       showBlock.indexOf("classList.add('open')") < showBlock.indexOf('autosize(pi)'),
       'черновик восстанавливается до показа страницы — autosize меряет display:none');
-    assert.ok(/savePlanDraft[\s\S]{0,900}requestAnimationFrame/.test(appSrc) &&
-      /requestAnimationFrame[\s\S]{0,200}autosize\(pi2(?:, true)?\)/.test(appSrc),
-      'нет кадрового повторного autosize поля плана (v224)');
+    /* v226: кадрового повтора у поля нет — строковый путь (rAF-повтор
+     * v224 вместе с ростом давал и лишние проходы под кареткой). */
+    assert.ok(!/function savePlanDraft[\s\S]{0,700}requestAnimationFrame/.test(appSrc),
+      'лишний кадровый повтор autosize поля плана (у строк его нет, v226)');
   });
   it('планы плоские: отступов нет, сдвиг не стартует (v197)', () => {
     assert.ok(/makeLine\(t\.id, t\.title, 0,/.test(rendSrc), 'строка плана едет со своим отступом');

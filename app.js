@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v225';
+  var APP_VERSION = 'v226';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -496,8 +496,8 @@
   function expandForAnchor(anchorId, indent) {
     if (window.EBRender) window.EBRender.expandForAnchor(anchorId, indent);
   }
-  function autosize(ta, growOnly) {
-    if (window.EBRender) window.EBRender.autosize(ta, growOnly);
+  function autosize(ta) {
+    if (window.EBRender) window.EBRender.autosize(ta);
   }
   function fitChipRow(div, src) {
     if (window.EBRender && window.EBRender.fitChipRow) window.EBRender.fitChipRow(div, src);
@@ -1336,20 +1336,13 @@
       var pi = el('planInput');
       if (!pi) return;
       localStorage.setItem(PLANFIELD_KEY, pi.value);
-      /* Только рост в фокусе (v225): схлоп-возврат под кареткой даёт
-       * телефону повод прокрутить содержимое поля внутри — первая строка
-       * «уезжала вверх». */
-      autosize(pi, true);
-      /* Страховка от несвежего scrollHeight (v224): на части мобильных
-       * движков замер к моменту input отстаёт от вставленного/набранного
-       * текста — повтор на следующем кадре догоняет (одно поле плана,
-       * цена — один кадр; строки списка такой страховки не плодят). */
-      if (window.requestAnimationFrame) {
-        window.requestAnimationFrame(function () {
-          var pi2 = el('planInput');
-          if (pi2) autosize(pi2, true);
-        });
-      }
+      /* Ровно строковый путь (v226): схлоп height='auto' → свежий замер →
+       * точная высота, как у .tinput на каждой строке. Отклонения от него
+       * ломали поле на телефоне каждый раз: grow-only без схлопа (v225)
+       * читал отстающий scrollHeight — поле не ростило, контент вылезал,
+       * и браузер крутил поле к каретке (текст уезжал вверх). Кадрового
+       * повтора нет — у строк его нет. */
+      autosize(pi);
     } catch (x) {}
   }
 
@@ -1920,11 +1913,9 @@
       if (t) { try { t.classList.remove('err'); } catch (x) {} }
       savePlanDraft();
     });
-    /* Точное ужимание без фокуса (v225): пока поле в фокусе — только рост
-     * (autosize growOnly); после расфокуса каретки нет, схлоп безопасен. */
-    on('planInput', 'blur', function () {
-      autosize(el('planInput'));
-    });
+    /* Составной ввод (Gboard и т.п.): как у строк списка — финальный
+     * замер на compositionend (v226). */
+    on('planInput', 'compositionend', function () { savePlanDraft(); });
     /* Вставка из буфера (v223): как у строк списка — отложенный замер,
      * иначе scrollHeight к моменту input врёт и текст обрезается. */
     on('planInput', 'paste', function () {
