@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v223';
+  var APP_VERSION = 'v224';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1301,16 +1301,17 @@
     var gm = el('gearMenu');
     if (gm) gm.classList.remove('open');
     try { planScrollY = window.pageYOffset || 0; } catch (x) { planScrollY = 0; }
+    if (!pg.classList.contains('open')) pg.classList.add('open');
     /* Черновик поля — восстановить при открытии (пишется на каждый
-     * input в savePlanDraft). */
+     * input). Строго ПОСЛЕ показа страницы: autosize на display:none
+     * меряет scrollHeight = 0 и поле схлопывается в 0px (v224). */
     try {
       if (typeof localStorage !== 'undefined') {
         var d = localStorage.getItem(PLANFIELD_KEY);
         var pi = el('planInput');
-        if (pi && d != null) pi.value = d;
+        if (pi && d != null) { pi.value = d; autosize(pi); }
       }
     } catch (x) {}
-    if (!pg.classList.contains('open')) pg.classList.add('open');
     render();
     /* v210: фокус в поле создания НЕ ставим — страница открывается без
      * клавиатуры (она закрывала полсписка); курсор — по тапу в поле. */
@@ -1336,6 +1337,16 @@
       if (!pi) return;
       localStorage.setItem(PLANFIELD_KEY, pi.value);
       autosize(pi);
+      /* Страховка от несвежего scrollHeight (v224): на части мобильных
+       * движков замер к моменту input отстаёт от вставленного/набранного
+       * текста — повтор на следующем кадре догоняет (одно поле плана,
+       * цена — один кадр; строки списка такой страховки не плодят). */
+      if (window.requestAnimationFrame) {
+        window.requestAnimationFrame(function () {
+          var pi2 = el('planInput');
+          if (pi2) autosize(pi2);
+        });
+      }
     } catch (x) {}
   }
 

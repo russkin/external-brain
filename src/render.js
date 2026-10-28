@@ -332,11 +332,66 @@ function makeLine(taskId, value, indent, opts) {
   return div;
 }
 
-/* Многострочность: поле растёт за текстом, переносы сохраняются в задачу. */
+/* Многострочность: поле растёт за текстом, переносы сохраняются в задачу.
+ * Быстрый путь — scrollHeight самого поля: он НЕ включает рамку, а height —
+ * border-box (глобальный `* { box-sizing: border-box }`), поэтому к замеру
+ * прибавляются рамки (offsetHeight − clientHeight) — иначе поле всегда на
+ * 4px ниже нужного и низ последней строки подрезан (v224).
+ * После установки проверяется fit: scrollHeight > clientHeight — текст всё
+ * ещё не помещается, т.е. замер соврал (на части мобильных движков
+ * scrollHeight textarea с overflow-y:hidden отстаёт от ввода — вставка из
+ * буфера v223 не росла). Тогда высота меряется независимым зеркалом
+ * (autosizeMirror). */
 function autosize(ta) {
   if (!ta || !ta.style) return;
   ta.style.height = 'auto';
-  try { ta.style.height = ta.scrollHeight + 'px'; } catch (x) {}
+  try {
+    var sh = ta.scrollHeight;
+    ta.style.height = sh + 'px';
+    /* Рамки поля — дёшево, без getComputedStyle (вёрстка уже свежая). */
+    var borders = (ta.offsetHeight - ta.clientHeight) || 0;
+    if (borders) ta.style.height = (sh + borders) + 'px';
+    /* Fit-проверка: без клиентской высоты (нет вёрстки/скрытая строка)
+     * сверять не с чем. */
+    if (ta.clientHeight && ta.scrollHeight > ta.clientHeight) autosizeMirror(ta);
+  } catch (x) {}
+}
+
+/* Зеркальный замер высоты для autosize (редкий путь — только когда поле
+ * само показало нехватку высоты). Див с теми же шрифтами/переносами и
+ * ШИРИНОЙ ПЕРЕНОСА самого поля: width = offsetWidth БЕЗ рамки — textarea
+ * переносит, будто рамки нет (грабль 48, та же копипаста, что в
+ * updateDurchip). Паддинги копируются, рамка зеркала нет — она прибавится
+ * вызывающему. Замер — scrollHeight зеркала (текст + паддинги). */
+function autosizeMirror(ta) {
+  var m = document.createElement('div');
+  try {
+    var cs = window.getComputedStyle(ta);
+    var props = ['font-family', 'font-size', 'font-weight', 'font-style',
+      'line-height', 'letter-spacing', 'word-spacing', 'text-indent',
+      'text-align', 'text-transform', 'white-space', 'word-break',
+      'overflow-wrap', 'direction', 'padding-top', 'padding-right',
+      'padding-bottom', 'padding-left', 'box-sizing'];
+    m.style.position = 'absolute';
+    m.style.left = '-9999px';
+    m.style.top = '0';
+    m.style.visibility = 'hidden';
+    m.style.pointerEvents = 'none';
+    m.style.width = ta.offsetWidth + 'px';
+    for (var i = 0; i < props.length; i++) {
+      var v = cs.getPropertyValue(props[i]);
+      if (v) m.style.setProperty(props[i], v);
+    }
+    /* Пустое поле — строка-заглушка (ZWSP): у непустого зеркало меряет
+     * ровно свой текст. */
+    m.appendChild(document.createTextNode(ta.value || '\u200b'));
+    document.body.appendChild(m);
+    var bt = parseFloat(cs.borderTopWidth) || 0;
+    var bb = parseFloat(cs.borderBottomWidth) || 0;
+    ta.style.height = (m.scrollHeight + bt + bb) + 'px';
+  } catch (x) {} finally {
+    try { if (m.parentNode) m.parentNode.removeChild(m); } catch (x) {}
+  }
 }
 
 /* Фон метки времени: прозрачный, пока текст поля под ней не мешает;

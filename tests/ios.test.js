@@ -777,6 +777,25 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(html.includes('resize: none'), 'поле можно растягивать вручную');
     assert.ok(html.includes('overflow-y'), 'нет скрытия скролла поля');
   });
+  it('autosize: рамки в высоту + fit-проверка с зеркалом (v224)', () => {
+    var iA = rendSrc.indexOf('function autosize(');
+    assert.ok(iA !== -1, 'нет autosize');
+    var aBlock = rendSrc.slice(iA, rendSrc.indexOf('function updateDurchip'));
+    /* scrollHeight не включает рамку, height — border-box: без прибавки
+     * поле на 4px ниже нужного и низ последней строки подрезан. */
+    assert.ok(aBlock.includes('offsetHeight - ta.clientHeight'),
+      'рамки не прибавляются к высоте (поле подрезано на 4px)');
+    assert.ok(aBlock.includes('scrollHeight > ta.clientHeight') &&
+      aBlock.includes('autosizeMirror'),
+      'нет fit-проверки с зеркальным замером (мобильный несвежий scrollHeight)');
+    var iM = rendSrc.indexOf('function autosizeMirror');
+    assert.ok(iM !== -1, 'нет autosizeMirror');
+    var mBlock = rendSrc.slice(iM, rendSrc.indexOf('function updateDurchip'));
+    assert.ok(mBlock.includes('ta.offsetWidth') && mBlock.includes('borderTopWidth'),
+      'зеркало без ширины переноса поля и прибавки рамки');
+    assert.ok(!/autosizeMirror[\s\S]{0,800}border:/.test(mBlock),
+      'у зеркала скопирована рамка (перенос разойдётся с полем, грабль 48)');
+  });
   it('групповой drag: дети прячутся под родителя и едут с ним', () => {
     assert.ok(gestSrc.includes('kids'), 'дети не собираются при drag');
     assert.ok(gestSrc.includes('holeShift'), 'дыра не покрывает весь блок');
@@ -1415,6 +1434,20 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(!/id="planInput"[^>]*wrap="off"/.test(html), 'перенос выключен');
     assert.ok(html.includes('id="planFormRow"'), 'дата и ＋ не во второй строке');
     assert.ok(/savePlanDraft[\s\S]{0,400}autosize\(/.test(appSrc), 'поле не растёт за текстом');
+    /* v224: восстановленный черновик растит поле сразу при открытии —
+     * строго ПОСЛЕ показа страницы (иначе autosize меряет display:none
+     * и поле схлопывается), и после каждого ввода замер повторяется на
+     * следующем кадре (несвежий scrollHeight мобильных движков). */
+    var iShow = appSrc.indexOf('function showPlanPage');
+    var showBlock = appSrc.slice(iShow, appSrc.indexOf('function hidePlanPage', iShow));
+    assert.ok(/d != null\)\s*\{\s*pi\.value = d;\s*autosize\(pi\)/.test(showBlock),
+      'восстановленный черновик не растит поле при открытии страницы');
+    assert.ok(showBlock.indexOf("classList.add('open')") !== -1 &&
+      showBlock.indexOf("classList.add('open')") < showBlock.indexOf('autosize(pi)'),
+      'черновик восстанавливается до показа страницы — autosize меряет display:none');
+    assert.ok(/savePlanDraft[\s\S]{0,600}requestAnimationFrame/.test(appSrc) &&
+      /requestAnimationFrame[\s\S]{0,200}autosize\(pi2\)/.test(appSrc),
+      'нет кадрового повторного autosize поля плана (v224)');
   });
   it('планы плоские: отступов нет, сдвиг не стартует (v197)', () => {
     assert.ok(/makeLine\(t\.id, t\.title, 0,/.test(rendSrc), 'строка плана едет со своим отступом');
