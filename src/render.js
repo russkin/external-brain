@@ -341,19 +341,38 @@ function makeLine(taskId, value, indent, opts) {
  * ещё не помещается, т.е. замер соврал (на части мобильных движков
  * scrollHeight textarea с overflow-y:hidden отстаёт от ввода — вставка из
  * буфера v223 не росла). Тогда высота меряется независимым зеркалом
- * (autosizeMirror). */
-function autosize(ta) {
+ * (autosizeMirror).
+ * Режим growOnly (v225, поле создания плана): НЕ схлопать поле при живой
+ * каретке. Схлоп-возврат под кареткой провоцирует телефонный браузер с
+ * клавиатурой прокрутить ВНУТРЕННЕЕ содержимое поля (scrollTop) — после
+ * возврата высоты прокрутка прилипала и первая строка «уезжала вверх»
+ * внутри целого поля. В growOnly при переполнении scrollHeight — честная
+ * высота контента: растим до неё, ужимание — без фокуса (blur, очистка
+ * после создания, восстановление черновика — там схлоп-путь безопасен). */
+function autosize(ta, growOnly) {
   if (!ta || !ta.style) return;
+  if (growOnly) {
+    try {
+      var shG = ta.scrollHeight;
+      var bg = (ta.offsetHeight - ta.clientHeight) || 0;
+      if (shG + bg > (ta.offsetHeight || 0)) ta.style.height = (shG + bg) + 'px';
+      /* Страховка: внутреннюю прокрутку телефона гасим всегда. */
+      if (ta.scrollTop) ta.scrollTop = 0;
+    } catch (x) {}
+    return;
+  }
   ta.style.height = 'auto';
   try {
     var sh = ta.scrollHeight;
     ta.style.height = sh + 'px';
-    /* Рамки поля — дёшево, без getComputedStyle (вёрстка уже свежая). */
     var borders = (ta.offsetHeight - ta.clientHeight) || 0;
     if (borders) ta.style.height = (sh + borders) + 'px';
     /* Fit-проверка: без клиентской высоты (нет вёрстки/скрытая строка)
      * сверять не с чем. */
     if (ta.clientHeight && ta.scrollHeight > ta.clientHeight) autosizeMirror(ta);
+    /* v225: схлоп-возврат мог оставить внутреннюю прокрутку (телефон
+     * докручивает каретку) — текст снова от верхнего края. */
+    if (ta.scrollTop) ta.scrollTop = 0;
   } catch (x) {}
 }
 

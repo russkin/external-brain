@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v224';
+  var APP_VERSION = 'v225';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -496,8 +496,8 @@
   function expandForAnchor(anchorId, indent) {
     if (window.EBRender) window.EBRender.expandForAnchor(anchorId, indent);
   }
-  function autosize(ta) {
-    if (window.EBRender) window.EBRender.autosize(ta);
+  function autosize(ta, growOnly) {
+    if (window.EBRender) window.EBRender.autosize(ta, growOnly);
   }
   function fitChipRow(div, src) {
     if (window.EBRender && window.EBRender.fitChipRow) window.EBRender.fitChipRow(div, src);
@@ -1336,7 +1336,10 @@
       var pi = el('planInput');
       if (!pi) return;
       localStorage.setItem(PLANFIELD_KEY, pi.value);
-      autosize(pi);
+      /* Только рост в фокусе (v225): схлоп-возврат под кареткой даёт
+       * телефону повод прокрутить содержимое поля внутри — первая строка
+       * «уезжала вверх». */
+      autosize(pi, true);
       /* Страховка от несвежего scrollHeight (v224): на части мобильных
        * движков замер к моменту input отстаёт от вставленного/набранного
        * текста — повтор на следующем кадре догоняет (одно поле плана,
@@ -1344,7 +1347,7 @@
       if (window.requestAnimationFrame) {
         window.requestAnimationFrame(function () {
           var pi2 = el('planInput');
-          if (pi2) autosize(pi2);
+          if (pi2) autosize(pi2, true);
         });
       }
     } catch (x) {}
@@ -1916,6 +1919,11 @@
       var t = el('planInput');
       if (t) { try { t.classList.remove('err'); } catch (x) {} }
       savePlanDraft();
+    });
+    /* Точное ужимание без фокуса (v225): пока поле в фокусе — только рост
+     * (autosize growOnly); после расфокуса каретки нет, схлоп безопасен. */
+    on('planInput', 'blur', function () {
+      autosize(el('planInput'));
     });
     /* Вставка из буфера (v223): как у строк списка — отложенный замер,
      * иначе scrollHeight к моменту input врёт и текст обрезается. */
