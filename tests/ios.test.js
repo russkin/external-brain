@@ -799,23 +799,41 @@ describe('логика вызывается с state.tasks', () => {
   it('поле плана на строковом пути: схлоп-замер, compositionend, без rAF/blur (v226)', () => {
     var iA = rendSrc.indexOf('function autosize(');
     var aBlock = rendSrc.slice(iA, rendSrc.indexOf('function updateDurchip'));
-    assert.ok(!/function autosize\(ta,/.test(aBlock) && !aBlock.includes('growOnly'),
+    assert.ok(!aBlock.includes('growOnly'),
       'остался режим только-рост (v225: на телефоне отстающий scrollHeight — поле не растёт)');
     assert.ok(aBlock.includes("ta.style.height = 'auto'") &&
       aBlock.includes('ta.scrollTop = 0') && aBlock.includes('autosizeMirror'),
       'нет строкового схлоп-замера, сброса прокрутки или fit-страховки');
     var iD = appSrc.indexOf('function savePlanDraft');
     var dBlock = appSrc.slice(iD, appSrc.indexOf('function clearPlanDraft', iD));
-    assert.ok(/localStorage\.setItem\(PLANFIELD_KEY, pi\.value\);\s*(\/\*[\s\S]*?\*\/\s*)?autosize\(pi\);/.test(dBlock),
-      'поле плана растёт не строковым autosize (без второго аргумента)');
+    assert.ok(/planProbeRun\(scene \|\| 'ввод', pi, function \(m\) \{ autosize\(pi, m\); \}\)/.test(dBlock),
+      'поле плана растёт не строковым autosize (в обёртке телеметрии)');
     assert.ok(!dBlock.includes('requestAnimationFrame'),
       'лишний кадровый повтор у поля плана (у строк его нет)');
-    assert.ok(!/on\('planInput', 'blur'/.test(appSrc),
-      'лишний blur-обработчик (у строк его нет)');
-    assert.ok(/on\('planInput', 'compositionend', function \(\) \{ savePlanDraft\(\); \}\)/.test(appSrc),
+    assert.ok(!/on\('planInput', 'blur'[\s\S]{0,200}autosize\(/.test(appSrc),
+      'blur-обработчик трогает высоту (у строк его нет; телеметрия — только чтение)');
+    assert.ok(/on\('planInput', 'compositionend', function \(\) \{ savePlanDraft\('составной'\); \}\)/.test(appSrc),
       'нет финального замера на compositionend (как у строк)');
     assert.ok(/autosize\(inp\)/.test(rendSrc) && /autosize\(areas\[q\]\)/.test(rendSrc),
       'строки потеряли свой автозамер');
+  });
+  it('телеметрия поля плана: кольцо сэмплов, shAuto в замере, строка в диагностике (v227)', () => {
+    assert.ok(appSrc.includes("PLANPROBE_KEY = 'external-brain-planprobe-v1'") &&
+      appSrc.includes('function planSnap') && appSrc.includes('function planProbeRun') &&
+      appSrc.includes("while (ring.length > 15)"),
+      'нет кольца сэмплов телеметрии поля плана');
+    assert.ok(/on\('planInput', 'blur', function \(\) \{\s*planProbeRun\('потеря фокуса'/.test(appSrc),
+      'нет снимка поля при потере фокуса');
+    assert.ok(/planProbeRun\('открытие'/.test(appSrc) &&
+      /savePlanDraft\('вставка'\)/.test(appSrc) &&
+      /savePlanDraft\('ввод'\)/.test(appSrc),
+      'сценарии открытия/вставки/ввода не подписаны');
+    assert.ok(rendSrc.includes('probe.shAuto') && rendSrc.includes('probe.borders') &&
+      rendSrc.includes('probe.mirror'),
+      'autosize не отдаёт серединные числа замера (shAuto/рамки/зеркало)');
+    assert.ok(diagSrc.includes('Поле плана') &&
+      diagSrc.includes('external-brain-planprobe-v1') && diagSrc.includes('схлоп shAuto='),
+      'нет строки телеметрии поля в диагностике');
   });
   it('групповой drag: дети прячутся под родителя и едут с ним', () => {
     assert.ok(gestSrc.includes('kids'), 'дети не собираются при drag');
@@ -1135,7 +1153,7 @@ describe('синк: триггеры и протокол', () => {
       appSrc.includes('window.EBRender.renderStatus()') &&
       !appSrc.includes('window.EBRender.focusTrailing()') &&
       appSrc.includes('window.EBRender.expandForAnchor(anchorId, indent)') &&
-      appSrc.includes('window.EBRender.autosize(ta)') &&
+      appSrc.includes('window.EBRender.autosize(ta, probe)') &&
       appSrc.includes('window.EBRender.fitChipRow(div, src)') &&
       appSrc.includes('window.EBRender.updateDurchip(inp, chip)') &&
       appSrc.includes('window.EBRender.refreshDurchips(box)'),
@@ -1461,10 +1479,10 @@ describe('планирование ФАЗА 1: страница плана (FR-9
      * следующем кадре (несвежий scrollHeight мобильных движков). */
     var iShow = appSrc.indexOf('function showPlanPage');
     var showBlock = appSrc.slice(iShow, appSrc.indexOf('function hidePlanPage', iShow));
-    assert.ok(/d != null\)\s*\{\s*pi\.value = d;\s*autosize\(pi\)/.test(showBlock),
+    assert.ok(/d != null\)\s*\{\s*pi\.value = d;\s*planProbeRun\('открытие'[\s\S]{0,120}autosize\(pi, m\)/.test(showBlock),
       'восстановленный черновик не растит поле при открытии страницы');
     assert.ok(showBlock.indexOf("classList.add('open')") !== -1 &&
-      showBlock.indexOf("classList.add('open')") < showBlock.indexOf('autosize(pi)'),
+      showBlock.indexOf("classList.add('open')") < showBlock.indexOf('autosize(pi, m)'),
       'черновик восстанавливается до показа страницы — autosize меряет display:none');
     /* v226: кадрового повтора у поля нет — строковый путь (rAF-повтор
      * v224 вместе с ростом давал и лишние проходы под кареткой). */

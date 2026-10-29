@@ -348,18 +348,25 @@ function makeLine(taskId, value, indent, opts) {
  * вылезает, и браузер с клавиатурой крутит поле к каретке (текст уезжает
  * вверх). Поле создания плана переведено на ЭТОТ же путь (строки и поле —
  * одна механика). scrollTop = 0 в конце — страховка от прилипшей
- * внутренней прокрутки. */
-function autosize(ta) {
+ * внутренней прокрутки.
+ * probe (v227, ВРЕМЕННАЯ телеметрия поля плана): если передан объект —
+ * в него складываются серединные числа замера (shAuto сразу после схлопа,
+ * рамки, сработало ли зеркало). */
+function autosize(ta, probe) {
   if (!ta || !ta.style) return;
   ta.style.height = 'auto';
   try {
     var sh = ta.scrollHeight;
+    if (probe) probe.shAuto = sh;
     ta.style.height = sh + 'px';
     var borders = (ta.offsetHeight - ta.clientHeight) || 0;
+    if (probe) probe.borders = borders;
     if (borders) ta.style.height = (sh + borders) + 'px';
     /* Fit-проверка: без клиентской высоты (нет вёрстки/скрытая строка)
      * сверять не с чем. */
-    if (ta.clientHeight && ta.scrollHeight > ta.clientHeight) autosizeMirror(ta);
+    var mir = false;
+    if (ta.clientHeight && ta.scrollHeight > ta.clientHeight) { mir = true; autosizeMirror(ta); }
+    if (probe) probe.mirror = mir;
     /* v226: схлоп-возврат мог оставить внутреннюю прокрутку (телефон
      * докручивает каретку) — текст снова от верхнего края. */
     if (ta.scrollTop) ta.scrollTop = 0;

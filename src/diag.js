@@ -267,6 +267,29 @@ function diagText() {
       lines.push('Последнее срабатывание: ' + (lastF ? fmtDT(lastF) : 'нет'));
     }
   } catch (x) {}
+  /* Телеметрия поля плана (v227, ВРЕМЕННАЯ — выпилить после разбора
+   * «поле не растёт / текст уезжает вверх» на телефоне): последний сэмпл
+   * кольца до/после автозамера (localStorage external-brain-planprobe-v1). */
+  try {
+    if (typeof localStorage !== 'undefined') {
+      var ppRing = JSON.parse(localStorage.getItem('external-brain-planprobe-v1') || '[]');
+      if (ppRing && ppRing.length) {
+        var pp = ppRing[ppRing.length - 1];
+        var pad2 = function (n) { return (n < 10 ? '0' : '') + n; };
+        var pd = new Date(pp.t || 0);
+        var ppFmt = function (s) {
+          if (!s) return '-';
+          return 'len ' + s.len + ', h=' + s.h + ', oh=' + s.oh + ', sh=' + s.sh +
+            ', st=' + s.st + ', w=' + s.w + (s.foc ? ', фокус' : '');
+        };
+        var ppM = pp.m ? ('; схлоп shAuto=' + pp.m.shAuto + ', рамки=' + pp.m.borders +
+          (pp.m.mirror ? ', зеркало' : '')) : '';
+        lines.push('Поле плана (' + pp.scene + ' ' + pad2(pd.getHours()) + ':' +
+          pad2(pd.getMinutes()) + ':' + pad2(pd.getSeconds()) + ', сэмплов ' +
+          ppRing.length + '): до ' + ppFmt(pp.b) + ' → после ' + ppFmt(pp.a) + ppM);
+      }
+    }
+  } catch (x) {}
   var lastAction = C.getLastAction();
   if (lastAction) lines.push('Последнее действие: ' + lastAction);
   /* Только непойманные JS-ошибки (window.onerror); ошибки синка живут
