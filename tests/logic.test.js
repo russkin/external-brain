@@ -898,6 +898,31 @@ describe('планирование ФАЗА 0: модель и изоляция 
     assert.equal(L.getRepeat({}), null, 'без полей — null');
     assert.equal(L.getRepeat({ repeatEvery: 2, repeatUnit: 'week' }).unit, 'week');
   });
+  it('repeat: normalize/clone держит weekday у week (v229 — метки «вс» у всех)', () => {
+    /* copyRepeat раньше не копировал repeatWeekday у unit 'week':
+     * каждый pull/слияние выбрасывало поле, getRepeat → 0 = «вс» и
+     * все еженедельные метки показывали воскресенье (даты при этом
+     * считались верно — расчёт от repeatWeekday не зависит). */
+    var src = {
+      id: 'w1', title: 'бюджет', status: 'todo', planDate: '04.11.2026',
+      repeatEvery: 1, repeatUnit: 'week', repeatWeekday: 3,
+      createdAt: 1, updatedAt: 1, ts: 1
+    };
+    var n = L.normalizeTask(src);
+    assert.equal(n.repeatWeekday, 3, 'normalize потерял repeatWeekday у week');
+    assert.equal(L.repeatLabel(L.getRepeat(n)), 'кажд. ср', 'метка после normalize');
+    var c = L.cloneTask(n);
+    assert.equal(c.repeatWeekday, 3, 'clone потерял repeatWeekday у week');
+    /* Пустое поле НЕ записываем (миграция v220 заполнит по planDate):
+     * записанный здесь «0» она бы уже не тронула. */
+    var old = { id: 'w2', title: 'x', status: 'todo', planDate: '01.11.2026',
+      repeatEvery: 1, repeatUnit: 'week', ts: 1 };
+    var on = L.normalizeTask(old);
+    assert.equal(on.repeatWeekday, undefined, 'пустое поле не выдумывается');
+    /* Недельный повтор переживает JSON-раундтрип (пулл с сервера). */
+    var rt = JSON.parse(JSON.stringify(n));
+    assert.equal(L.normalizeTask(rt).repeatWeekday, 3, 'JSON-раундтрип потерял weekday');
+  });
   it('repeat: nextPlanDate день/неделя — фиксированный сдвиг', () => {
     assert.equal(L.nextPlanDate('16.10.2026', { every: 5, unit: 'day' }, localMs(2026, 10, 16, 12, 0)), '21.10.2026');
     assert.equal(L.nextPlanDate('16.10.2026', { every: 2, unit: 'week' }, localMs(2026, 10, 16, 12, 0)), '30.10.2026');

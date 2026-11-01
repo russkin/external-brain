@@ -794,7 +794,13 @@ function repeatLabel(r) {
   return n === 1 ? base : base + ' · ' + n + ' мес.';
 }
 
-/* Копия повтора в задачу-приёмник (нормализованный белый список). */
+/* Копия повтора в задачу-приёмник (нормализованный белый список).
+ * v229: unit 'week' тоже копирует repeatWeekday — иначе normalize/clone
+ * (каждый pull и слияние) выкидывали поле, getRepeat → 0 = «вс», и ВСЕ
+ * еженедельные метки показывали воскресенье, хоть даты были разные
+ * (расчёт даты от repeatWeekday не зависит — поле у 'week' только для
+ * метки). Миграция v220 в store.js чинит по planDate только при старте,
+ * а синк снова стирал. */
 function copyRepeat(src, dst) {
   var r = getRepeat(src);
   if (!r) return;
@@ -805,6 +811,13 @@ function copyRepeat(src, dst) {
     dst.repeatWeekday = r.weekday;
   } else if (r.unit === 'month' || r.unit === 'year') {
     dst.repeatDay = r.day;
+  } else if (r.unit === 'week') {
+    /* Только если поле есть: пустое не записываем — миграция v220
+     * (store.js) заполнит его по planDate при следующей загрузке,
+     * а записанный здесь «0» (вс) она бы уже не тронула. */
+    if (src && src.repeatWeekday != null && src.repeatWeekday !== '') {
+      dst.repeatWeekday = normRepeatWeekday(src.repeatWeekday);
+    }
   }
 }
 

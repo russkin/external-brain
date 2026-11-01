@@ -181,8 +181,18 @@ function pinLabel(fmtWhen) {
 
 /* Занятость localStorage (v228, грабль 53): сумма длин ключей+значений
  * ЧТЕНИЕМ — при полной квоте чтение работает, только setItem падает.
- * Номинал 5120 КБ — лимит Chrome ~5 МБ/origin; строки в UTF-16 (×2). */
-var LS_LIMIT_KB = 5120;
+ * Номинал лимита (v229): Chrome ~10240 КБ (10 MiB, проверено стендом:
+ * QuotaExceededError ровно на 5 242 880 UTF-16 символов) — исторические
+ * 5120 КБ остались у Safari/iOS (5 MiB). Строки в UTF-16 (×2). */
+function lsLimitKb() {
+  try {
+    var ua = navigator.userAgent || '';
+    var iosChrome = /CriOS/.test(ua);            /* Chrome на iOS */
+    var safari = /Safari/.test(ua) && !/Chrome|Chromium|CriOS|Edg|Android/.test(ua);
+    if (safari && !iosChrome) return 5120;
+  } catch (x) {}
+  return 10240;
+}
 function storageUsage() {
   try {
     if (typeof localStorage === 'undefined') return null;
@@ -193,7 +203,7 @@ function storageUsage() {
       var v = localStorage.getItem(k);
       bytes += (k.length + (v ? v.length : 0)) * 2;
     }
-    return { kb: Math.round(bytes / 1024), limit: LS_LIMIT_KB };
+    return { kb: Math.round(bytes / 1024), limit: lsLimitKb() };
   } catch (x) { return null; }
 }
 

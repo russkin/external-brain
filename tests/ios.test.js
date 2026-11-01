@@ -864,10 +864,10 @@ describe('логика вызывается с state.tasks', () => {
       'неудачные записи store не фиксируются / не отдаются в диагностику');
     /* Диагностика: строка квоты чтением, флаг записи, ужатие истории,
      * «Поле плана» видна всегда («сэмплов 0»). */
-    assert.ok(diagSrc.includes('LS_LIMIT_KB = 5120') &&
+    assert.ok(diagSrc.includes('function lsLimitKb()') &&
       diagSrc.includes("localStorage.key(i)") &&
       diagSrc.includes('ПЕРЕПОЛНЕН'),
-      'нет строки занятости хранилища (чтением, из 5120)');
+      'нет строки занятости хранилища (чтением, с лимитом браузера)');
     assert.ok(diagSrc.includes('Запись хранилища:') &&
       diagSrc.includes('за сессию без ошибок'),
       'нет строки неудачных записей');
@@ -875,6 +875,28 @@ describe('логика вызывается с state.tasks', () => {
       'нет пометки ужатия истории');
     assert.ok(diagSrc.includes('Поле плана: сэмплов 0'),
       'строка поля плана молчит при пустом кольце (должна: «сэмплов 0»)');
+  });
+  it('квота v229: лимит браузера, ужатое записывается сразу, week держит weekday', () => {
+    /* Лимит (v229): Chrome 10240 КБ (стенд: ошибка ровно на 10 MiB
+     * UTF-16), Safari/iOS — 5120. Жёсткого «из 5120» больше нет. */
+    assert.ok(diagSrc.includes('return 5120') && diagSrc.includes('return 10240'),
+      'нет выбора лимита под браузер (Safari 5120 / Chrome 10240)');
+    assert.ok(!diagSrc.includes('LS_LIMIT_KB = 5120'),
+      'остался жёсткий лимит 5120 для всех браузеров');
+    /* Ужатие при загрузке сразу пишется на диск (v228 урезал только
+     * память — квота не освобождалась: «↩7» рядом с «ПЕРЕПОЛНЕН»). */
+    assert.ok(/if \(histFit\(\)\) histSave\(\);/.test(historySrc),
+      'ужатые стеки истории не записываются при загрузке');
+    assert.ok(/function histFit\(\)[\s\S]{0,500}return dropped;/.test(historySrc),
+      'histFit не отдаёт число отброшенных шагов');
+    /* Метки недельных повторов (v229): copyRepeat копирует weekday у
+     * week — иначе normalize/clone (pull и слияние) выбрасывают поле и
+     * все метки показывают «вс» (нет поля → 0 = воскресенье). */
+    assert.ok(/else if \(r\.unit === 'week'\)/.test(logicSrc) &&
+      logicSrc.indexOf('dst.repeatWeekday') > -1,
+      'copyRepeat не копирует repeatWeekday у week (метки «вс» у всех)');
+    assert.ok(logicSrc.includes('src.repeatWeekday != null'),
+      'week weekday копируется безусловно — миграция v220 потеряет пустое поле');
   });
   it('групповой drag: дети прячутся под родителя и едут с ним', () => {
     assert.ok(gestSrc.includes('kids'), 'дети не собираются при drag');
