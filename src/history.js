@@ -30,11 +30,48 @@ var HISTORY_MAX = 50;
 var UNDO_KEY = 'external-brain-undo-v1';
 var REDO_KEY = 'external-brain-redo-v1';
 
+/* Бюджет стеков (v228, грабль 53): слепки — ПОЛНЫЙ JSON списка на шаг,
+ * при большом списке 50 шагов заполняют всю квоту localStorage (~5 МБ)
+ * и дальше молча падают ВСЕ записи (черновик, копия, история). Поэтому
+ * перед записью суммарный размер стеков держим ≤~1.5 МБ (UTF-16:
+ * длина строки ×2) — старые шаги отбрасываем. Ограничение памяти
+ * сессии: трим виден в диагностике (счётчик отброшенных). */
+var HISTORY_BUDGET = 1.5 * 1024 * 1024;
+var trimInfo = null;   /* { at, dropped } — память сессии, в ⓘ */
+var writeErr = null;   /* { t, who, name } — неудачная запись (память) */
+
+function histBytes() {
+  return (JSON.stringify(undoStack).length + JSON.stringify(redoStack).length) * 2;
+}
+
+/* Ставит флаг неудачной записи (кто/когда/имя ошибки) — его же ставит
+ * store.js для backupWrite/lsWrite; читает diag. */
+function noteWriteErr(who, e) {
+  writeErr = { t: Date.now(), who: who, name: (e && e.name) || '' };
+}
+
+function histFit() {
+  var dropped = 0;
+  while (histBytes() > HISTORY_BUDGET &&
+         undoStack.length + redoStack.length > 1) {
+    if (redoStack.length) redoStack.shift();
+    else undoStack.shift();
+    dropped++;
+  }
+  if (dropped) {
+    trimInfo = {
+      at: Date.now(),
+      dropped: (trimInfo ? trimInfo.dropped : 0) + dropped
+    };
+  }
+}
+
 function histSave() {
   try {
+    histFit();
     localStorage.setItem(UNDO_KEY, JSON.stringify(undoStack));
     localStorage.setItem(REDO_KEY, JSON.stringify(redoStack));
-  } catch (e) {}
+  } catch (e) { noteWriteErr('histSave', e); }
 }
 
 function histClean(arr) {
@@ -55,6 +92,9 @@ function load() {
     r = histClean(r).slice(-HISTORY_MAX);
     undoStack = u;
     redoStack = r;
+    /* Накопленные старые стеки (до бюджета v228) ужимаем сразу — иначе
+     * сгоревшая квота не даст им уменьшиться, пока histSave не вызван. */
+    histFit();
   } catch (e) {}
 }
 
@@ -202,7 +242,11 @@ var api = {
   snapFull: snapFull,
   pushUndo: pushUndo,
   updateHistoryButtons: updateHistoryButtons,
-  mutateWithHistory: mutateWithHistory
+  mutateWithHistory: mutateWithHistory,
+  /* v228: бюджет стека — { at, dropped } или null (память сессии);
+   * последняя неудачная запись истории — { t, who, name } или null. */
+  trimInfo: function () { return trimInfo; },
+  writeErr: function () { return writeErr; }
 };
 
 if (typeof module !== 'undefined' && module.exports) {

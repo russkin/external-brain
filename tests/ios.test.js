@@ -835,6 +835,47 @@ describe('логика вызывается с state.tasks', () => {
       diagSrc.includes('external-brain-planprobe-v1') && diagSrc.includes('схлоп shAuto='),
       'нет строки телеметрии поля в диагностике');
   });
+  it('квота localStorage: бюджет стека истории, автозамер до записи черновика (v228)', () => {
+    /* Бюджет стека (грабль 53): полный JSON на шаг ×50 шагов заполнял
+     * всю квоту ~5 МБ и молча ронял ВСЕ записи. histSave ужимает стек
+     * до бюджета, load чистит накопленное, неудача пишет флаг. */
+    assert.ok(historySrc.includes('HISTORY_BUDGET = 1.5 * 1024 * 1024'),
+      'нет бюджета стека истории');
+    assert.ok(/function histFit\(\)[\s\S]{0,400}undoStack\.shift\(\)/.test(historySrc),
+      'нет отбрасывания старых шагов при переполнении бюджета');
+    assert.ok(/function histSave\(\) \{\s*try \{\s*histFit\(\);/.test(historySrc),
+      'histSave не ужимает стек перед записью');
+    assert.ok(historySrc.includes("noteWriteErr('histSave', e)"),
+      'неудачная запись истории не фиксируется');
+    assert.ok(/function load\(\)[\s\S]{0,700}histFit\(\)/.test(historySrc),
+      'накопленные стеки при загрузке не ужимаются');
+    /* Автозамер ДО setItem (иначе при полной квоте поле замирало —
+     * схлоп-замер не вызывался вовсе, сага поля плана). */
+    var iD = appSrc.indexOf('function savePlanDraft');
+    var dBlock = appSrc.slice(iD, appSrc.indexOf('function clearPlanDraft', iD));
+    var iAut = dBlock.indexOf('autosize(pi, m)');
+    var iSet = dBlock.indexOf('setItem(PLANFIELD_KEY');
+    assert.ok(iAut !== -1 && iSet !== -1 && iAut < iSet,
+      'автозамер поля плана идёт не до записи черновика');
+    /* Флаги неудач: store.js (backupWrite/lsWrite) + api. */
+    assert.ok(storeSrc.includes("noteWriteErr('backupWrite', e)") &&
+      storeSrc.includes("noteWriteErr('lsWrite', e)") &&
+      storeSrc.includes('writeErr: function () { return writeErr; }'),
+      'неудачные записи store не фиксируются / не отдаются в диагностику');
+    /* Диагностика: строка квоты чтением, флаг записи, ужатие истории,
+     * «Поле плана» видна всегда («сэмплов 0»). */
+    assert.ok(diagSrc.includes('LS_LIMIT_KB = 5120') &&
+      diagSrc.includes("localStorage.key(i)") &&
+      diagSrc.includes('ПЕРЕПОЛНЕН'),
+      'нет строки занятости хранилища (чтением, из 5120)');
+    assert.ok(diagSrc.includes('Запись хранилища:') &&
+      diagSrc.includes('за сессию без ошибок'),
+      'нет строки неудачных записей');
+    assert.ok(diagSrc.includes('ужата (отброшено '),
+      'нет пометки ужатия истории');
+    assert.ok(diagSrc.includes('Поле плана: сэмплов 0'),
+      'строка поля плана молчит при пустом кольце (должна: «сэмплов 0»)');
+  });
   it('групповой drag: дети прячутся под родителя и едут с ним', () => {
     assert.ok(gestSrc.includes('kids'), 'дети не собираются при drag');
     assert.ok(gestSrc.includes('holeShift'), 'дыра не покрывает весь блок');

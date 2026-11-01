@@ -25,13 +25,22 @@
   var lastPersisted = null;
   var skipBackupOnce = false;
 
+  /* Последняя неудачная запись localStorage (v228, грабль 53): память
+   * сессии { t, who, name } — при полной квоте setItem падает молча,
+   * без флага в диагностике «Локальная копия замерла» — единственный
+   * симптом. Показывает src/diag.js (строка «Запись хранилища:»). */
+  var writeErr = null;
+  function noteWriteErr(who, e) {
+    writeErr = { t: Date.now(), who: who, name: (e && e.name) || '' };
+  }
+
   function snap(s) {
     try { return JSON.parse(JSON.stringify(s)); } catch (e) { return null; }
   }
   function backupWrite(prev) {
     try {
       localStorage.setItem(BACKUP_KEY, JSON.stringify({ savedAt: Date.now(), state: prev }));
-    } catch (e) {}
+    } catch (e) { noteWriteErr('backupWrite', e); }
   }
   function backupRead() {
     try {
@@ -74,6 +83,7 @@
       localStorage.setItem(LS_KEY, JSON.stringify(state));
       return true;
     } catch (e) {
+      noteWriteErr('lsWrite', e);
       return false;
     }
   }
@@ -218,6 +228,9 @@
     },
     /* { savedAt, state } — копия для диагностики, или null. */
     backupInfo: function () { return backupRead(); },
+    /* Последняя неудачная запись (v228): { t, who, name } или null —
+     * для строки «Запись хранилища:» в диагностике. */
+    writeErr: function () { return writeErr; },
     /* Копия состояния для восстановления + защита от перетирания
      * самой копии при последующем сохранении. null — копии нет. */
     restoreBackup: function () {

@@ -179,6 +179,35 @@ function pinLabel(fmtWhen) {
   return fmtWhen(p.savedAt) + ' (' + src + ')';
 }
 
+/* Занятость localStorage (v228, грабль 53): сумма длин ключей+значений
+ * ЧТЕНИЕМ — при полной квоте чтение работает, только setItem падает.
+ * Номинал 5120 КБ — лимит Chrome ~5 МБ/origin; строки в UTF-16 (×2). */
+var LS_LIMIT_KB = 5120;
+function storageUsage() {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    var bytes = 0;
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k == null) continue;
+      var v = localStorage.getItem(k);
+      bytes += (k.length + (v ? v.length : 0)) * 2;
+    }
+    return { kb: Math.round(bytes / 1024), limit: LS_LIMIT_KB };
+  } catch (x) { return null; }
+}
+
+/* Последняя неудачная запись (память сессии): у store.js свой флаг
+ * (backupWrite/lsWrite), у истории свой (histSave) — берём свежайшую. */
+function lastWriteErr() {
+  var a = null, b = null;
+  try { if (window.EBStore && window.EBStore.writeErr) a = window.EBStore.writeErr(); } catch (x) {}
+  try { if (window.EBHistory && window.EBHistory.writeErr) b = window.EBHistory.writeErr(); } catch (x) {}
+  if (!a) return b || null;
+  if (!b) return a;
+  return (b.t || 0) > (a.t || 0) ? b : a;
+}
+
 function diagText() {
   var state = C.getState();
   var sy = C.getSync();
@@ -217,7 +246,31 @@ function diagText() {
   lines.push('Локально: выполненные ' + (C.isDoneHidden() ? 'скрыты' : 'видны') +
     ' · свёрнуто групп ' + collapsedN);
   var h = C.getHistoryCounts();
-  lines.push('История: ↩ ' + h.u + ' · ↪ ' + h.r);
+  var hLine = 'История: ↩ ' + h.u + ' · ↪ ' + h.r;
+  /* Ужатие стека по бюджету (v228): видно, что лечение квоты работает. */
+  try {
+    if (window.EBHistory && window.EBHistory.trimInfo) {
+      var tr = window.EBHistory.trimInfo();
+      if (tr && tr.dropped) hLine += ' · ужата (отброшено ' + tr.dropped + ')';
+    }
+  } catch (x) {}
+  lines.push(hLine);
+  /* Занятость квоты и неудачные записи (v228, грабль 53): читаем ключи
+   * сами — при полной квоте чтение работает, падает только запись. */
+  try {
+    var su = storageUsage();
+    if (su) {
+      lines.push('Хранилище: ' + su.kb + ' КБ из ' + su.limit + ' · ' +
+        (su.kb >= su.limit ? 'ПЕРЕПОЛНЕН' : 'норма'));
+    }
+  } catch (x) {}
+  try {
+    var we = lastWriteErr();
+    lines.push(we
+      ? 'Запись хранилища: не удалась ' + fmtDT(we.t) + ' (' + we.who +
+        (we.name ? ', ' + we.name : '') + ')'
+      : 'Запись хранилища: за сессию без ошибок');
+  } catch (x) {}
   lines.push('Сеть: ' + connLine());
   lines.push('Устройство: ' + deviceLine() + ' · id ' + journalDeviceId());
   lines.push('Repo: ' + (state ? state.settings.repo : '?'));
@@ -287,6 +340,10 @@ function diagText() {
         lines.push('Поле плана (' + pp.scene + ' ' + pad2(pd.getHours()) + ':' +
           pad2(pd.getMinutes()) + ':' + pad2(pd.getSeconds()) + ', сэмплов ' +
           ppRing.length + '): до ' + ppFmt(pp.b) + ' → после ' + ppFmt(pp.a) + ppM);
+      } else {
+        /* v228: строка видна всегда — «сэмплов 0» прямо говорит, что
+         * кольцо не создавалось (при полной квоте setItem молчал). */
+        lines.push('Поле плана: сэмплов 0 (нет данных)');
       }
     }
   } catch (x) {}

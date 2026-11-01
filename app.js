@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v227';
+  var APP_VERSION = 'v228';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1371,20 +1371,16 @@
     } catch (x) {}
   }
 
-  /* Черновик поля создания плана — запись на каждый input. */
+  /* Черновик поля создания плана — запись на каждый input.
+   * Рост — строковый схлоп-замер v226; v228 (грабль 53): автозамер
+   * ПЕРЕД setItem — при полной квоте запись падает, поле замирало. */
   function savePlanDraft(scene) {
     try {
       if (typeof localStorage === 'undefined') return;
       var pi = el('planInput');
       if (!pi) return;
-      localStorage.setItem(PLANFIELD_KEY, pi.value);
-      /* Ровно строковый путь (v226): схлоп height='auto' → свежий замер →
-       * точная высота, как у .tinput на каждой строке. Отклонения от него
-       * ломали поле на телефоне каждый раз: grow-only без схлопа (v225)
-       * читал отстающий scrollHeight — поле не ростило, контент вылезал,
-       * и браузер крутил поле к каретке (текст уезжал вверх). Кадрового
-       * повтора нет — у строк его нет. */
       planProbeRun(scene || 'ввод', pi, function (m) { autosize(pi, m); });
+      try { localStorage.setItem(PLANFIELD_KEY, pi.value); } catch (e) {}
     } catch (x) {}
   }
 
