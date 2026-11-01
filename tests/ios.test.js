@@ -806,41 +806,41 @@ describe('логика вызывается с state.tasks', () => {
       'нет строкового схлоп-замера, сброса прокрутки или fit-страховки');
     var iD = appSrc.indexOf('function savePlanDraft');
     var dBlock = appSrc.slice(iD, appSrc.indexOf('function clearPlanDraft', iD));
-    assert.ok(/planProbeRun\(scene \|\| 'ввод', pi, function \(m\) \{ autosize\(pi, m\); \}\)/.test(dBlock),
-      'поле плана растёт не строковым autosize (в обёртке телеметрии)');
+    assert.ok(/var pi = el\('planInput'\);\s*if \(!pi\) return;\s*autosize\(pi\);/.test(dBlock) &&
+      !dBlock.includes('planProbe'),
+      'поле плана растёт не строковым autosize (осталась телеметрия v227)');
     assert.ok(!dBlock.includes('requestAnimationFrame'),
       'лишний кадровый повтор у поля плана (у строк его нет)');
-    assert.ok(!/on\('planInput', 'blur'[\s\S]{0,200}autosize\(/.test(appSrc),
-      'blur-обработчик трогает высоту (у строк его нет; телеметрия — только чтение)');
-    assert.ok(/on\('planInput', 'compositionend', function \(\) \{ savePlanDraft\('составной'\); \}\)/.test(appSrc),
+    assert.ok(!/on\('planInput', 'blur'/.test(appSrc),
+      'blur-обработчик телеметрии (v227) не выпилен');
+    assert.ok(/on\('planInput', 'compositionend', function \(\) \{ savePlanDraft\(\); \}\)/.test(appSrc),
       'нет финального замера на compositionend (как у строк)');
     assert.ok(/autosize\(inp\)/.test(rendSrc) && /autosize\(areas\[q\]\)/.test(rendSrc),
       'строки потеряли свой автозамер');
   });
-  it('телеметрия поля плана: кольцо сэмплов, shAuto в замере, строка в диагностике (v227)', () => {
-    assert.ok(appSrc.includes("PLANPROBE_KEY = 'external-brain-planprobe-v1'") &&
-      appSrc.includes('function planSnap') && appSrc.includes('function planProbeRun') &&
-      appSrc.includes("while (ring.length > 15)"),
-      'нет кольца сэмплов телеметрии поля плана');
-    assert.ok(/on\('planInput', 'blur', function \(\) \{\s*planProbeRun\('потеря фокуса'/.test(appSrc),
-      'нет снимка поля при потере фокуса');
-    assert.ok(/planProbeRun\('открытие'/.test(appSrc) &&
-      /savePlanDraft\('вставка'\)/.test(appSrc) &&
-      /savePlanDraft\('ввод'\)/.test(appSrc),
-      'сценарии открытия/вставки/ввода не подписаны');
-    assert.ok(rendSrc.includes('probe.shAuto') && rendSrc.includes('probe.borders') &&
-      rendSrc.includes('probe.mirror'),
-      'autosize не отдаёт серединные числа замера (shAuto/рамки/зеркало)');
-    assert.ok(diagSrc.includes('Поле плана') &&
-      diagSrc.includes('external-brain-planprobe-v1') && diagSrc.includes('схлоп shAuto='),
-      'нет строки телеметрии поля в диагностике');
+  it('телеметрия поля плана выпилена (v230, sagа закрыта — поле растёт)', () => {
+    assert.ok(!appSrc.includes('planProbe') && !appSrc.includes('PLANPROBE_KEY') &&
+      !appSrc.includes('planSnap'),
+      'осталась телеметрия поля плана в app.js');
+    assert.ok(!rendSrc.includes('probe.shAuto') && !rendSrc.includes('probe.borders') &&
+      !rendSrc.includes('probe.mirror') && /function autosize\(ta\) \{/.test(rendSrc),
+      'autosize отдаёт пробные числа телеметрии или не принят без probe');
+    assert.ok(!diagSrc.includes('Поле плана') &&
+      !diagSrc.includes("getItem('external-brain-planprobe-v1')"),
+      'осталась строка телеметрии в диагностике');
+    assert.ok(/removeItem\('external-brain-planprobe-v1'\)/.test(diagSrc),
+      'мёртвый ключ planprobe не чистится при старте');
   });
   it('квота localStorage: бюджет стека истории, автозамер до записи черновика (v228)', () => {
     /* Бюджет стека (грабль 53): полный JSON на шаг ×50 шагов заполнял
-     * всю квоту ~5 МБ и молча ронял ВСЕ записи. histSave ужимает стек
-     * до бюджета, load чистит накопленное, неудача пишет флаг. */
-    assert.ok(historySrc.includes('HISTORY_BUDGET = 1.5 * 1024 * 1024'),
-      'нет бюджета стека истории');
+     * всю квоту и молча ронял ВСЕ записи. histSave ужимает стек
+     * до бюджета, load чистит накопленное, неудача пишет флаг.
+     * v230: бюджет — доля (30%) от лимита браузера, не константа. */
+    assert.ok(historySrc.includes('var HIST_BUDGET_PCT = 0.3') &&
+      /histBudgetBytes\(\)[\s\S]{0,400}EBDiag[\s\S]{0,120}lsLimitKb/.test(historySrc),
+      'нет бюджета стека истории как доли от лимита квоты');
+    assert.ok(!historySrc.includes('HISTORY_BUDGET = 1.5'),
+      'осталась жёсткая константа бюджета 1.5 МБ');
     assert.ok(/function histFit\(\)[\s\S]{0,400}undoStack\.shift\(\)/.test(historySrc),
       'нет отбрасывания старых шагов при переполнении бюджета');
     assert.ok(/function histSave\(\) \{\s*try \{\s*histFit\(\);/.test(historySrc),
@@ -853,7 +853,7 @@ describe('логика вызывается с state.tasks', () => {
      * схлоп-замер не вызывался вовсе, сага поля плана). */
     var iD = appSrc.indexOf('function savePlanDraft');
     var dBlock = appSrc.slice(iD, appSrc.indexOf('function clearPlanDraft', iD));
-    var iAut = dBlock.indexOf('autosize(pi, m)');
+    var iAut = dBlock.indexOf('autosize(pi)');
     var iSet = dBlock.indexOf('setItem(PLANFIELD_KEY');
     assert.ok(iAut !== -1 && iSet !== -1 && iAut < iSet,
       'автозамер поля плана идёт не до записи черновика');
@@ -862,8 +862,7 @@ describe('логика вызывается с state.tasks', () => {
       storeSrc.includes("noteWriteErr('lsWrite', e)") &&
       storeSrc.includes('writeErr: function () { return writeErr; }'),
       'неудачные записи store не фиксируются / не отдаются в диагностику');
-    /* Диагностика: строка квоты чтением, флаг записи, ужатие истории,
-     * «Поле плана» видна всегда («сэмплов 0»). */
+    /* Диагностика: строка квоты чтением, флаг записи, ужатие истории. */
     assert.ok(diagSrc.includes('function lsLimitKb()') &&
       diagSrc.includes("localStorage.key(i)") &&
       diagSrc.includes('ПЕРЕПОЛНЕН'),
@@ -873,8 +872,9 @@ describe('логика вызывается с state.tasks', () => {
       'нет строки неудачных записей');
     assert.ok(diagSrc.includes('ужата (отброшено '),
       'нет пометки ужатия истории');
-    assert.ok(diagSrc.includes('Поле плана: сэмплов 0'),
-      'строка поля плана молчит при пустом кольце (должна: «сэмплов 0»)');
+    /* lsLimitKb отдан в api — им пользуется бюджет истории. */
+    assert.ok(/lsLimitKb: lsLimitKb/.test(diagSrc),
+      'lsLimitKb не экспортирован для бюджета истории');
   });
   it('квота v229: лимит браузера, ужатое записывается сразу, week держит weekday', () => {
     /* Лимит (v229): Chrome 10240 КБ (стенд: ошибка ровно на 10 MiB
@@ -1216,7 +1216,7 @@ describe('синк: триггеры и протокол', () => {
       appSrc.includes('window.EBRender.renderStatus()') &&
       !appSrc.includes('window.EBRender.focusTrailing()') &&
       appSrc.includes('window.EBRender.expandForAnchor(anchorId, indent)') &&
-      appSrc.includes('window.EBRender.autosize(ta, probe)') &&
+      appSrc.includes('window.EBRender.autosize(ta)') &&
       appSrc.includes('window.EBRender.fitChipRow(div, src)') &&
       appSrc.includes('window.EBRender.updateDurchip(inp, chip)') &&
       appSrc.includes('window.EBRender.refreshDurchips(box)'),
@@ -1542,10 +1542,10 @@ describe('планирование ФАЗА 1: страница плана (FR-9
      * следующем кадре (несвежий scrollHeight мобильных движков). */
     var iShow = appSrc.indexOf('function showPlanPage');
     var showBlock = appSrc.slice(iShow, appSrc.indexOf('function hidePlanPage', iShow));
-    assert.ok(/d != null\)\s*\{\s*pi\.value = d;\s*planProbeRun\('открытие'[\s\S]{0,120}autosize\(pi, m\)/.test(showBlock),
+    assert.ok(/d != null\)\s*\{\s*pi\.value = d;\s*autosize\(pi\)/.test(showBlock),
       'восстановленный черновик не растит поле при открытии страницы');
     assert.ok(showBlock.indexOf("classList.add('open')") !== -1 &&
-      showBlock.indexOf("classList.add('open')") < showBlock.indexOf('autosize(pi, m)'),
+      showBlock.indexOf("classList.add('open')") < showBlock.indexOf('autosize(pi)'),
       'черновик восстанавливается до показа страницы — autosize меряет display:none');
     /* v226: кадрового повтора у поля нет — строковый путь (rAF-повтор
      * v224 вместе с ростом давал и лишние проходы под кареткой). */

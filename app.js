@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v229';
+  var APP_VERSION = 'v230';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -496,8 +496,8 @@
   function expandForAnchor(anchorId, indent) {
     if (window.EBRender) window.EBRender.expandForAnchor(anchorId, indent);
   }
-  function autosize(ta, probe) {
-    if (window.EBRender) window.EBRender.autosize(ta, probe);
+  function autosize(ta) {
+    if (window.EBRender) window.EBRender.autosize(ta);
   }
   function fitChipRow(div, src) {
     if (window.EBRender && window.EBRender.fitChipRow) window.EBRender.fitChipRow(div, src);
@@ -1311,7 +1311,7 @@
         var pi = el('planInput');
         if (pi && d != null) {
           pi.value = d;
-          planProbeRun('открытие', pi, function (m) { autosize(pi, m); });
+          autosize(pi);
         }
       }
     } catch (x) {}
@@ -1332,54 +1332,15 @@
     try { window.history.pushState({ page: 'plan' }, '', '#plan'); } catch (x) {}
   }
 
-  /* Телеметрия поля плана (v227, ВРЕМЕННАЯ — выпилить после разбора
-   * «поле не растёт / текст уезжает вверх» на телефоне, как chipDbg/
-   * headDbg): кольцо сэмплов до/после автозамера в localStorage
-   * (ключ external-brain-planprobe-v1, 15 штук), строка «Поле плана:»
-   * в диагностике. Сценарии: ввод/вставка/составной, потеря фокуса
-   * (только снимок до), открытие страницы. Поведение поля не меняет. */
-  var PLANPROBE_KEY = 'external-brain-planprobe-v1';
-  function planSnap(ta) {
-    return {
-      len: ta.value ? ta.value.length : 0,
-      h: ta.style.height || '',
-      oh: ta.offsetHeight,
-      ch: ta.clientHeight,
-      sh: ta.scrollHeight,
-      st: ta.scrollTop,
-      w: ta.clientWidth,
-      foc: document.activeElement === ta
-    };
-  }
-  function planProbePush(scene, b, a, m) {
-    try {
-      if (typeof localStorage === 'undefined') return;
-      var ring = [];
-      try { ring = JSON.parse(localStorage.getItem(PLANPROBE_KEY) || '[]'); } catch (x1) { ring = []; }
-      ring.push({ t: Date.now(), scene: scene, b: b, a: a, m: m || null });
-      while (ring.length > 15) ring.shift();
-      localStorage.setItem(PLANPROBE_KEY, JSON.stringify(ring));
-    } catch (x) {}
-  }
-  function planProbeRun(scene, ta, fn) {
-    if (!ta) return;
-    try {
-      var b = planSnap(ta);
-      var m = null;
-      if (fn) { m = {}; fn(m); }
-      planProbePush(scene, b, planSnap(ta), m);
-    } catch (x) {}
-  }
-
   /* Черновик поля создания плана — запись на каждый input.
    * Рост — строковый схлоп-замер v226; v228 (грабль 53): автозамер
-   * ПЕРЕД setItem — при полной квоте запись падает, поле замирало. */
-  function savePlanDraft(scene) {
+   * ПЕРЕД setItem — при полной квоте запись падала, поле замирало. */
+  function savePlanDraft() {
     try {
       if (typeof localStorage === 'undefined') return;
       var pi = el('planInput');
       if (!pi) return;
-      planProbeRun(scene || 'ввод', pi, function (m) { autosize(pi, m); });
+      autosize(pi);
       try { localStorage.setItem(PLANFIELD_KEY, pi.value); } catch (e) {}
     } catch (x) {}
   }
@@ -1949,20 +1910,15 @@
       /* Раз пользователь правит — красную ошибку гасим (v199). */
       var t = el('planInput');
       if (t) { try { t.classList.remove('err'); } catch (x) {} }
-      savePlanDraft('ввод');
+      savePlanDraft();
     });
     /* Составной ввод (Gboard и т.п.): как у строк списка — финальный
      * замер на compositionend (v226). */
-    on('planInput', 'compositionend', function () { savePlanDraft('составной'); });
-    /* Телеметрия (v227, временная): снимок состояния поля при потере
-     * фокуса — только чтение, поведение не меняем. */
-    on('planInput', 'blur', function () {
-      planProbeRun('потеря фокуса', el('planInput'), null);
-    });
+    on('planInput', 'compositionend', function () { savePlanDraft(); });
     /* Вставка из буфера (v223): как у строк списка — отложенный замер,
      * иначе scrollHeight к моменту input врёт и текст обрезается. */
     on('planInput', 'paste', function () {
-      setTimeout(function () { savePlanDraft('вставка'); }, 0);
+      setTimeout(function () { savePlanDraft(); }, 0);
     });
     on('planInput', 'keydown', function (e) {
       if (!e || e.key !== 'Enter') return;

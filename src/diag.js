@@ -330,33 +330,6 @@ function diagText() {
       lines.push('Последнее срабатывание: ' + (lastF ? fmtDT(lastF) : 'нет'));
     }
   } catch (x) {}
-  /* Телеметрия поля плана (v227, ВРЕМЕННАЯ — выпилить после разбора
-   * «поле не растёт / текст уезжает вверх» на телефоне): последний сэмпл
-   * кольца до/после автозамера (localStorage external-brain-planprobe-v1). */
-  try {
-    if (typeof localStorage !== 'undefined') {
-      var ppRing = JSON.parse(localStorage.getItem('external-brain-planprobe-v1') || '[]');
-      if (ppRing && ppRing.length) {
-        var pp = ppRing[ppRing.length - 1];
-        var pad2 = function (n) { return (n < 10 ? '0' : '') + n; };
-        var pd = new Date(pp.t || 0);
-        var ppFmt = function (s) {
-          if (!s) return '-';
-          return 'len ' + s.len + ', h=' + s.h + ', oh=' + s.oh + ', sh=' + s.sh +
-            ', st=' + s.st + ', w=' + s.w + (s.foc ? ', фокус' : '');
-        };
-        var ppM = pp.m ? ('; схлоп shAuto=' + pp.m.shAuto + ', рамки=' + pp.m.borders +
-          (pp.m.mirror ? ', зеркало' : '')) : '';
-        lines.push('Поле плана (' + pp.scene + ' ' + pad2(pd.getHours()) + ':' +
-          pad2(pd.getMinutes()) + ':' + pad2(pd.getSeconds()) + ', сэмплов ' +
-          ppRing.length + '): до ' + ppFmt(pp.b) + ' → после ' + ppFmt(pp.a) + ppM);
-      } else {
-        /* v228: строка видна всегда — «сэмплов 0» прямо говорит, что
-         * кольцо не создавалось (при полной квоте setItem молчал). */
-        lines.push('Поле плана: сэмплов 0 (нет данных)');
-      }
-    }
-  } catch (x) {}
   var lastAction = C.getLastAction();
   if (lastAction) lines.push('Последнее действие: ' + lastAction);
   /* Только непойманные JS-ошибки (window.onerror); ошибки синка живут
@@ -379,12 +352,14 @@ function diagText() {
 
 function init(ctx) {
   C = ctx;
-  /* Выпил временной телеметрии (v186 — метки, v211 — дотяжки шапки):
-   * мёртвые ключи чистим сами, иначе лежат в localStorage вечно. */
+  /* Выпил временной телеметрии (v186 — метки, v211 — дотяжки шапки,
+   * v230 — поле плана): мёртвые ключи чистим сами, иначе лежат в
+   * localStorage вечно. */
   try {
     localStorage.removeItem('external-brain-chipfit-v1');
     localStorage.removeItem('external-brain-chipblur-v1');
     localStorage.removeItem('external-brain-headlift-v1');
+    localStorage.removeItem('external-brain-planprobe-v1');
   } catch (x) {}
   ctx.on('diagBtn', 'click', function () {
     diagText().then(function (txt) {
@@ -406,7 +381,10 @@ var api = {
   load: load,
   maybePublishJournal: maybePublishJournal,
   diagText: diagText,
-  journalDeviceId: journalDeviceId
+  journalDeviceId: journalDeviceId,
+  /* v230: бюджет стека истории — доля от этого лимита (история живёт
+   * в том же localStorage). */
+  lsLimitKb: lsLimitKb
 };
 
 if (typeof module !== 'undefined' && module.exports) {

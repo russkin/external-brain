@@ -30,15 +30,27 @@ var HISTORY_MAX = 50;
 var UNDO_KEY = 'external-brain-undo-v1';
 var REDO_KEY = 'external-brain-redo-v1';
 
-/* Бюджет стеков (v228, грабль 53): слепки — ПОЛНЫЙ JSON списка на шаг,
- * при большом списке 50 шагов заполняют всю квоту localStorage (~5 МБ)
- * и дальше молча падают ВСЕ записи (черновик, копия, история). Поэтому
- * перед записью суммарный размер стеков держим ≤~1.5 МБ (UTF-16:
- * длина строки ×2) — старые шаги отбрасываем. Ограничение памяти
- * сессии: трим виден в диагностике (счётчик отброшенных). */
-var HISTORY_BUDGET = 1.5 * 1024 * 1024;
+/* Бюджет стеков (v228, грабль 53; v230 — доля от квоты): слепки —
+ * ПОЛНЫЙ JSON списка на шаг, при большом списке 50 шагов заполняют
+ * всю квоту localStorage и дальше молча падают ВСЕ записи (черновик,
+ * копия, история). Держим 30% квоты браузера: Safari 5120 КБ → ~1.5 МБ,
+ * Chrome 10240 КБ → ~3 МБ (стенд v229). UTF-16: длина строки ×2.
+ * Лимит — из EBDiag.lsLimitKb (тот же localStorage); в Node/тестах —
+ * дефолт 5120. Ограничение памяти сессии: трим виден в диагностике
+ * (счётчик отброшенных). */
+var HIST_BUDGET_PCT = 0.3;
 var trimInfo = null;   /* { at, dropped } — память сессии, в ⓘ */
 var writeErr = null;   /* { t, who, name } — неудачная запись (память) */
+
+function histBudgetBytes() {
+  var kb = 5120;
+  try {
+    if (typeof window !== 'undefined' && window.EBDiag && window.EBDiag.lsLimitKb) {
+      kb = window.EBDiag.lsLimitKb();
+    }
+  } catch (x) {}
+  return Math.round(kb * 1024 * HIST_BUDGET_PCT);
+}
 
 function histBytes() {
   return (JSON.stringify(undoStack).length + JSON.stringify(redoStack).length) * 2;
@@ -52,7 +64,7 @@ function noteWriteErr(who, e) {
 
 function histFit() {
   var dropped = 0;
-  while (histBytes() > HISTORY_BUDGET &&
+  while (histBytes() > histBudgetBytes() &&
          undoStack.length + redoStack.length > 1) {
     if (redoStack.length) redoStack.shift();
     else undoStack.shift();
