@@ -154,7 +154,12 @@ function doSync(force) {
           st.updatedAt = Date.now();
           window.EBStore.save(st);
         }
-        C.render();
+        /* v231 (вариант А): во время перетаскивания список не пересобираем —
+         * renderLines делает box.innerHTML='' и отвязывает строки, замороженные
+         * в каркасе жеста: finish падал NotFoundError'ем на insertBefore,
+         * посадка не сохранялась («задача отскакивает назад»). Догон — сам
+         * finish рендерит в конце жеста. */
+        if (!(C.isDragActive && C.isDragActive())) C.render();
       }
     }
     if (syncQueued) { syncQueued = false; doSync(); }

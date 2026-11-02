@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v230';
+  var APP_VERSION = 'v231';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1845,7 +1845,9 @@
       getVersion: function () { return APP_VERSION; },
       /* Будильник срабатывания планов (ФАЗА 2): триггеры зовут его на
        * возврате на вкладку, по сети и на тике 60 сек. */
-      planCheck: function () { schedulePlanCheck(0); }
+      planCheck: function () { schedulePlanCheck(0); },
+      /* v231: синк не рендерит список во время drag'а (гард в doSync). */
+      isDragActive: isDragActive
     });
 
     /* ВРЕМЕННЫЕ часы под шапкой (диагностика по скриншотам, до решения

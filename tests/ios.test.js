@@ -616,6 +616,18 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(fin.includes('!(kf && mode ===') && fin.includes('var kf = keepFocus;'),
       'сдвиг-отступ своей пустой гасит клавиатуру как чужой жест');
   });
+  it('v231: finish не падает NotFoundError при чужом render во время drag', () => {
+    var iF = gestSrc.indexOf('function finish(e)');
+    assert.ok(iF !== -1, 'нет finish в src/gestures.js');
+    var iG = gestSrc.indexOf('div.parentNode !== box || (anchor && anchor.parentNode !== box)', iF);
+    assert.ok(iG > iF, 'нет проверки строки/якоря в box перед insertBefore (drop упал NotFoundError)');
+    var dg = gestSrc.slice(iG, iG + 1000);
+    assert.ok(dg.includes("box.classList.remove('drag-active')") &&
+      dg.includes("box.style.minHeight = ''") && dg.includes('order = null'),
+      'деградация не чистит вид жеста (drag-active/minHeight залипают)');
+    assert.ok(dg.includes('C.render();') && dg.includes('return;'),
+      'деградация не перерисовывает список и не выходит до persistLineOrder');
+  });
   it('сдвиг-отступ своей пустой строки не гасит клавиатуру', () => {
     assert.ok(gestSrc.includes('keepFocus = !!(ae0') && gestSrc.includes("div.contains(ae0)"),
       'захват не запоминает фокус своей строки');
@@ -1301,6 +1313,12 @@ describe('синк: триггеры и протокол', () => {
   });
   it('файл состояния — data/state.json', () => {
     assert.ok(syncSrc.includes('contents/data/state.json'), 'не тот путь состояния');
+  });
+  it('v231: синк не пересобирает список во время drag (гард в doSync)', () => {
+    assert.ok(trigSrc.includes('if (!(C.isDragActive && C.isDragActive())) C.render();'),
+      'нет гарда isDragActive перед C.render в doSync — merged/pulled во время drag рвал посадку (NotFoundError)');
+    assert.ok(/EBTriggers\.init\(\{[\s\S]{0,700}isDragActive: isDragActive/.test(appSrc),
+      'app.js не отдаёт isDragActive в контекст модуля триггеров');
   });
 });
 

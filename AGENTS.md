@@ -18,7 +18,7 @@
 не в russkin/external-brain. Код по умолчанию смотрит в
 russkin/external-brain — дефолты в коде не менять. Репозиторий переключается
 настройкой repo в приложении.
-Текущая версия: v230 (ноябрь 2026). Тестов: 273 (`logic` + `ios` + `sync` + `sync-devices`).
+Текущая версия: v231 (ноябрь 2026). Тестов: 275 (`logic` + `ios` + `sync` + `sync-devices`).
 Тестовые платформы: смартфон Honor 400 Pro, Android 16 + iPhone, Safari 15
 (хозяин репозитория тестирует на iPhone). Планшет НЕ используется.
 
@@ -646,46 +646,30 @@ Docs-only правки версию НЕ bump'ят. Есть регресс-те
 
 ## Состояние сессии (для продолжения в новом чате)
 
-- **ОТКРЫТЫЙ БАГ (01.11.2026, анализ готов, ПРАВКИ НЕ ДЕЛАЛИ — ждём
-  выбор варианта в НОВОЙ сессии): NotFoundError при перетаскивании.
-  Симптомы (устройство хозяина, Honor 400 Pro / Chrome 156): иногда при
-  переносе дочерней задачи из-под одного родителя под другого задача
-  «отскакивает» назад, в статус-строке `ОШИБКА: Uncaught NotFoundError:
-  Failed to execute 'insertBefore' on 'Node': The node before which the
-  new node is to be inserted is not a child of this node. at
-  HTMLDocument.finish (…/src/gestures.js:990:11)`; в диагностике в тот
-  же момент `Синк: merged`. Причина (код изучен, цепочка доказана):
-  фоновый синк-триггер (дебаунс 2с/опрос 60с/возврат на вкладку) →
-  `doSync` → статус `merged`/`pulled` → `C.render()` в
-  `src/triggers.js:157` БЕЗ гарда `isDragActive()` (гардят только
-  `src/history.js:161` и `app.js:996`) → `renderLines()` делает
-  `box.innerHTML = ''` (`src/render.js:549`) — строки, замороженные в
-  каркасе `fr`, и сама тянущаяся строка отвязываются → `finish` →
-  `box.insertBefore(div, fr[phi].row)` (`src/gestures.js:990`) падает:
-  якорь не в `box`. Исключение обрывает `finish` ДО `persistLineOrder`
-  — drop не сохраняется, задача на старом месте; застревают
-  `#lines.drag-active`/`minHeight` (`gestures.js:1050-1051` пропущены),
-  `order`/`kids` не обнуляются. Почему «иногда»: рендерят только
-  `merged`/`pulled` (не `pushed`/`in-sync`); посадка в самый конец
-  списка (`anchor = null`) не падает — только `phi < fr.length`;
-  `isTypingNow()` откладывает синк лишь при фокусе в поле.
-  Варианты решения (хозяину предложены А/Б/В, рекомендована В; выбор
-  НЕ сделан — договорились доработать в новой сессии):
-  **А** — гард в `doSync` (`src/triggers.js`): на `merged`/`pulled`
-  `if (!isDragActive()) C.render()`; протащить `isDragActive` в ctx
-  `EBTriggers.init` (`app.js:1841`); `finish` рендерит сам в конце
-  (+220мс) — догон есть. Лечит все сегодняшние пути рендера.
-  **Б** — страховка в `finish` (`src/gestures.js`): перед
-  `insertBefore` проверить `anchor.parentNode === box`; оторван —
-  деградация без крэша (снять стили/класс `drag-active`/`minHeight`,
-  обнулить `order`/`kids`, `C.render()`, выйти). Ловит любую причину
-  перерисовки (в т.ч. мультитач-тап второй пальцем во время drag'а —
-  сегодня тоже уронит).
-  **В** — А + Б (рекомендация: А убирает известную причину, Б
-  гарантирует, что жест не упадёт чужим рендером).
-  В новой сессии: спросить вариант (текстом, не tool question), после
-  команды — правки, регресс-тест (гард/якорь), бамп v231, доки, полный
-  регламент публикации.
+- **АКТУАЛЬНО (02.11.2026):** выпущен v231 — баг NotFoundError при
+  перетаскивании закрыт (хозяин выбрал вариант В: А + Б, 02.11.2026).
+  Симптомы (Honor 400 Pro / Chrome 156): при переносе дочерней задачи
+  из-под одного родителя под другого задача «отскакивала» назад, в
+  статусе `ОШИБКА: Uncaught NotFoundError: … insertBefore … at
+  HTMLDocument.finish (src/gestures.js)`, в диагностике `Синк: merged`.
+  Причина: фоновый синк → `doSync` → `merged`/`pulled` → `C.render()`
+  в `src/triggers.js` без гарда → `box.innerHTML = ''` отвязывает
+  строки каркаса `fr` → `finish` падал на `box.insertBefore(div,
+  fr[phi].row)` ДО `persistLineOrder` (drop не сохранялся,
+  `#lines.drag-active`/`minHeight` залипали). Правки: **(А)** гард
+  `if (!(C.isDragActive && C.isDragActive())) C.render()` в `doSync`
+  (`src/triggers.js`, на `merged`/`pulled`) + `isDragActive: isDragActive`
+  в ctx `EBTriggers.init` (`app.js`); **(Б)** страховка в `finish`
+  (`src/gestures.js`): перед посадкой проверка
+  `div.parentNode !== box || (anchor && anchor.parentNode !== box)` —
+  оторваны: снять стили/класс `drag-active`/`minHeight`, обнулить
+  `order`/`kids`, `C.render()`, выйти (ловит ЛЮБУЮ причину чужого
+  рендера, в т.ч. мультитач). Догон — `finish` рендерит сам (+220мс).
+  Регресс-тесты: «v231: синк не пересобирает список во время drag»
+  (ios.test.js, триггеры) и «v231: finish не падает NotFoundError при
+  чужом render во время drag» (якорь/деградация). Документы: шапка
+  v231/275, FR-78, VERSIONS.html (USER_GUIDE не тронут — чисто
+  внутренний фикс).
 - **АКТУАЛЬНО (01.11.2026):** выпущен v230 (хозяин подтвердил: поле
   плана растёт — телеметрия planprobe выпилена, как chipDbg/headDbg;
   бюджет стека истории переведён с константы 1.5 МБ на ДОЛЮ от квоты

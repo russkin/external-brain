@@ -969,8 +969,39 @@ function wireLineDrag(div, grip, inp) {
         preTops.push({ el: row2, top: r.top });
       }
       /* Посадка ровно в дыру: якорь — первый ряд под ней из слепка.
-       * Пересчёт не нужен, промаха между preview и посадкой нет. */
+       * Пересчёт не нужен, промах между preview и посадкой нет. */
       var anchor = phi < fr.length ? fr[phi].row : null;
+      /* Страховка (v231, вариант Б): пока жест тянулся, список мог
+       * пересобраться мимо него (например, фоновый синк → C.render →
+       * box.innerHTML=''): строки каркаса и сама тянущаяся висят
+       * отвязанными, insertBefore падал NotFoundError'ем и finish
+       * обрывался ДО посадки и persistLineOrder (задача «отскакивала
+       * назад», в статусе — ОШИБКА). Строка или якорь вне box —
+       * пересборка уже случилась: деградируем без крэша: чистим вид,
+       * данные не трогаем, рисуем заново. */
+      if (div.parentNode !== box || (anchor && anchor.parentNode !== box)) {
+        div.classList.remove('dragging');
+        div.style.transition = '';
+        div.style.transform = '';
+        div.style.position = '';
+        div.style.top = '';
+        div.style.left = '';
+        div.style.width = '';
+        div.style.margin = '';
+        div.style.pointerEvents = '';
+        for (var gc = 0; gc < kids.length; gc++) {
+          if (!kids[gc] || !kids[gc].style) continue;
+          kids[gc].style.display = '';
+          kids[gc].style.transition = '';
+          kids[gc].style.transform = '';
+        }
+        box.classList.remove('drag-active');
+        box.style.minHeight = '';
+        order = null;
+        kids = [];
+        C.render();
+        return;
+      }
       /* Дыру снимаем мгновенно ДО перестановки: старая трансформа дыры,
        * сложенная с новым потоком (строка+дети вернулись), даёт прыжок
        * строк ниже вверх с возвратом. Замер preTops выше — со старой
