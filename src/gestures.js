@@ -337,7 +337,10 @@ function persistLineOrder(beforeOverride, boxOverride) {
      * порядка; в основном списке их секция отдельно и в порядок не входит. */
     if (t && !t.deleted && (wantPlan || t.status !== 'done')) domAlive.push(id);
   }
-  if (!domAlive.length) return false;
+  if (!domAlive.length) {
+    if (C.probe) C.probe('land', 'nodom');
+    return false;
+  }
   var wantTasks = (wantPlan && C.planTasks) ? C.planTasks() : C.lineTasks();
   var cur = wantTasks.map(function (t) { return t.id; });
   if (cur.length === domAlive.length) {
@@ -345,14 +348,21 @@ function persistLineOrder(beforeOverride, boxOverride) {
     for (var k = 0; k < domAlive.length; k++) {
       if (domAlive[k] !== cur[k]) { same = false; break; }
     }
-    if (same) return false;
+    if (same) {
+      if (C.probe) C.probe('land', 'same');
+      return false;
+    }
   }
   /* Уехавший блок — непрерывный отрезок отличий (drag двигает целиком). */
   var bs = -1, be = -1;
   for (var d = 0; d < domAlive.length && d < cur.length; d++) {
     if (domAlive[d] !== cur[d]) { if (bs === -1) bs = d; be = d; }
   }
-  if (bs === -1) return false;
+  if (bs === -1) {
+    /* Длины разные, а общий префикс совпал — DOM и каталог разошлись. */
+    if (C.probe) C.probe('land', 'prefix-eq dom=' + domAlive.length + ' cur=' + cur.length);
+    return false;
+  }
   var before = beforeOverride || C.snapFull();
   var now = Date.now();
   function at(idx) {
@@ -371,23 +381,32 @@ function persistLineOrder(beforeOverride, boxOverride) {
   state.tasks.forEach(function (t) {
     if (t && !t.deleted && !inSeg[t.id]) busyAt[t.createdAt] = true;
   });
+  var br = 'FALLBACK';
   var vals = null;
   if (P === null && N !== null) {
+    br = 'top';
     vals = [];
     for (var c0 = N - 1; vals.length < m; c0--) {
       if (!busyAt[c0]) vals.unshift(c0);
     }
   } else if (N === null && P !== null) {
+    br = 'bottom';
     vals = [];
     for (var c1 = P + 1; vals.length < m; c1++) {
       if (!busyAt[c1]) vals.push(c1);
     }
   } else if (P !== null && N !== null && N - P > m) {
+    br = 'gap';
     vals = [];
     for (var c = P + 1; c < N && vals.length < m; c++) {
       if (!busyAt[c]) vals.push(c);
     }
-    if (vals.length < m) vals = null;
+    if (vals.length < m) { vals = null; br = 'gap-short'; }
+  }
+  /* v232: какая ветка посадки порядка и насколько разошлись DOM/каталог. */
+  if (C.probe) {
+    C.probe('land', br + ' P' + (P === null ? '-' : '+') + ' N' + (N === null ? '-' : '+') +
+      ' m=' + m + ' dom=' + domAlive.length + ' cur=' + cur.length);
   }
   if (vals) {
     for (var v = 0; v < m; v++) {
@@ -652,6 +671,7 @@ function wireLineDrag(div, grip, inp) {
     indentCur = b.cur;
     indentMax = b.max;
     mode = 'indent';
+    if (C.probe) C.probe('idrag');
     /* Ветка едет целиком (как при вертикальной посадке): собираем
      * вложенных ниже по DOM-порядку — иначе сдвиг родителя отрывал
      * бы детей (внучки оставались на старом отступе). */
@@ -676,6 +696,7 @@ function wireLineDrag(div, grip, inp) {
     var box = boxOf(div);
     if (!box) return;
     mode = 'vertical';
+    if (C.probe) C.probe('vdrag');
     /* Высота контейнера фиксируется: вынутая из потока строка ужмёт
      * документ на кадр, браузер клампнет скролл вверх — и не вернёт.
      * Меряем до любых изменений, снимаем на финише (там высоты те же). */
@@ -865,6 +886,8 @@ function wireLineDrag(div, grip, inp) {
     /* Таймер краевой прокрутки гасим всегда — иначе страница уедет сама
      * после отпускания пальца. */
     stopEdge();
+    /* v232: отпускание — какой жест был на финише (vertical/indent/tap). */
+    if (C.probe) C.probe('up', mode || 'tap');
     dragActive = false;
     document.removeEventListener('pointerup', finish);
     document.removeEventListener('pointercancel', finish);
@@ -980,6 +1003,7 @@ function wireLineDrag(div, grip, inp) {
        * пересборка уже случилась: деградируем без крэша: чистим вид,
        * данные не трогаем, рисуем заново. */
       if (div.parentNode !== box || (anchor && anchor.parentNode !== box)) {
+        if (C.probe) C.probe('degrade', div.parentNode !== box ? 'div-вне-box' : 'anchor-вне-box');
         div.classList.remove('dragging');
         div.style.transition = '';
         div.style.transform = '';

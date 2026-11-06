@@ -159,6 +159,11 @@ function doSync(force) {
          * в каркасе жеста: finish падал NotFoundError'ем на insertBefore,
          * посадка не сохранялась («задача отскакивает назад»). Догон — сам
          * finish рендерит в конце жеста. */
+        /* v232: синк-окно жеста — ловим момент merged/pulled при активном
+         * drag'е (проверяем, что гард сработал, а render не проскочил). */
+        if (C.probe) {
+          C.probe('sync', res.status + ((C.isDragActive && C.isDragActive()) ? ' в-жесте' : ''));
+        }
         if (!(C.isDragActive && C.isDragActive())) C.render();
       }
     }

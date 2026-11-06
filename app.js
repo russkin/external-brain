@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v231';
+  var APP_VERSION = 'v232';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -485,7 +485,37 @@
   /* Отрисовка списка — модуль src/render.js (рефакторинг, этап 7):
    * здесь только тонкие алиасы, чтобы десятки вызовов во вводе, истории,
    * жестах и boot не трогать. */
+  /* ВРЕМЕННАЯ телеметрия посадки (v232, разбор отскока при перетаскивании):
+   * кольцо событий жеста в localStorage, строка «Жест:» в диагностике.
+   * Ловим: чужой render во время жеста (с file:line вызывающего),
+   * старт/отпускание жеста, ветку persistLineOrder, деградацию страховки
+   * в finish, синк в окне жеста. Выпилить после разбора (как planprobe),
+   * ключ — external-brain-landprobe-v1. */
+  var LANDPROBE_KEY = 'external-brain-landprobe-v1';
+  function dragProbe(ev, detail) {
+    try {
+      var arr = [];
+      try { arr = JSON.parse(localStorage.getItem(LANDPROBE_KEY)); } catch (x) { arr = null; }
+      if (!Array.isArray(arr)) arr = [];
+      var s = { t: Date.now(), ev: String(ev).slice(0, 24) };
+      if (detail) s.d = String(detail).slice(0, 90);
+      arr.push(s);
+      if (arr.length > 30) arr.shift();
+      localStorage.setItem(LANDPROBE_KEY, JSON.stringify(arr));
+    } catch (x) {}
+  }
+  /* file:line вызывающего для пробы render: 0 — эта функция, 1 — render(),
+   * 2 — кто его позвал (стек Chrome/Safari одинаков по формату .js:NNN). */
+  function probeCaller() {
+    try {
+      var ms = String((new Error()).stack || '').match(/[\w./-]+\.js:\d+/g) || [];
+      return ms.length > 2 ? ms[2].replace(/^.*\//, '') : 'н/д';
+    } catch (x) { return 'н/д'; }
+  }
   function render() {
+    /* v232: render во время жеста = список пересобрали под пальцем
+     * (призрак отвязывается, задача «улетает» назад ДО отпускания). */
+    if (isDragActive()) dragProbe('render', probeCaller());
     if (window.EBRender) window.EBRender.render();
     /* Опции цели — после строк: селект читает актуальный список (ФАЗА 2). */
     renderPlanTarget();
@@ -1846,8 +1876,10 @@
       /* Будильник срабатывания планов (ФАЗА 2): триггеры зовут его на
        * возврате на вкладку, по сети и на тике 60 сек. */
       planCheck: function () { schedulePlanCheck(0); },
-      /* v231: синк не рендерит список во время drag'а (гард в doSync). */
-      isDragActive: isDragActive
+      /* v231: синк не рендерит список во время drag'а (гард в doSync).
+       * v232: probe — телеметрия синк-окна жеста (разбор отскока). */
+      isDragActive: isDragActive,
+      probe: dragProbe
     });
 
     /* ВРЕМЕННЫЕ часы под шапкой (диагностика по скриншотам, до решения
@@ -2088,7 +2120,8 @@
       pushUndo: pushUndo,
       updateHistoryButtons: updateHistoryButtons,
       INDENT_STEP: INDENT_STEP,
-      LINES_GAP: LINES_GAP
+      LINES_GAP: LINES_GAP,
+      probe: dragProbe
     });
     /* Отрисовка списка — модуль src/render.js (этап 7): строки, порядок,
      * секция выполненных, статус. Сюда отдаём только контекст. */

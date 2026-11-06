@@ -992,7 +992,7 @@ describe('логика вызывается с state.tasks', () => {
       'вставка сверху сдвигает только живых');
     assert.ok(gestSrc.includes('busyAt[t.createdAt] = true') &&
       gestSrc.includes('if (!busyAt[c0]) vals.unshift(c0)') &&
-      gestSrc.includes('if (vals.length < m) vals = null;'),
+      gestSrc.includes('{ vals = null; br = \'gap-short\'; }'),
       'посадка встаёт встык с чужими метками');
     assert.ok(gestSrc.includes('var all = state.tasks.filter(function (t) { return t && !t.deleted; });'),
       'перенумер затрагивает только живых');
@@ -1319,6 +1319,23 @@ describe('синк: триггеры и протокол', () => {
       'нет гарда isDragActive перед C.render в doSync — merged/pulled во время drag рвал посадку (NotFoundError)');
     assert.ok(/EBTriggers\.init\(\{[\s\S]{0,700}isDragActive: isDragActive/.test(appSrc),
       'app.js не отдаёт isDragActive в контекст модуля триггеров');
+  });
+  it('v232: телеметрия посадки (временная, разбор отскока)', () => {
+    assert.ok(appSrc.includes("external-brain-landprobe-v1"), 'нет ключа кольца ландпробы');
+    assert.ok(appSrc.includes("if (isDragActive()) dragProbe('render', probeCaller())"),
+      'render не ловит чужой вызов во время жеста');
+    assert.ok(/EBTriggers\.init\(\{[\s\S]{0,900}probe: dragProbe/.test(appSrc),
+      'probe не отдан триггерам синка');
+    assert.ok(/EBGestures\.init\(\{[\s\S]{0,1400}probe: dragProbe/.test(appSrc),
+      'probe не отдан жестам');
+    assert.ok(gestSrc.includes("C.probe('up'") && gestSrc.includes("C.probe('vdrag'") &&
+      gestSrc.includes("C.probe('degrade'") && gestSrc.includes("C.probe('land'"),
+      'нет проб в startVertical/finish/деградации/persistLineOrder');
+    assert.ok(gestSrc.includes("C.probe('land', br +"), 'ветка посадки порядка не подписана (br)');
+    assert.ok(trigSrc.includes("C.probe('sync'"), 'нет пробы синк-окна жеста');
+    assert.ok(diagSrc.includes("'Жест: сэмплов '"), 'нет строки «Жест:» в диагностике');
+    assert.ok(!/removeItem\('external-brain-landprobe-v1'\)/.test(diagSrc),
+      'живой ключ телеметрии чистится при старте — сэмплы пропадут до скриншота');
   });
 });
 
