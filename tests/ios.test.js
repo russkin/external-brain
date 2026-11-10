@@ -994,8 +994,21 @@ describe('логика вызывается с state.tasks', () => {
       gestSrc.includes('if (!busyAt[c0]) vals.unshift(c0)') &&
       gestSrc.includes('{ vals = null; br = \'gap-short\'; }'),
       'посадка встаёт встык с чужими метками');
-    assert.ok(gestSrc.includes('var all = state.tasks.filter(function (t) { return t && !t.deleted; });'),
-      'перенумер затрагивает только живых');
+    assert.ok(gestSrc.includes('L.fitVisibleSlots(domAlive, state.tasks)'),
+      'запасная ветка не идёт через слоты в порядке DOM');
+    assert.ok(!gestSrc.includes('var base = now - all.length;'),
+      'запасная ветка всё ещё нумерует всех по старым createdAt (грабля 50)');
+  });
+  it('v233: посадка при исчерпанном зазоре не отстреливает (грабля 50)', () => {
+    const logicSrc = fs.readFileSync(path.join(root, 'src/logic.js'), 'utf8');
+    assert.ok(/fitVisibleSlots: fitVisibleSlots/.test(logicSrc), 'fitVisibleSlots не в api logic.js');
+    assert.ok(gestSrc.includes('st.ts = now'), 'изменённые слоты не получают свежий ts — синк откатит порядок');
+    assert.ok(gestSrc.includes('typeof nv !== \'number\''), 'битый слот молча пишется в createdAt');
+    /* Телеметрия остаётся (вариант Б) — выпилить только после подтверждения. */
+    assert.ok(gestSrc.includes('{ vals = null; br = \'gap-short\'; }'),
+      'проба gap-short выпилена раньше подтверждения на устройстве');
+    assert.ok(appSrc.includes('external-brain-landprobe-v1'),
+      'кольцо landprobe выпилено раньше подтверждения на устройстве');
   });
   it('поиск: кнопка, оверлей, проводка (модуль src/search.js)', () => {
     assert.ok(html.includes('id="searchBtn"'), 'нет кнопки поиска в шапке');

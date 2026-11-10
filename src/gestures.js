@@ -316,8 +316,9 @@ function toggleDoneSlide(taskId) {
 /* Порядок строк после drag: перенумеровываем createdAt ТОЛЬКО уехавшему
  * блоку, втискивая его между соседями (целыми, с запасом). Чужие метки
  * не трогаем — поэтому вернувшаяся из выполненных встаёт на своё место,
- * а синк не дёргается лишний раз. Тесно (зазор исчерпан) — перенумеровать
- * всех живых. Выполненные и tombstone не трогаем никогда. */
+ * а синк не дёргается лишний раз. Тесно (зазор исчерпан) — видимым их же
+ * слоты в порядке DOM (`fitVisibleSlots`), чужие по-прежнему не трогаем
+ * (v233, грабля 50). Выполненные и tombstone не трогаем никогда. */
 /* beforeOverride — слепок ДО мутации отступа (applyDropIndent): финиш
  * вызывает persist уже после неё, и свежий snapFull() нёс бы новый отступ —
  * отмена возвращала бы порядок, но не отступ. */
@@ -417,20 +418,20 @@ function persistLineOrder(beforeOverride, boxOverride) {
       bt.updatedAt = now;
     }
   } else {
-    /* Зазор исчерпан: перенумеровать ВСЕ видимые подряд в текущем порядке
-     * (живых и выполненных) — относительный порядок не меняется, перепрыгнуть
-     * через замороженные метки негде. */
-    var all = state.tasks.filter(function (t) { return t && !t.deleted; });
-    all.sort(function (a, b) {
-      if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
-      return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
-    });
-    var base = now - all.length;
-    all.forEach(function (t2, idx) {
-      t2.createdAt = base + idx;
-      t2.ts = now;
-      t2.updatedAt = now;
-    });
+    /* Зазор исчерпан (v233, грабля 50): видимым отдаём их же старые слоты,
+     * но В ПОРЯДКЕ DOM (как встали после посадки) — новая позиция
+     * сохраняется, чужие метки (выполненные, планы) не двигаются.
+     * Старый код нумеровал ВСЕХ по СТАРОМУ createdAt — render сортировал
+     * по меткам и отстреливал задачу назад на старое место. */
+    var slots = L.fitVisibleSlots(domAlive, state.tasks);
+    for (var si = 0; si < domAlive.length; si++) {
+      var st = L.getTask(state.tasks, domAlive[si]);
+      var nv = slots[domAlive[si]];
+      if (!st || typeof nv !== 'number' || nv === st.createdAt) continue;
+      st.createdAt = nv;
+      st.ts = now;
+      st.updatedAt = now;
+    }
   }
   var byId = {};
   state.tasks.forEach(function (t) { if (t) byId[t.id] = t; });

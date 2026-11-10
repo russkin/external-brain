@@ -230,6 +230,42 @@ function reopenBranch(tasks, id, nowMs) {
   return back;
 }
 
+/* v233 (грабля 50): слоты видимых строк для запасной ветки persistLineOrder,
+ * когда зазор между соседями исчерпан (busyAt съел свободные значения).
+ * Старый код нумеровал живых по СТАРОМУ createdAt — порядок DOM (новая
+ * посадка) выбрасывался, render сортировал по меткам и отстреливал задачу
+ * назад на старое место. Здесь видимые получают СВОИ же старые значения
+ * (множество меток не растёт), но в порядке DOM: первый видимый — своё
+ * старое значение или выше, каждый следующий — строго больше предыдущего;
+ * занятые чужие значения (выполненные, планы) обходятся вперёд. Чужие
+ * метки не двигаются вообще. Возвращает { id: createdAt } по видимым —
+ * вызывающий пишет только реально изменившиеся и ставит им свежий ts. */
+function fitVisibleSlots(domIds, tasks) {
+  var out = {};
+  if (!Array.isArray(domIds) || !Array.isArray(tasks)) return out;
+  var inDom = {};
+  var i, t;
+  for (i = 0; i < domIds.length; i++) inDom[domIds[i]] = true;
+  var slots = [];
+  var busy = {};
+  for (i = 0; i < tasks.length; i++) {
+    t = tasks[i];
+    if (!t || t.deleted) continue;
+    if (inDom[t.id]) slots.push(toInt(t.createdAt, 0));
+    else busy[t.createdAt] = true;
+  }
+  slots.sort(function (a, b) { return a - b; });
+  var prev = null;
+  for (i = 0; i < domIds.length; i++) {
+    var slot = i < slots.length ? slots[i] : (prev === null ? 0 : prev + 1);
+    var val = prev === null ? slot : Math.max(slot, prev + 1);
+    while (busy[val]) val++;
+    out[domIds[i]] = val;
+    prev = val;
+  }
+  return out;
+}
+
 /* Удаление — tombstone, чтобы LWW-синк не воскрешал задачу на других устройствах. */
 function removeTask(tasks, id, nowMs) {
   var task = getTask(tasks, id);
@@ -1151,6 +1187,7 @@ var api = {
   completeBranch: completeBranch,
   reopenTask: reopenTask,
   reopenBranch: reopenBranch,
+  fitVisibleSlots: fitVisibleSlots,
   removeTask: removeTask,
   purgeTombstones: purgeTombstones,
   setIndent: setIndent,

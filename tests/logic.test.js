@@ -592,6 +592,62 @@ describe('отступ (группы)', () => {
   });
 });
 
+describe('слоты посадки при исчерпанном зазоре (v233, грабля 50)', () => {
+  function task(id, ca, status) {
+    return { id: id, title: id, status: status || 'todo', indent: 0,
+      createdAt: ca, updatedAt: ca, doneAt: status === 'done' ? ca : 0,
+      ts: ca, deleted: false };
+  }
+  /* Отскок 09.11.2026: блок b1..b3 уехал вниз на строку мимо x, в зазоре
+   * P=10..N=15 стоят выполненные (d1=11, d2=14) — зазор исчерпан
+   * (busyAt), срабатывает запасная ветка. */
+  function sample() {
+    return [
+      task('p', 10), task('b1', 11), task('b2', 12), task('b3', 13),
+      task('x', 14), task('n', 15),
+      task('d1', 11, 'done'), task('d2', 14, 'done')
+    ];
+  }
+  it('видимые встают в порядке DOM, префикс держит старую метку', () => {
+    const dom = ['p', 'x', 'b1', 'b2', 'b3', 'n'];
+    const slots = L.fitVisibleSlots(dom, sample());
+    const got = dom.slice().sort(function (a, b) { return slots[a] - slots[b]; });
+    assert.deepEqual(got, dom, 'сортировка по слотам не даёт порядок DOM — отстрел остался');
+    assert.equal(slots.p, 10, 'префикс до сдвига получил новую метку (лишний ts)');
+    for (let i = 1; i < dom.length; i++) {
+      assert.ok(slots[dom[i]] > slots[dom[i - 1]], 'слоты не строго возрастают вдоль DOM');
+    }
+  });
+  it('чужие метки не двигаются и их значения не берутся', () => {
+    const dom = ['p', 'x', 'b1', 'b2', 'b3', 'n'];
+    const tasks = sample();
+    const slots = L.fitVisibleSlots(dom, tasks);
+    assert.deepEqual(Object.keys(slots).sort(), ['b1', 'b2', 'b3', 'n', 'p', 'x']);
+    const taken = Object.keys(slots).map(function (k) { return slots[k]; });
+    assert.ok(!taken.includes(11) && !taken.includes(14), 'слот занял чужое (выполненное) значение');
+    const d1 = tasks.filter(function (t) { return t.id === 'd1'; })[0];
+    const d2 = tasks.filter(function (t) { return t.id === 'd2'; })[0];
+    assert.equal(d1.createdAt, 11, 'чужой d1 сдвинут');
+    assert.equal(d2.createdAt, 14, 'чужой d2 сдвинут');
+  });
+  it('без сдвига порядка — те же метки (вызывающий не трогает ts)', () => {
+    const tasks = [
+      task('p', 10), task('a', 11), task('b', 12), task('x', 13),
+      task('n', 14), task('d', 20, 'done')
+    ];
+    const slots = L.fitVisibleSlots(['p', 'a', 'b', 'x', 'n'], tasks);
+    assert.deepEqual(slots, { p: 10, a: 11, b: 12, x: 13, n: 14 });
+  });
+  it('дубликат createdAt у видимых разводится мимо чужих значений', () => {
+    const tasks = [
+      task('p', 10), task('a', 11), task('b', 11), task('n', 15),
+      task('d', 12, 'done')
+    ];
+    const slots = L.fitVisibleSlots(['p', 'a', 'b', 'n'], tasks);
+    assert.deepEqual(slots, { p: 10, a: 11, b: 13, n: 15 });
+  });
+});
+
 describe('сжатие могил (purgeTombstones)', () => {
   function tomb(id, title, ts) {
     return { id: id, title: title, status: 'todo', estMin: 0, sumKids: true,
