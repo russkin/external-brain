@@ -1519,6 +1519,23 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(appSrc.includes('function tickClock') && appSrc.includes('setInterval(tickClock, 1000)'),
       'часы не тикают раз в секунду');
   });
+  it('v234: плашка даты/времени на вкладке планирования — в шапке плана, вне скроллера', () => {
+    assert.ok(html.includes('id="planClockBar"'), 'нет planClockBar');
+    assert.ok(html.includes('#planClockBar'), 'нет стиля planClockBar');
+    var iHead = html.indexOf('id="planHead"');
+    var iBar = html.indexOf('id="planClockBar"');
+    var iScroll = html.indexOf('id="planScroll"');
+    assert.ok(iHead !== -1 && iBar > iHead && iBar < iScroll,
+      'плашка не внутри #planHead или после #planScroll (поедет при прокрутке)');
+    var headSlice = html.slice(html.indexOf('<div id="planHead">'), html.indexOf('<div id="planScroll">'));
+    assert.ok(headSlice.includes('id="planClockBar"'), 'плашка вне блока шапки плана');
+    assert.ok(!/id="planHead"[^>]*transform|planHead[^}]*transform/.test(html),
+      'шапке плана навешен transform (плашка поедет вместе с ней)');
+    assert.ok(appSrc.includes("el('planClockBar')"), 'tickClock не обновляет плашку плана');
+    assert.ok(appSrc.includes('id="clockBar"') || appSrc.includes("el('clockBar')"),
+      'старая плашка списка выпиленна');
+    assert.ok(appSrc.includes('planClockBar'), 'нет упоминания planClockBar в app.js');
+  });
   it('кнопка 📅 в шапке (id, класс, подсказки)', () => {
     assert.ok(html.includes('id="planBtn"'), 'нет planBtn в шапке');
     assert.ok(/id="planBtn"[^>]*class="hbtn"/.test(html), 'кнопка не в стиле шапки');

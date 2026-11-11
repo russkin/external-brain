@@ -298,10 +298,18 @@
     /* Однострочное поле с меткой повтора: 60px = текст (одна строка)
      * сверху + бейдж (34..58) над планшипом (6..30) внутри рамки. */
     .tinput.has-repeat { min-height: 60px; }
-    /* Плашка даты и времени внутри sticky-header: ДД.ММ.ГГГГ ЧЧ:ММ:СС,
-     * обновляется раз в секунду. Внутри header — всегда видна при прокрутке. */
-    #clockBar { font-size: 11px; line-height: 1.2; color: #999; text-align: center;
-      padding: 1px 0; margin: 2px -14px -10px; background: #fff; border-bottom: 1px solid #f0f0f0; }
+    /* Плашка даты и времени: ДД.ММ.ГГГГ ЧЧ:ММ:СС, обновляется раз в
+     * секунду. #clockBar — последний ребёнок sticky-шапки списка;
+     * #planClockBar (v234) — последний ребёнок #planHead страницы
+     * планирования: шапка плана ВНЕ скроллера (#planScroll) и не
+     * двигается — плашка закреплена, вместе с прокруткой не едет. */
+    #clockBar, #planClockBar { font-size: 11px; line-height: 1.2; color: #999;
+      text-align: center; padding: 1px 0; background: #fff;
+      border-bottom: 1px solid #f0f0f0; }
+    /* Отрицательные поля снимают вертикальный паддинг контейнера:
+     * у шапки списка 10px снизу, у плана 8px. */
+    #clockBar { margin: 2px -14px -10px; }
+    #planClockBar { margin: 2px -14px -8px; }
   </style>
 </head>
 <body>
@@ -368,6 +376,7 @@
         <button id="planDiagBtn" title="Диагностика" aria-label="Диагностика">ⓘ</button>
         <button id="planSetBtn" title="Настройки планирования" aria-label="Настройки планирования">⚙</button>
       </div>
+      <div id="planClockBar" title="Дата и время устройства">--.--.---- --:--:--</div>
     </div>
     <div id="planScroll">
       <div id="planForm">

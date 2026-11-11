@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v233';
+  var APP_VERSION = 'v234';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1882,16 +1882,18 @@
       probe: dragProbe
     });
 
-    /* ВРЕМЕННЫЕ часы под шапкой (диагностика по скриншотам, до решения
-     * хозяина): ЧЧ:ММ:СС локального времени, раз в секунду. */
+    /* Часы под шапкой: ДД.ММ.ГГГГ ЧЧ:ММ:СС локального времени, раз в
+     * секунду. Две плашки (v234): #clockBar — в шапке списка,
+     * #planClockBar — в шапке страницы планирования (вне её скроллера,
+     * при прокрутке не двигается). */
     function tickClock() {
       try {
-        var c = el('clockBar');
-        if (!c) return;
         var d = new Date();
         function p(n) { return (n < 10 ? '0' : '') + n; }
-        c.textContent = p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear() + ' '
+        var s = p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear() + ' '
           + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+        var bars = [el('clockBar'), el('planClockBar')];
+        for (var i = 0; i < bars.length; i++) if (bars[i]) bars[i].textContent = s;
       } catch (x) {}
     }
     try {
