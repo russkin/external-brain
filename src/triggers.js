@@ -186,38 +186,45 @@ function doSync(force) {
 }
 
 function setLight(color, blink) {
-  var n = el('syncLight');
-  if (!n) return;
+  /* Два светофора (v235): шапка списка + страница планирования
+   * (#planSyncLight рядом с ←). Статус у них общий. */
+  var nodes = [el('syncLight'), el('planSyncLight')].filter(function (n) { return n; });
+  if (!nodes.length) return;
   /* Цвета светофора — обычные яркие (игры с яркостью v121/v127
    * отменены: приглушённые на мелком квадратике читались как чёрные). */
   var map = { green: '#4caf50', yellow: '#ffc107', red: '#f44336', gray: '#bbb' };
-  n.style.background = map[color] || map.gray;
-  if (blink) n.classList.add('blink');
-  else n.classList.remove('blink');
+  var bg = map[color] || map.gray;
   /* Знаки — оба поверх квадратика (отдельного слева нет): «!» внутри,
    * цвет различает ошибки — белый при конфликте 409/422, жёлтый при
    * любой другой ошибке синка. Тап — принудительный синк. */
   var err = (syncStatus || '') + ' ' + (lastErrMsg || '');
   var alert = color === 'red' && /github-put (409|422)/.test(err);
   var warn = color === 'red';
-  n.classList.toggle('alert', alert);
-  if (warn) {
-    n.textContent = '!';
-    n.style.color = alert ? '#fff' : '#ffb300';
-  } else {
-    n.textContent = '';
-    n.style.color = '';
-  }
-  if (color === 'yellow') n.title = 'Идёт синхронизация…';
-  else if (alert) n.title = 'Конфликт записи (409/422). Нажми — принудительный синк.';
-  else if (color === 'red') n.title = (syncStatus || 'Ошибка синка') + '. Нажми — попробовать снова.';
-  else if (color === 'green') n.title = 'Синк: ' + (syncStatus || 'выполнено') + '. Нажми — синхронизировать.';
+  var title;
+  if (color === 'yellow') title = 'Идёт синхронизация…';
+  else if (alert) title = 'Конфликт записи (409/422). Нажми — принудительный синк.';
+  else if (color === 'red') title = (syncStatus || 'Ошибка синка') + '. Нажми — попробовать снова.';
+  else if (color === 'green') title = 'Синк: ' + (syncStatus || 'выполнено') + '. Нажми — синхронизировать.';
   else {
     var st = C ? C.getState() : null;
-    n.title = st && st.settings.token
+    title = st && st.settings.token
       ? 'Синк ещё не запускался. Нажми — синхронизировать.'
       : 'Синк выключен (нет ключа).';
   }
+  nodes.forEach(function (n) {
+    n.style.background = bg;
+    if (blink) n.classList.add('blink');
+    else n.classList.remove('blink');
+    n.classList.toggle('alert', alert);
+    if (warn) {
+      n.textContent = '!';
+      n.style.color = alert ? '#fff' : '#ffb300';
+    } else {
+      n.textContent = '';
+      n.style.color = '';
+    }
+    n.title = title;
+  });
 }
 
 /* Шапка ⇅: цвет — online/offline, подпись — скорость (downlink → МБ/с,
@@ -320,8 +327,10 @@ function init(ctx) {
   C = ctx;
   planCheck = (ctx && typeof ctx.planCheck === 'function') ? ctx.planCheck : null;
   ctx.on('syncNowBtn', 'click', function () { doSync(true); });
-  /* Тап по светофору — принудительный синк (как в purchases). */
+  /* Тап по светофору — принудительный синк (как в purchases).
+   * v235: второй светофор на странице планирования — тот же тап. */
   ctx.on('syncLight', 'click', function () { doSync(true); });
+  ctx.on('planSyncLight', 'click', function () { doSync(true); });
 
   /* Возврат на вкладку: три события (visibilitychange + focus + pageshow),
    * иначе bfcache/focus без visibility оставляет старое. */

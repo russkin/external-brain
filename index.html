@@ -32,12 +32,14 @@
     .netwrap { display: inline-flex; flex-direction: column; align-items: center; line-height: 1; }
     #netStatus { font-size: 24px; }
     #netType { font-size: 9px; color: #888; min-height: 10px; }
-    #syncLight.blink { animation: synblink 1s infinite; }
+    /* Два светофора синка (v235): #syncLight в шапке списка,
+     * #planSyncLight — на странице планирования рядом с ←. */
+    .synclight.blink { animation: synblink 1s infinite; }
     @keyframes synblink { 50% { opacity: .25; } }
-    #syncLight { display: inline-block; position: relative; width: 14px; height: 14px;
+    .synclight { display: inline-block; position: relative; width: 14px; height: 14px;
       border-radius: 3px; background: #bbb; flex: none; cursor: pointer;
       color: #fff; font-weight: bold; font-size: 11px; line-height: 14px; text-align: center; }
-    #syncLight.alert { background: #f44336; }
+    .synclight.alert { background: #f44336; }
     button { font-size: 16px; padding: 8px 12px; cursor: pointer; }
     main { padding: 12px 14px 60px; max-width: 720px; margin: 0 auto; }
     #lines { display: flex; flex-direction: column; gap: 8px; }
@@ -318,7 +320,7 @@
       <h1 id="appTitle">Внешний мозг</h1>
       <span id="appVerHead" title="Версия приложения"></span>
       <span class="netwrap"><span id="netStatus" title="Сеть">⇅</span><span id="netType"></span></span>
-      <span id="syncLight" title="Синхронизация"></span>
+      <span id="syncLight" class="synclight" title="Синхронизация"></span>
       <button id="gearBtn" title="Меню" aria-label="Меню">⚙</button>
     </div>
     <div id="headActions">
@@ -367,6 +369,7 @@
     <div id="planHead">
       <div id="planHeadTop">
         <h2>Планирование</h2>
+        <span id="planSyncLight" class="synclight" title="Синхронизация"></span>
         <button id="planBack" title="Назад к списку" aria-label="Назад к списку">←</button>
       </div>
       <div id="planHeadRow">

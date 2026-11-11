@@ -1596,6 +1596,23 @@ describe('планирование ФАЗА 1: страница плана (FR-9
       '🔍 плана ведёт на открытие поиска');
     assert.ok(diagSrc.includes("on('planDiagBtn'"), 'ⓘ плана не открывает диагностику');
   });
+  it('v235: светофор синка на вкладке планирования рядом с ←', () => {
+    assert.ok(html.includes('id="planSyncLight"'), 'нет #planSyncLight в шапке плана');
+    var top = html.slice(html.indexOf('<div id="planHeadTop">'), html.indexOf('</div>', html.indexOf('<div id="planHeadTop">')));
+    assert.ok(top.indexOf('id="planSyncLight"') > top.indexOf('<h2>') &&
+      top.indexOf('id="planSyncLight"') < top.indexOf('id="planBack"'),
+      'светофор плана не между заголовком и ←');
+    assert.ok(html.includes('class="synclight"') &&
+      (html.match(/class="synclight"/g) || []).length === 2,
+      'у двух светофоров нет общего класса .synclight');
+    assert.ok(/#syncLight\b/.test(html) === false || !/#syncLight \{/.test(html),
+      'стили светофора остались на #syncLight, а не на общем классе');
+    assert.ok(trigSrc.includes("el('planSyncLight')") &&
+      trigSrc.includes("ctx.on('planSyncLight', 'click', function () { doSync(true); })"),
+      'setLight/тап не обновляют светофор плана');
+    assert.ok(/nodes\.forEach/.test(trigSrc) && /filter\(function \(n\) \{ return n; \}\)/.test(trigSrc),
+      'setLight не рассчитан на два узла');
+  });
   it('форма плана в две строки, название с переносом (v196)', () => {
     assert.ok(/<textarea[^>]*id="planInput"/.test(html), 'название не textarea (нет переноса)');
     assert.ok(!/id="planInput"[^>]*wrap="off"/.test(html), 'перенос выключен');
