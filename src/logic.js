@@ -464,6 +464,83 @@ function shareText(tasks) {
   return lines.join('\n');
 }
 
+/* --- Отправка папки (FR-103): поддерево одной группы отдельным текстом --- */
+
+/* Живые строки для отправки: как на экране (normalizeTasks сортирует
+ * по createdAt, как lineTasks), без выполненных/планов/могил и пустых
+ * текстов — пустые и выполненные shareText в текст не несёт. */
+function shareLiveList(tasks) {
+  return normalizeTasks(tasks).filter(function (t) {
+    return !t.deleted && t.title && !isPlanned(t) && t.status !== 'done';
+  });
+}
+
+/* Список папок для выбора: живые строки с живыми вложениями (та же
+ * механика, что треугольник ▶ — hasLiveKids, только пустые заголовки
+ * не предлагаем: текст их не несёт, отправлять некуда). */
+function shareFolderList(tasks) {
+  var all = shareLiveList(tasks);
+  var out = [];
+  for (var i = 0; i < all.length; i++) {
+    if (hasKids(all, i)) out.push({ id: all[i].id, title: all[i].title });
+  }
+  return out;
+}
+
+/* Время строки в тексте — как на экране (lineEstMin в src/render.js):
+ * у родителя авто-сумма первого вложения, пока sumKids не снят; флаг
+ * снят или живых детей нет — своё estMin. Обход по переданному массиву
+ * (поддерево целиком, порядок тот же, что на экране). */
+function shareFolderEst(arr, idx) {
+  var t = arr[idx];
+  if (!t) return 0;
+  if (!hasKids(arr, idx) || t.sumKids === false) return t.estMin || 0;
+  var base = indentOf(t);
+  var sum = 0;
+  for (var j = idx + 1; j < arr.length; j++) {
+    var v = indentOf(arr[j]);
+    if (v <= base) break;
+    if (v === base + 1) sum += shareFolderEst(arr, j);
+  }
+  return sum;
+}
+
+/* Текст папки (FR-103): корень + все живые вложения поддерева, отступы
+ * пересчитаны от корня (2 пробела на уровень, как shareItem, но от
+ * нуля — папка уходит наружу на свой уровень). withTimes — метки
+ * времени в скобках «(1ч 30м)» (fmtDur; 0 — скобок нет); без флага —
+ * без меток (окно передаёт состояние чекбокса). Папка не найдена
+ * (нет такой живой строки) — ''. */
+function shareFolderText(tasks, folderId, withTimes) {
+  var all = shareLiveList(tasks);
+  var fid = String(folderId == null ? '' : folderId);
+  var fi = -1, i;
+  for (i = 0; i < all.length; i++) {
+    if (all[i].id === fid) { fi = i; break; }
+  }
+  if (fi === -1) return '';
+  var base = indentOf(all[fi]);
+  var sub = [all[fi]];
+  for (i = fi + 1; i < all.length; i++) {
+    var v = indentOf(all[i]);
+    if (v <= base) break;
+    sub.push(all[i]);
+  }
+  var lines = [];
+  for (i = 0; i < sub.length; i++) {
+    var pad = '';
+    var rel = indentOf(sub[i]) - base;
+    for (var k = 0; k < rel; k++) pad += '  ';
+    var s = pad + '- ' + sub[i].title;
+    if (withTimes) {
+      var d = fmtDur(shareFolderEst(sub, i));
+      if (d) s += ' (' + d + ')';
+    }
+    lines.push(s);
+  }
+  return lines.join('\n');
+}
+
 /* --- Нормализация (защита от битых данных старых версий/синка) --- */
 
 /* Оценка времени в минутах: целое 0..59999 (99ч 59м — потолок модалки). */
@@ -1200,6 +1277,8 @@ var api = {
   todoCount: todoCount,
   stats: stats,
   shareText: shareText,
+  shareFolderList: shareFolderList,
+  shareFolderText: shareFolderText,
   searchTasks: searchTasks,
   fmtDur: fmtDur,
   normTokenExp: normTokenExp,

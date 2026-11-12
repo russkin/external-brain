@@ -105,6 +105,19 @@
     #durCtl { display: none; flex-direction: column; gap: 10px; margin-bottom: 12px; }
     /* Настройки планов в модалке (v207): прячется/показывается как durCtl. */
     #planSetBox { display: none; margin-bottom: 4px; }
+    /* Отправка папки (FR-103, v236): выбор папки + флаг меток времени —
+     * прячется/показывается как durCtl, селект как у целевой планов. */
+    #shareFolderBox { display: none; margin-bottom: 12px; }
+    #shareFolderRow { display: flex; align-items: center; gap: 8px;
+      margin-bottom: 8px; font-size: 15px; color: #666; }
+    #shareFolderRow label { flex: none; }
+    #shareFolderSel { flex: 1 1 auto; min-width: 0; font-size: 15px; font-family: inherit;
+      padding: 6px 8px; border: 1px solid #ccc; border-radius: 8px;
+      background: #fff; color: #333; }
+    #shareFolderTimesRow { display: block; font-size: 15px; color: #666;
+      user-select: none; -webkit-user-select: none; }
+    #shareFolderTimesRow input { width: 20px; height: 20px; margin: 0 6px 0 0;
+      vertical-align: middle; }
     .durrow { display: flex; align-items: center; gap: 10px; }
     .durrow span { flex: 1; font-size: 14px; color: #555; }
     .durrow b { min-width: 64px; text-align: center; font-size: 22px; }
@@ -340,6 +353,7 @@
     <button id="syncNowBtn">⇅ Синхронизировать</button>
     <button id="installBtn">📲 Установить приложение</button>
     <button id="shareBtn">📤 Поделиться списком</button>
+    <button id="shareFolderBtn">📤 Отправить папку</button>
     <button id="shareAppBtn">🔗 Поделиться приложением</button>
     <a id="guideBtn" href="./docs/USER_GUIDE.html" target="_blank" rel="noopener">📖 Инструкция пользователя</a>
     <a id="versionsBtn" href="./docs/VERSIONS.html" target="_blank" rel="noopener">📋 Информация о версиях</a>
@@ -517,6 +531,15 @@
             <span id="dateRepeatHint"></span>
           </span>
         </div>
+      </div>
+      <!-- Отправка папки (FR-103): выбор папки + флаг меток времени,
+           показ/скрытие инлайн (паттерн #planSetBox). -->
+      <div id="shareFolderBox">
+        <div id="shareFolderRow">
+          <label for="shareFolderSel">Папка:</label>
+          <select id="shareFolderSel" aria-label="Папка для отправки"></select>
+        </div>
+        <label id="shareFolderTimesRow"><input type="checkbox" id="shareFolderTimes" checked /> Метки времени</label>
       </div>
       <div class="row">
         <button id="modalOk">OK</button>

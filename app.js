@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v235';
+  var APP_VERSION = 'v236';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1220,6 +1220,15 @@
     } else manual('Скопируй вручную', text);
   }
 
+  /* Отправка текста списком/папкой/приложением: тот же канал, что жил
+   * в кнопках ⚙ (v236 вынесен в shareOut — меню списка, иначе буфер
+   * («скопировано» в статусе), иначе окно с текстом). */
+  function shareOut(txt) {
+    if (navigator.share) navigator.share({ text: txt }).catch(function () {});
+    else if (navigator.clipboard) navigator.clipboard.writeText(txt).then(function () { lastAction = 'скопировано'; renderStatus(); });
+    else askText(txt, '', false).then(function () {});
+  }
+
   /* Сжать могилы: все tombstone заменяются короткими метками
    * (файл худеет). Живые и выполненные не трогаются; шаг пишется в историю
    * (↩ возвращает полные могилы). ДВОЙНОЕ предупреждение: текст могил
@@ -1791,6 +1800,58 @@
     schedulePlanCheck(0);
   }
 
+  /* Отправить папку (FR-103, v236): окно с выбором папки и флагом
+   * «Метки времени» (паттерн askPlanSettings — инлайн display в
+   * #modalBox, кнопка OK переименовывается в «Отправить»). Папок нет —
+   * инфо-окно. Текст собирает L.shareFolderText (корень + живые
+   * вложения, отступы от корня), отправка — общим каналом shareOut. */
+  function askShareFolder() {
+    var back = el('modalBack'), text = el('modalText'), input = el('modalInput');
+    var ok = el('modalOk'), cancel = el('modalCancel'), clearBtn = el('modalClear');
+    var box = el('shareFolderBox'), sel = el('shareFolderSel'), times = el('shareFolderTimes');
+    if (!back || !text || !ok || !box || !sel || !state) return;
+    var folders = L.shareFolderList(state.tasks);
+    if (!folders.length) {
+      askInfo('Нет папок: ни у одной живой задачи нет вложенных — отправлять нечего.').then(function () {});
+      return;
+    }
+    sel.innerHTML = '';
+    for (var i = 0; i < folders.length; i++) {
+      var op = document.createElement('option');
+      op.value = folders[i].id;
+      op.textContent = String(folders[i].title).slice(0, 120);
+      sel.appendChild(op);
+    }
+    if (times) times.checked = true;
+    text.textContent = 'Отправить папку';
+    if (input) input.style.display = 'none';
+    if (clearBtn) { clearBtn.style.display = 'none'; clearBtn.onclick = null; }
+    if (cancel) { cancel.style.display = ''; cancel.onclick = function () { closeShareFolder(); }; }
+    ok.textContent = 'Отправить';
+    box.style.display = 'block';
+    back.classList.add('open');
+    ok.onclick = function () {
+      var id = String(sel.value || '');
+      var withT = !!(times && times.checked);
+      closeShareFolder();
+      if (!state || !id) return;
+      var txt = L.shareFolderText(state.tasks, id, withT);
+      if (txt) shareOut(txt);
+    };
+  }
+
+  function closeShareFolder() {
+    var back = el('modalBack'), input = el('modalInput');
+    var ok = el('modalOk'), cancel = el('modalCancel'), clearBtn = el('modalClear');
+    var box = el('shareFolderBox');
+    if (box) box.style.display = 'none';
+    if (back) back.classList.remove('open');
+    if (ok) { ok.onclick = null; ok.textContent = 'OK'; }
+    if (cancel) { cancel.onclick = null; cancel.style.display = ''; }
+    if (clearBtn) { clearBtn.onclick = null; clearBtn.style.display = 'none'; }
+    if (input) input.style.display = '';
+  }
+
   /* Опции цели в селекте страницы плана (FR-100): живые задачи в
    * порядке списка + всегда пункт «(не выбрана)» (пустая цель —
    * норма: планы ждут). Тексты — через textContent (заголовки —
@@ -1910,16 +1971,11 @@
       }
     });
     on('shareBtn', 'click', function () {
-      var txt = L.shareText(state.tasks);
-      if (navigator.share) navigator.share({ text: txt }).catch(function () {});
-      else if (navigator.clipboard) navigator.clipboard.writeText(txt).then(function () { lastAction = 'скопировано'; renderStatus(); });
-      else askText(txt, '', false).then(function () {});
+      shareOut(L.shareText(state.tasks));
     });
+    on('shareFolderBtn', 'click', function () { askShareFolder(); });
     on('shareAppBtn', 'click', function () {
-      var url = window.location.href;
-      if (navigator.share) navigator.share({ text: url }).catch(function () {});
-      else if (navigator.clipboard) navigator.clipboard.writeText(url).then(function () { lastAction = 'скопировано'; renderStatus(); });
-      else askText(url, '', false).then(function () {});
+      shareOut(window.location.href);
     });
     /* Поиск — модуль src/search.js (этап 1): подписки внутри init,
      * сюда отдаём только контекст (всё изменяемое — через геттеры). */

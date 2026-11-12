@@ -282,6 +282,114 @@ describe('списки и фокус', () => {
   });
 });
 
+describe('отправка папки (shareFolderList/shareFolderText, FR-103)', () => {
+  function seed() {
+    const t = L.blankTasks();
+    mk(t, 'Папка', 1000, { id: 'f' });
+    mk(t, 'Дитя', 2000, { id: 'k', indent: 1 });
+    mk(t, 'Внучка', 3000, { id: 'g', indent: 2 });
+    mk(t, 'Сосед', 4000, { id: 's' });
+    return t;
+  }
+  it('shareFolderList: только строки с вложениями (вложенная — тоже папка)', () => {
+    const t = seed();
+    assert.deepEqual(L.shareFolderList(t).map(function (x) { return x.id; }),
+      ['f', 'k'], 'и корень, и вложенная папка');
+    assert.equal(L.shareFolderList(t)[0].title, 'Папка');
+    assert.deepEqual(L.shareFolderList(L.blankTasks()), []);
+    const one = L.blankTasks();
+    mk(one, 'Одиночка', 1000, { id: 'l' });
+    assert.deepEqual(L.shareFolderList(one), [], 'без вложений папки нет');
+  });
+  it('shareFolderList: папка только из выполненных не предлагается', () => {
+    const t = seed();
+    L.completeTask(t, 'k', 5000);
+    L.completeTask(t, 'g', 6000);
+    assert.deepEqual(L.shareFolderList(t), []);
+  });
+  it('shareFolderText: поддерево целиком, соседей нет', () => {
+    const t = seed();
+    assert.equal(L.shareFolderText(t, 'f', false),
+      '- Папка\n  - Дитя\n    - Внучка');
+    assert.equal(L.shareFolderText(t, 's', false), '- Сосед', 'лист тоже отправляется');
+  });
+  it('shareFolderText: отступы считаются от корня папки', () => {
+    const t = L.blankTasks();
+    mk(t, 'Верх', 1000, { id: 'a' });
+    mk(t, 'Середина', 2000, { id: 'b', indent: 1 });
+    mk(t, 'Папка', 3000, { id: 'f', indent: 2 });
+    mk(t, 'Дитя', 4000, { id: 'k', indent: 3 });
+    assert.equal(L.shareFolderText(t, 'f', false), '- Папка\n  - Дитя');
+  });
+  it('shareFolderText: метки времени — fmtDur в скобках, без флага — без них', () => {
+    const t = seed();
+    L.clarifyTask(t, 'g', { estMin: 90 }, 5000);
+    /* g — лист: показывается своё; k и f — родители, идут суммой (= 90). */
+    assert.equal(L.shareFolderText(t, 'f', true),
+      '- Папка (1ч 30м)\n  - Дитя (1ч 30м)\n    - Внучка (1ч 30м)');
+    assert.equal(L.shareFolderText(t, 'f', false),
+      '- Папка\n  - Дитя\n    - Внучка');
+    assert.equal(L.shareFolderText(t, 'k', true),
+      '- Дитя (1ч 30м)\n  - Внучка (1ч 30м)', 'отступы от корня выбранной папки');
+  });
+  it('shareFolderText: время — авто-сумма, своё у родителя не показывается', () => {
+    const t = L.blankTasks();
+    mk(t, 'Папка', 1000, { id: 'f', estMin: 777 });
+    mk(t, 'Дитя', 2000, { id: 'k', indent: 1, estMin: 30 });
+    mk(t, 'Внучка', 3000, { id: 'g', indent: 2, estMin: 60 });
+    mk(t, 'Лист', 4000, { id: 'l', indent: 1, estMin: 10 });
+    /* Дитя-родитель = сумма Внучки (60, свои 30 мимо — как lineEstMin
+     * на экране); Папка = 60+10 = 70; своё estMin 777 тоже мимо. */
+    assert.equal(L.shareFolderText(t, 'f', true),
+      '- Папка (1ч 10м)\n  - Дитя (1ч)\n    - Внучка (1ч)\n  - Лист (10м)');
+    /* Флаг «Суммировать из вложенных» снят — корень показывает своё. */
+    L.clarifyTask(t, 'f', { sumKids: false }, 8000);
+    assert.equal(L.shareFolderText(t, 'f', true),
+      '- Папка (12ч 57м)\n  - Дитя (1ч)\n    - Внучка (1ч)\n  - Лист (10м)');
+  });
+  it('shareFolderText: вложенные родители суммируют своё поддерево', () => {
+    const t = L.blankTasks();
+    mk(t, 'Папка', 1000, { id: 'f' });
+    mk(t, 'Секция', 2000, { id: 'c', indent: 1, estMin: 15 });
+    mk(t, 'Дитя', 3000, { id: 'k', indent: 2, estMin: 45 });
+    mk(t, 'Второе', 4000, { id: 'k2', indent: 1, estMin: 10 });
+    /* Секция = 45 (свои 15 мимо); корень = 45+10 = 55. */
+    assert.equal(L.shareFolderText(t, 'f', true),
+      '- Папка (55м)\n  - Секция (45м)\n    - Дитя (45м)\n  - Второе (10м)');
+  });
+  it('shareFolderText: выполненные, планы, могилы и пустые — мимо', () => {
+    const t = seed();
+    L.completeTask(t, 'k', 5000);
+    assert.equal(L.shareFolderText(t, 'f', false), '- Папка\n    - Внучка',
+      'выполненное дитя исключено');
+    /* Выполненный корень — живой строки нет, папка не найдена. */
+    L.completeTask(t, 'f', 6000);
+    assert.equal(L.shareFolderText(t, 'f', false), '');
+    /* План в текст живого списка не попадает. */
+    const p = L.blankTasks();
+    mk(p, 'Папка', 1000, { id: 'f' });
+    mk(p, 'Дитя', 2000, { id: 'k', indent: 1 });
+    L.clarifyTask(p, 'k', { planDate: '05.11.2026' }, 3000);
+    assert.equal(L.shareFolderText(p, 'f', false), '- Папка');
+    assert.deepEqual(L.shareFolderList(p), [], 'папка только из планов не предлагается');
+    /* Пустой заголовок и могила не уходят. */
+    const e = L.blankTasks();
+    mk(e, 'Папка', 1000, { id: 'f' });
+    L.createTask(e, '', 2000, { id: 'z', indent: 1, allowEmpty: true });
+    mk(e, 'Дитя', 3000, { id: 'k', indent: 1 });
+    L.removeTask(e, 'k', 4000);
+    assert.equal(L.shareFolderText(e, 'f', false), '- Папка');
+  });
+  it('shareFolderText: неизвестная/битая папка — пусто', () => {
+    const t = seed();
+    assert.equal(L.shareFolderText(t, 'nope', true), '');
+    assert.equal(L.shareFolderText(t, '', true), '');
+    assert.equal(L.shareFolderText(t, null, true), '');
+    assert.equal(L.shareFolderText(L.blankTasks(), 'f', true), '');
+    assert.equal(L.shareFolderText(null, 'f', true), '');
+  });
+});
+
 describe('поиск', () => {
   function seed() {
     const t = L.blankTasks();
