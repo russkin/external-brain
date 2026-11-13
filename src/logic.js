@@ -464,91 +464,6 @@ function shareText(tasks) {
   return lines.join('\n');
 }
 
-/* --- Отправка папки (FR-103): поддерево одной группы отдельным текстом --- */
-
-/* Живые строки для отправки — как их видит экран (lineTasks): normalizeTasks
- * сортирует по createdAt, могилы/планы/выполненные мимо. Пустые заголовки
- * ОСТАЮТСЯ: на экране пустая строка — полноценная граница ветки; убрав её
- * до обхода, отправка перепрыгивала за пределы папки (чужие дети в тексте).
- * В сам текст пустые не идут — отфильтровываются при печати, как в shareText. */
-function shareLiveList(tasks) {
-  return normalizeTasks(tasks).filter(function (t) {
-    return !t.deleted && !isPlanned(t) && t.status !== 'done';
-  });
-}
-
-/* Список папок для выбора: живые строки с непустым заголовком, у которых
- * есть вложение — ровно те, у кого на экране стоит ▶ (hasKids по отступу,
- * v238: раньше требовался титлованный ребёнок, и папка с пустыми
- * детьми на экране была, а в списке — нет). Текст папки пустые дети
- * не дают (фильтр при печати) — отправится сам родитель. */
-function shareFolderList(tasks) {
-  var all = shareLiveList(tasks);
-  var out = [];
-  for (var i = 0; i < all.length; i++) {
-    if (!all[i].title) continue;
-    if (hasKids(all, i)) out.push({ id: all[i].id, title: all[i].title });
-  }
-  return out;
-}
-
-/* Время строки в тексте — как на экране (lineEstMin в src/render.js):
- * у родителя авто-сумма первого вложения, пока sumKids не снят; флаг
- * снят или живых детей нет — своё estMin. Обход по переданному массиву
- * (поддерево целиком, порядок тот же, что на экране). */
-function shareFolderEst(arr, idx) {
-  var t = arr[idx];
-  if (!t) return 0;
-  if (!hasKids(arr, idx) || t.sumKids === false) return t.estMin || 0;
-  var base = indentOf(t);
-  var sum = 0;
-  for (var j = idx + 1; j < arr.length; j++) {
-    var v = indentOf(arr[j]);
-    if (v <= base) break;
-    if (v === base + 1) sum += shareFolderEst(arr, j);
-  }
-  return sum;
-}
-
-/* Текст папки (FR-103): как «Поделиться списком» (shareText/shareItem),
- * только корень + живые вложения одного поддерева. Обход — по экранному
- * списку (shareLiveList): границы ветки ровно те, что видит пользователь;
- * пустые строки границу держат, но в текст не идут (фильтр при печати).
- * Отступы пересчитаны от корня (2 пробела на уровень). withTimes — метки
- * времени в скобках «(1ч 30м)» (fmtDur; 0 — скобок нет); без флага —
- * без меток (окно передаёт состояние чекбокса). Папка не найдена
- * (нет такой живой строки) — ''. */
-function shareFolderText(tasks, folderId, withTimes) {
-  var all = shareLiveList(tasks);
-  var fid = String(folderId == null ? '' : folderId);
-  var fi = -1, i;
-  for (i = 0; i < all.length; i++) {
-    if (all[i].id === fid) { fi = i; break; }
-  }
-  if (fi === -1) return '';
-  var base = indentOf(all[fi]);
-  var sub = [all[fi]];
-  for (i = fi + 1; i < all.length; i++) {
-    var v = indentOf(all[i]);
-    if (v <= base) break;
-    sub.push(all[i]);
-  }
-  var lines = [];
-  for (i = 0; i < sub.length; i++) {
-    if (!sub[i].title) continue; /* пустые в текст не идут — как shareText */
-    var pad = '';
-    var rel = indentOf(sub[i]) - base;
-    for (var k = 0; k < rel; k++) pad += '  ';
-    var s = pad + '- ' + sub[i].title;
-    if (withTimes) {
-      var d = fmtDur(shareFolderEst(sub, i));
-      if (d) s += ' (' + d + ')';
-    }
-    lines.push(s);
-  }
-  return lines.join('\n');
-}
-
 /* --- Нормализация (защита от битых данных старых версий/синка) --- */
 
 /* Оценка времени в минутах: целое 0..59999 (99ч 59м — потолок модалки). */
@@ -1285,8 +1200,6 @@ var api = {
   todoCount: todoCount,
   stats: stats,
   shareText: shareText,
-  shareFolderList: shareFolderList,
-  shareFolderText: shareFolderText,
   searchTasks: searchTasks,
   fmtDur: fmtDur,
   normTokenExp: normTokenExp,
