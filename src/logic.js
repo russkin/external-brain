@@ -466,23 +466,38 @@ function shareText(tasks) {
 
 /* --- Отправка папки (FR-103): поддерево одной группы отдельным текстом --- */
 
-/* Живые строки для отправки: как на экране (normalizeTasks сортирует
- * по createdAt, как lineTasks), без выполненных/планов/могил и пустых
- * текстов — пустые и выполненные shareText в текст не несёт. */
+/* Живые строки для отправки — как их видит экран (lineTasks): normalizeTasks
+ * сортирует по createdAt, могилы/планы/выполненные мимо. Пустые заголовки
+ * ОСТАЮТСЯ: на экране пустая строка — полноценная граница ветки; убрав её
+ * до обхода, отправка перепрыгивала за пределы папки (чужие дети в тексте).
+ * В сам текст пустые не идут — отфильтровываются при печати, как в shareText. */
 function shareLiveList(tasks) {
   return normalizeTasks(tasks).filter(function (t) {
-    return !t.deleted && t.title && !isPlanned(t) && t.status !== 'done';
+    return !t.deleted && !isPlanned(t) && t.status !== 'done';
   });
 }
 
-/* Список папок для выбора: живые строки с живыми вложениями (та же
- * механика, что треугольник ▶ — hasLiveKids, только пустые заголовки
- * не предлагаем: текст их не несёт, отправлять некуда). */
+/* Есть ли у строки idx вложение с непустым заголовком: границы ветки —
+ * как на экране (пустые строки-терминаторы в счёте), но пустые дети
+ * текста не дают — отправлять некуда. */
+function shareHasTextKids(arr, idx) {
+  var base = indentOf(arr[idx]);
+  for (var j = idx + 1; j < arr.length; j++) {
+    var v = indentOf(arr[j]);
+    if (v <= base) return false;
+    if (arr[j].title) return true;
+  }
+  return false;
+}
+
+/* Список папок для выбора: живые строки с непустым заголовком, у которых
+ * есть вложение с текстом (механика границ та же, что у текста папки). */
 function shareFolderList(tasks) {
   var all = shareLiveList(tasks);
   var out = [];
   for (var i = 0; i < all.length; i++) {
-    if (hasKids(all, i)) out.push({ id: all[i].id, title: all[i].title });
+    if (!all[i].title) continue;
+    if (shareHasTextKids(all, i)) out.push({ id: all[i].id, title: all[i].title });
   }
   return out;
 }
@@ -505,9 +520,11 @@ function shareFolderEst(arr, idx) {
   return sum;
 }
 
-/* Текст папки (FR-103): корень + все живые вложения поддерева, отступы
- * пересчитаны от корня (2 пробела на уровень, как shareItem, но от
- * нуля — папка уходит наружу на свой уровень). withTimes — метки
+/* Текст папки (FR-103): как «Поделиться списком» (shareText/shareItem),
+ * только корень + живые вложения одного поддерева. Обход — по экранному
+ * списку (shareLiveList): границы ветки ровно те, что видит пользователь;
+ * пустые строки границу держат, но в текст не идут (фильтр при печати).
+ * Отступы пересчитаны от корня (2 пробела на уровень). withTimes — метки
  * времени в скобках «(1ч 30м)» (fmtDur; 0 — скобок нет); без флага —
  * без меток (окно передаёт состояние чекбокса). Папка не найдена
  * (нет такой живой строки) — ''. */
@@ -528,6 +545,7 @@ function shareFolderText(tasks, folderId, withTimes) {
   }
   var lines = [];
   for (i = 0; i < sub.length; i++) {
+    if (!sub[i].title) continue; /* пустые в текст не идут — как shareText */
     var pad = '';
     var rel = indentOf(sub[i]) - base;
     for (var k = 0; k < rel; k++) pad += '  ';

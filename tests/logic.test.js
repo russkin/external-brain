@@ -388,6 +388,47 @@ describe('отправка папки (shareFolderList/shareFolderText, FR-103)'
     assert.equal(L.shareFolderText(L.blankTasks(), 'f', true), '');
     assert.equal(L.shareFolderText(null, 'f', true), '');
   });
+  it('shareFolderText: границы ветки как на экране — пустая строка-терминатор', () => {
+    /* v237: пустая строка на экране обрывает ветку; в обходе она обязана
+     * остаться, иначе отправка перепрыгивает и берёт чужих детей. */
+    const t = L.blankTasks();
+    mk(t, 'Папка', 1000, { id: 'p' });
+    mk(t, 'Дитя', 2000, { id: 'a', indent: 1 });
+    mk(t, '', 3000, { id: 'e', indent: 0, allowEmpty: true });
+    mk(t, 'Чужое дитя', 4000, { id: 'fc', indent: 1 });
+    assert.equal(L.shareFolderText(t, 'p', false), '- Папка\n  - Дитя',
+      'пустая строка держит границу — чужие дети не утекают');
+    /* Внутри ветки пустая не рвёт соседей и в текст не идёт. */
+    const i2 = L.blankTasks();
+    mk(i2, 'Папка', 1000, { id: 'p' });
+    mk(i2, 'До', 2000, { id: 'a', indent: 1 });
+    mk(i2, '', 3000, { id: 'e', indent: 1, allowEmpty: true });
+    mk(i2, 'После', 4000, { id: 'b', indent: 1 });
+    assert.equal(L.shareFolderText(i2, 'p', false), '- Папка\n  - До\n  - После');
+  });
+  it('shareFolderText: выполненная строка снаружи ветку не обрывает (как на экране)', () => {
+    /* На экране выполненные в секции внизу — между родителем и детьми
+     * их нет; в обходе они не должны притворяться границей. */
+    const t = L.blankTasks();
+    mk(t, 'Папка', 1000, { id: 'p' });
+    mk(t, 'Готовое', 1500, { id: 'd' });
+    L.completeTask(t, 'd', 1600);
+    mk(t, 'Дитя', 2000, { id: 'a', indent: 1 });
+    assert.equal(L.shareFolderText(t, 'p', false), '- Папка\n  - Дитя');
+  });
+  it('shareFolderList: папка только из пустых детей не предлагается', () => {
+    const t = L.blankTasks();
+    mk(t, 'Папка', 1000, { id: 'p' });
+    mk(t, '', 2000, { id: 'z', indent: 1, allowEmpty: true });
+    assert.deepEqual(L.shareFolderList(t), [], 'пустые детей текста не дают');
+    /* А терминатор-пустая не считается вложением чужой ветки. */
+    const b = L.blankTasks();
+    mk(b, 'Папка', 1000, { id: 'p' });
+    mk(b, '', 2000, { id: 'e', indent: 0, allowEmpty: true });
+    mk(b, 'Чужое дитя', 3000, { id: 'fc', indent: 1 });
+    assert.deepEqual(L.shareFolderList(b).map(function (x) { return x.id; }), [],
+      'за пустой-границей вложения папки не видит');
+  });
 });
 
 describe('поиск', () => {
