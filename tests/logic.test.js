@@ -416,11 +416,16 @@ describe('отправка папки (shareFolderList/shareFolderText, FR-103)'
     mk(t, 'Дитя', 2000, { id: 'a', indent: 1 });
     assert.equal(L.shareFolderText(t, 'p', false), '- Папка\n  - Дитя');
   });
-  it('shareFolderList: папка только из пустых детей не предлагается', () => {
+  it('shareFolderList: папка с пустыми детьми предлагается (▶ на экране)', () => {
+    /* v238: стрелка ▶ стоит по отступу — папка обязана быть и в списке,
+     * даже если дети пустые (текст — сам родитель, без пустых строк). */
     const t = L.blankTasks();
     mk(t, 'Папка', 1000, { id: 'p' });
     mk(t, '', 2000, { id: 'z', indent: 1, allowEmpty: true });
-    assert.deepEqual(L.shareFolderList(t), [], 'пустые детей текста не дают');
+    assert.deepEqual(L.shareFolderList(t).map(function (x) { return x.id; }), ['p'],
+      'пустые дети дают вложение — как ▶ на экране');
+    assert.equal(L.shareFolderText(t, 'p', false), '- Папка',
+      'в текст пустые не идут — только родитель');
     /* А терминатор-пустая не считается вложением чужой ветки. */
     const b = L.blankTasks();
     mk(b, 'Папка', 1000, { id: 'p' });

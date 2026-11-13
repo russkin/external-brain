@@ -477,27 +477,17 @@ function shareLiveList(tasks) {
   });
 }
 
-/* Есть ли у строки idx вложение с непустым заголовком: границы ветки —
- * как на экране (пустые строки-терминаторы в счёте), но пустые дети
- * текста не дают — отправлять некуда. */
-function shareHasTextKids(arr, idx) {
-  var base = indentOf(arr[idx]);
-  for (var j = idx + 1; j < arr.length; j++) {
-    var v = indentOf(arr[j]);
-    if (v <= base) return false;
-    if (arr[j].title) return true;
-  }
-  return false;
-}
-
 /* Список папок для выбора: живые строки с непустым заголовком, у которых
- * есть вложение с текстом (механика границ та же, что у текста папки). */
+ * есть вложение — ровно те, у кого на экране стоит ▶ (hasKids по отступу,
+ * v238: раньше требовался титлованный ребёнок, и папка с пустыми
+ * детьми на экране была, а в списке — нет). Текст папки пустые дети
+ * не дают (фильтр при печати) — отправится сам родитель. */
 function shareFolderList(tasks) {
   var all = shareLiveList(tasks);
   var out = [];
   for (var i = 0; i < all.length; i++) {
     if (!all[i].title) continue;
-    if (shareHasTextKids(all, i)) out.push({ id: all[i].id, title: all[i].title });
+    if (hasKids(all, i)) out.push({ id: all[i].id, title: all[i].title });
   }
   return out;
 }
