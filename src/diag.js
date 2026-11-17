@@ -357,6 +357,32 @@ function diagText() {
    * с журналом. */
   var b = C.getBoot();
   lines.push(b.error ? b.error + ' ' + b.stack : 'Ошибок JS: нет');
+  /* Порядок живых строк в МАССИВЕ (v240, разбор бага «порядок в
+   * «Поделиться списком»»): экран и шаринг сортируют по createdAt —
+   * по этой строке оба порядка воспроизводятся без пересылки задач.
+   * i — позиция в state.tasks, c — createdAt (в кавычках, если не
+   * число), iN — сырой indent, дальше id и префикс текста; фильтр тот
+   * же, что у lineTasks (могилы/done/планы мимо; пустые строки сюда
+   * ВХОДЯТ — shareText их исключает, и это одно из отличий). */
+  try {
+    if (state && state.tasks && state.tasks.length) {
+      var od = [], oi, ot;
+      for (oi = 0; oi < state.tasks.length; oi++) {
+        ot = state.tasks[oi];
+        if (!ot || ot.deleted || ot.status === 'done' || C.L.isPlanned(ot)) continue;
+        var oc = ot.createdAt;
+        var ocs = (typeof oc === 'number') ? String(oc)
+          : '"' + String(oc == null ? '' : oc) + '"';
+        var oti = String(ot.title == null ? '' : ot.title)
+          .replace(/\s+/g, ' ').slice(0, 24);
+        od.push('#' + oi + ' c' + ocs + ' i' + ot.indent + ' ' + ot.id + ' ' + oti);
+      }
+      if (od.length) {
+        lines.push('Порядок (живых ' + od.length + ', массив):');
+        for (oi = 0; oi < od.length; oi++) lines.push('  ' + od[oi]);
+      }
+    }
+  } catch (x) {}
   if (syncLog.length) {
     lines.push('Журнал:');
     var from = Math.max(0, syncLog.length - 12);

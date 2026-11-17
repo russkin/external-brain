@@ -2106,4 +2106,17 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(/C\.L\.isPlanned\(pt\)/.test(diagSrc) && /pt\.planFired/.test(diagSrc),
       'счётчики не по планам/planFired');
   });
+
+  it('v240: диагностика печатает порядок живых в массиве (разбор «Поделиться списком»)', () => {
+    assert.ok(diagSrc.includes("'Порядок (живых '"), 'нет строки «Порядок (живых …)»');
+    assert.ok(/state\.tasks\[oi\]/.test(diagSrc), 'порядок не по state.tasks');
+    assert.ok(diagSrc.includes("' c' + ocs") && diagSrc.includes("' i' + ot.indent"),
+      'в строке порядка нет createdAt/indent');
+    assert.ok(diagSrc.includes("ot.status === 'done'") && /isPlanned\(ot\)/.test(diagSrc),
+      'фильтр порядка не как у lineTasks (могилы/done/планы мимо)');
+    var iO = diagSrc.indexOf("'Порядок (живых '");
+    var iJ = diagSrc.indexOf("'Журнал:'");
+    assert.ok(iO !== -1 && iJ !== -1 && iO < iJ,
+      'блок порядка не перед «Журнал:»');
+  });
 });
