@@ -2119,4 +2119,21 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(iO !== -1 && iJ !== -1 && iO < iJ,
       'блок порядка не перед «Журнал:»');
   });
+
+  it('v241: диагностика печатает порядок шаринга и отпечаток кода', () => {
+    assert.ok(diagSrc.includes("'Порядок шаринга (первые '"),
+      'нет строки «Порядок шаринга»');
+    assert.ok(/C\.L\.shareText\(state\.tasks\)/.test(diagSrc),
+      'шаринг не из state.tasks');
+    assert.ok(diagSrc.includes("'Код шаринга: sort='"),
+      'нет отпечатка кода шаринга');
+    assert.ok(/indexOf\('out\.sort'\)/.test(diagSrc),
+      'отпечаток не ищет сортировку normalizeTasks');
+    assert.ok(/indexOf\('normalizeTasks'\)/.test(diagSrc),
+      'отпечаток не ищет normalizeTasks в shareText');
+    var iS = diagSrc.indexOf("'Порядок шаринга");
+    var iJ = diagSrc.indexOf("'Журнал:'");
+    assert.ok(iS !== -1 && iJ !== -1 && iS < iJ,
+      'блок шаринга не перед «Журнал:»');
+  });
 });

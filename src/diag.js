@@ -383,6 +383,26 @@ function diagText() {
       }
     }
   } catch (x) {}
+  /* Порядок шаринга (v241, разбор бага «порядок в «Поделиться
+   * списком»»): первые строк того, что реально отдаёт
+   * L.shareText(state.tasks) — сравнивать со «Порядок (живых…)»
+   * выше: равны → шаринг идёт по массиву; отпечаток кода ловит
+   * устаревший скрипт в памяти вкладки (есть ли сортировка в
+   * выполняющихся функциях). */
+  try {
+    var shTxt = C.L.shareText(state.tasks);
+    var shArr = String(shTxt || '').split('\n');
+    var shN = Math.min(10, shArr.length);
+    lines.push('Порядок шаринга (первые ' + shN + ' из ' + shArr.length + '):');
+    for (var shI = 0; shI < shN; shI++) lines.push('  ' + shArr[shI]);
+    lines.push('Код шаринга: sort=' +
+      (String(C.L.normalizeTasks).indexOf('out.sort') !== -1 ? 'есть' : 'НЕТ') +
+      ', share→normalize=' +
+      (String(C.L.shareText).indexOf('normalizeTasks') !== -1 ? 'да' : 'НЕТ') +
+      ', shareText=' + String(C.L.shareText).length + ' симв.');
+  } catch (x) {
+    lines.push('Порядок шаринга: ошибка ' + (x && x.message));
+  }
   if (syncLog.length) {
     lines.push('Журнал:');
     var from = Math.max(0, syncLog.length - 12);
