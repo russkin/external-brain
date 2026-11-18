@@ -2136,4 +2136,22 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(iS !== -1 && iJ !== -1 && iS < iJ,
       'блок шаринга не перед «Журнал:»');
   });
+
+  it('v242: диагностика печатает пробник нормализации', () => {
+    assert.ok(diagSrc.includes("'Нормализация (первые '"),
+      'нет строки «Нормализация»');
+    assert.ok(/C\.L\.normalizeTasks\(state\.tasks\)/.test(diagSrc),
+      'нормализация не из state.tasks');
+    assert.ok(diagSrc.includes("'Сырые: typeof='") &&
+      /C\.L\.normalizeTask\(raw0\)/.test(diagSrc),
+      'нет пробника сырого/нормализованного createdAt');
+    assert.ok(diagSrc.includes("'Код: normalizeTasks='"),
+      'нет длин выполняющихся функций');
+    assert.ok(diagSrc.includes("'Исходник normalizeTasks: '"),
+      'нет исходника normalizeTasks');
+    var iN = diagSrc.indexOf("'Нормализация (первые '");
+    var iJ = diagSrc.indexOf("'Журнал:'");
+    assert.ok(iN !== -1 && iJ !== -1 && iN < iJ,
+      'блок нормализации не перед «Журнал:»');
+  });
 });

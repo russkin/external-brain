@@ -403,6 +403,38 @@ function diagText() {
   } catch (x) {
     lines.push('Порядок шаринга: ошибка ' + (x && x.message));
   }
+  /* Пробник нормализации (v242, разбор бага «порядок в «Поделиться
+   * списком»»): что реально делает normalizeTasks с state.tasks —
+   * первые строк результата, typeof/raw/норм/сравнение createdAt у
+   * первой живой задачи, длины и полный исходник выполняющихся
+   * функций (сравнить с репозиторием байт в байт). */
+  try {
+    var nrm = C.L.normalizeTasks(state.tasks);
+    var nShow = Math.min(8, nrm.length);
+    lines.push('Нормализация (первые ' + nShow + ' из ' + nrm.length + '):');
+    for (var ni = 0; ni < nShow; ni++) {
+      lines.push('  c' + nrm[ni].createdAt + ' ' +
+        String(nrm[ni].title || '').replace(/\s+/g, ' ').slice(0, 24));
+    }
+    var raw0 = null;
+    for (ni = 0; ni < state.tasks.length; ni++) {
+      var rt = state.tasks[ni];
+      if (rt && !rt.deleted && rt.status !== 'done') { raw0 = rt; break; }
+    }
+    if (raw0) {
+      var nrm0 = C.L.normalizeTask(raw0);
+      var cmpv = (nrm.length >= 2) ? String(nrm[0].createdAt - nrm[1].createdAt) : 'n/a';
+      lines.push('Сырые: typeof=' + typeof raw0.createdAt +
+        ' raw=' + JSON.stringify(raw0.createdAt) +
+        ' норм=' + JSON.stringify(nrm0 && nrm0.createdAt) +
+        ' cmp=' + cmpv);
+    }
+    lines.push('Код: normalizeTasks=' + String(C.L.normalizeTasks).length +
+      ', normalizeTask=' + String(C.L.normalizeTask).length + ' симв.');
+    lines.push('Исходник normalizeTasks: ' + String(C.L.normalizeTasks));
+  } catch (x) {
+    lines.push('Нормализация: ошибка ' + (x && x.message));
+  }
   if (syncLog.length) {
     lines.push('Журнал:');
     var from = Math.max(0, syncLog.length - 12);
