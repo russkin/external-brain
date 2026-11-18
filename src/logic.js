@@ -1093,7 +1093,8 @@ function normalizeTasks(tasks) {
     out.push(n);
   }
   out.sort(function (a, b) {
-    if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
+    var ca = a.createdAt || 0, cb = b.createdAt || 0;
+    if (ca !== cb) return ca - cb;
     return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
   });
   return out;
@@ -1147,7 +1148,8 @@ function mergeTasks(localTasks, remoteTasks) {
     else out.push(cloneTask(e.local || e.remote));
   }
   out.sort(function (x, y) {
-    if (x.createdAt !== y.createdAt) return x.createdAt - y.createdAt;
+    var cx = x.createdAt || 0, cy = y.createdAt || 0;
+    if (cx !== cy) return cx - cy;
     return x.id < y.id ? -1 : (x.id > y.id ? 1 : 0);
   });
   return out;

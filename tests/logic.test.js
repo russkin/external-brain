@@ -280,6 +280,29 @@ describe('списки и фокус', () => {
       '- Старая'
     ]);
   });
+
+  it('v243: порядок шаринга переживает могилы без createdAt (баг «Поделиться списком»)', () => {
+    // min-могилы после «Сжать удалённые»: normalizeTask возвращает их
+    // ранним выходом БЕЗ createdAt — старый компаратор давал NaN
+    // и sort не упорядочивал (шаринг отдавал порядок массива).
+    const t = [];
+    for (let i = 0; i < 6; i++) {
+      t.push({ id: 'min-tomb-' + i, deleted: true, ts: 1000 + i, updatedAt: 1000 + i, min: true });
+    }
+    mk(t, 'Верх', 1000, { id: 'a' });
+    mk(t, 'Середина', 2000, { id: 'b' });
+    mk(t, 'Низ', 3000, { id: 'c' });
+    t.splice(3, 0, { id: 'min-tomb-x', deleted: true, ts: 2000, updatedAt: 2000, min: true });
+    t.splice(5, 0, { id: 'min-tomb-y', deleted: true, ts: 3000, updatedAt: 3000, min: true });
+    const outLive = L.normalizeTasks(t).filter((x) => !x.deleted);
+    assert.deepEqual(outLive.map((x) => x.id), ['a', 'b', 'c'],
+      'normalizeTasks: живые не в c-порядке');
+    assert.deepEqual(L.shareText(t).split('\n'), ['- Верх', '- Середина', '- Низ'],
+      'shareText: порядок не как на экране');
+    const mLive = L.mergeTasks(t, t).filter((x) => !x.deleted);
+    assert.deepEqual(mLive.map((x) => x.id), ['a', 'b', 'c'],
+      'mergeTasks: живые не в c-порядке');
+  });
 });
 
 describe('поиск', () => {
