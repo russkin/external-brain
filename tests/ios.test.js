@@ -999,7 +999,7 @@ describe('логика вызывается с state.tasks', () => {
       'вставка сверху сдвигает только живых');
     assert.ok(gestSrc.includes('busyAt[t.createdAt] = true') &&
       gestSrc.includes('if (!busyAt[c0]) vals.unshift(c0)') &&
-      gestSrc.includes('{ vals = null; br = \'gap-short\'; }'),
+      gestSrc.includes('vals = null; }'),
       'посадка встаёт встык с чужими метками');
     assert.ok(gestSrc.includes('L.fitVisibleSlots(domAlive, state.tasks)'),
       'запасная ветка не идёт через слоты в порядке DOM');
@@ -1011,11 +1011,6 @@ describe('логика вызывается с state.tasks', () => {
     assert.ok(/fitVisibleSlots: fitVisibleSlots/.test(logicSrc), 'fitVisibleSlots не в api logic.js');
     assert.ok(gestSrc.includes('st.ts = now'), 'изменённые слоты не получают свежий ts — синк откатит порядок');
     assert.ok(gestSrc.includes('typeof nv !== \'number\''), 'битый слот молча пишется в createdAt');
-    /* Телеметрия остаётся (вариант Б) — выпилить только после подтверждения. */
-    assert.ok(gestSrc.includes('{ vals = null; br = \'gap-short\'; }'),
-      'проба gap-short выпилена раньше подтверждения на устройстве');
-    assert.ok(appSrc.includes('external-brain-landprobe-v1'),
-      'кольцо landprobe выпилено раньше подтверждения на устройстве');
   });
   it('поиск: кнопка, оверлей, проводка (модуль src/search.js)', () => {
     assert.ok(html.includes('id="searchBtn"'), 'нет кнопки поиска в шапке');
@@ -1340,22 +1335,17 @@ describe('синк: триггеры и протокол', () => {
     assert.ok(/EBTriggers\.init\(\{[\s\S]{0,700}isDragActive: isDragActive/.test(appSrc),
       'app.js не отдаёт isDragActive в контекст модуля триггеров');
   });
-  it('v232: телеметрия посадки (временная, разбор отскока)', () => {
-    assert.ok(appSrc.includes("external-brain-landprobe-v1"), 'нет ключа кольца ландпробы');
-    assert.ok(appSrc.includes("if (isDragActive()) dragProbe('render', probeCaller())"),
-      'render не ловит чужой вызов во время жеста');
-    assert.ok(/EBTriggers\.init\(\{[\s\S]{0,900}probe: dragProbe/.test(appSrc),
-      'probe не отдан триггерам синка');
-    assert.ok(/EBGestures\.init\(\{[\s\S]{0,1400}probe: dragProbe/.test(appSrc),
-      'probe не отдан жестам');
-    assert.ok(gestSrc.includes("C.probe('up'") && gestSrc.includes("C.probe('vdrag'") &&
-      gestSrc.includes("C.probe('degrade'") && gestSrc.includes("C.probe('land'"),
-      'нет проб в startVertical/finish/деградации/persistLineOrder');
-    assert.ok(gestSrc.includes("C.probe('land', br +"), 'ветка посадки порядка не подписана (br)');
-    assert.ok(trigSrc.includes("C.probe('sync'"), 'нет пробы синк-окна жеста');
-    assert.ok(diagSrc.includes("'Жест: сэмплов '"), 'нет строки «Жест:» в диагностике');
-    assert.ok(!/removeItem\('external-brain-landprobe-v1'\)/.test(diagSrc),
-      'живой ключ телеметрии чистится при старте — сэмплы пропадут до скриншота');
+  it('v246: телеметрия посадки выпилена (грабля 50 подтверждена)', () => {
+    assert.ok(!appSrc.includes('external-brain-landprobe-v1') &&
+      !appSrc.includes('dragProbe') && !appSrc.includes('probeCaller'),
+      'осталась телеметрия посадки в app.js');
+    assert.ok(!gestSrc.includes('C.probe') && !trigSrc.includes('C.probe'),
+      'остались пробы C.probe в жестах/триггерах');
+    assert.ok(!diagSrc.includes("'Жест: сэмплов '") &&
+      !diagSrc.includes("getItem('external-brain-landprobe-v1')"),
+      'осталась строка «Жест:» в диагностике');
+    assert.ok(/removeItem\('external-brain-landprobe-v1'\)/.test(diagSrc),
+      'мёртвый ключ landprobe не чистится при старте');
   });
 });
 

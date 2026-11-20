@@ -304,26 +304,6 @@ function diagText() {
     (pubAt ? fmtDT(pubAt) + ' · ' + pubStatus + pubNote : 'ещё не было'));
   lines.push('Локальная копия: ' + backupLabel(C.fmtWhen));
   lines.push('Постоянная копия: ' + pinLabel(C.fmtWhen));
-  /* ВРЕМЕННАЯ телеметрия посадки (v232, разбор отскока при перетаскивании):
-   * кольцо событий жеста — старт, отпускание, ветка persistLineOrder,
-   * деградация страховки, чужой render во время жеста (с file:line),
-   * синк в окне жеста. Ключ external-brain-landprobe-v1 — ЖИВ: не чистить
-   * в init, выпилить строку вместе с телеметрией после разбора. */
-  try {
-    var lpRaw = localStorage.getItem('external-brain-landprobe-v1');
-    var lp = lpRaw ? JSON.parse(lpRaw) : null;
-    if (Array.isArray(lp) && lp.length) {
-      var lp2 = function (n) { return (n < 10 ? '0' : '') + n; };
-      var lpParts = [];
-      for (var lpi = Math.max(0, lp.length - 5); lpi < lp.length; lpi++) {
-        var lpe = lp[lpi] || {};
-        var lpd = new Date(lpe.t || 0);
-        lpParts.push(lp2(lpd.getHours()) + ':' + lp2(lpd.getMinutes()) + ':' +
-          lp2(lpd.getSeconds()) + ' ' + (lpe.ev || '?') + (lpe.d ? ' ' + lpe.d : ''));
-      }
-      lines.push('Жест: сэмплов ' + lp.length + ' · ' + lpParts.join(' · '));
-    }
-  } catch (x) {}
   /* Планирование (фаза 3, FR-101): цель, счётчики и последнее
    * срабатывание (макс planFired; план живёт и после удаления дочки). */
   try {
@@ -373,13 +353,14 @@ function diagText() {
 function init(ctx) {
   C = ctx;
   /* Выпил временной телеметрии (v186 — метки, v211 — дотяжки шапки,
-   * v230 — поле плана): мёртвые ключи чистим сами, иначе лежат в
-   * localStorage вечно. */
+   * v230 — поле плана, v246 — посадка drag): мёртвые ключи чистим сами,
+   * иначе лежат в localStorage вечно. */
   try {
     localStorage.removeItem('external-brain-chipfit-v1');
     localStorage.removeItem('external-brain-chipblur-v1');
     localStorage.removeItem('external-brain-headlift-v1');
     localStorage.removeItem('external-brain-planprobe-v1');
+    localStorage.removeItem('external-brain-landprobe-v1');
   } catch (x) {}
   ctx.on('diagBtn', 'click', function () {
     diagText().then(function (txt) {
