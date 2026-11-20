@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v244';
+  var APP_VERSION = 'v245';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1220,6 +1220,16 @@
     } else manual('Скопируй вручную', text);
   }
 
+  /* Общий канал отправки текста наружу (FR-104, v245): системное меню,
+   * иначе буфер («скопировано» в статусе), иначе окно с текстом. Им же
+   * идут «Поделиться списком» и «Поделиться приложением» — поведение
+   * прежнее, байт-в-байт. */
+  function shareOut(txt) {
+    if (navigator.share) navigator.share({ text: txt }).catch(function () {});
+    else if (navigator.clipboard) navigator.clipboard.writeText(txt).then(function () { lastAction = 'скопировано'; renderStatus(); });
+    else askText(txt, '', false).then(function () {});
+  }
+
   /* Сжать могилы: все tombstone заменяются короткими метками
    * (файл худеет). Живые и выполненные не трогаются; шаг пишется в историю
    * (↩ возвращает полные могилы). ДВОЙНОЕ предупреждение: текст могил
@@ -1791,6 +1801,90 @@
     schedulePlanCheck(0);
   }
 
+  /* Вопрос про метки времени (FR-104, Q2-А): КАЖДЫЙ раз при «Поделиться
+   * папкой», ДО выбора папки. «Да»/«Нет» — к выбору папки (true/false),
+   * «Отмена» — выход из флоу (null). Своя модалка: prompt/confirm на
+   * iOS вне user-activation блокируются. При закрытии возвращаем всё
+   * к дефолтам — иначе следующий askText/askConfirm сломается. */
+  function askShareTimes() {
+    return new Promise(function (resolve) {
+      var back = el('modalBack'), text = el('modalText'), input = el('modalInput');
+      var ok = el('modalOk'), cancel = el('modalCancel'), clearBtn = el('modalClear');
+      if (!back || !ok || !cancel) { resolve(null); return; }
+      text.textContent = 'Добавить метки времени к тексту папки? (например, 1ч 30м)';
+      if (input) input.style.display = 'none';
+      if (clearBtn) { clearBtn.style.display = ''; clearBtn.textContent = 'Нет'; }
+      ok.textContent = 'Да';
+      cancel.style.display = '';
+      back.classList.add('open');
+      function done(v) {
+        back.classList.remove('open');
+        ok.onclick = null; cancel.onclick = null;
+        if (clearBtn) { clearBtn.onclick = null; clearBtn.style.display = 'none'; clearBtn.textContent = 'Очистить'; }
+        ok.textContent = 'OK';
+        if (input) input.style.display = '';
+        resolve(v);
+      }
+      ok.onclick = function () { done(true); };
+      if (clearBtn) clearBtn.onclick = function () { done(false); };
+      cancel.onclick = function () { done(null); };
+    });
+  }
+
+  /* Отправить папку (FR-104, v245): окно выбора папки (паттерн
+   * askPlanSettings — инлайн display в #modalBox, кнопка OK —
+   * «Отправить»). Флаг меток уже спрошен (askShareTimes), чекбокса в
+   * окне нет; папка и флаг НЕ запоминаются (Q8-А) — селект каждый раз
+   * заново, первый пункт дефолт. Папок нет — инфо-окно, селект не
+   * открываем. Текст собирает L.shareFolderText (корень + живые
+   * вложения, отступы от корня), отправка — общим shareOut. */
+  function askShareFolder(withTimes) {
+    var back = el('modalBack'), text = el('modalText'), input = el('modalInput');
+    var ok = el('modalOk'), cancel = el('modalCancel'), clearBtn = el('modalClear');
+    var box = el('shareFolderBox'), sel = el('shareFolderSel');
+    if (!back || !text || !ok || !box || !sel || !state) return;
+    var folders = L.shareFolderList(state.tasks);
+    if (!folders.length) {
+      askInfo('Нет папок: ни у одной живой задачи нет вложенных с текстом — отправлять нечего.').then(function () {});
+      return;
+    }
+    sel.innerHTML = '';
+    for (var i = 0; i < folders.length; i++) {
+      var op = document.createElement('option');
+      op.value = folders[i].id;
+      op.textContent = String(folders[i].title).slice(0, 120);
+      sel.appendChild(op);
+    }
+    text.textContent = 'Отправить папку';
+    if (input) input.style.display = 'none';
+    if (clearBtn) { clearBtn.style.display = 'none'; clearBtn.onclick = null; }
+    if (cancel) { cancel.style.display = ''; cancel.onclick = function () { closeShareFolder(); }; }
+    ok.textContent = 'Отправить';
+    box.style.display = 'block';
+    back.classList.add('open');
+    ok.onclick = function () {
+      var id = String(sel.value || '');
+      closeShareFolder();
+      if (!state || !id) return;
+      var txt = L.shareFolderText(state.tasks, id, withTimes);
+      if (txt) shareOut(txt);
+    };
+  }
+
+  /* Закрытие окна папки: восстановить кнопки/поле и спрятать контейнер
+   * (паттерн closePlanSettings). ДО shareOut — сквозной клик v151. */
+  function closeShareFolder() {
+    var back = el('modalBack'), input = el('modalInput');
+    var ok = el('modalOk'), cancel = el('modalCancel'), clearBtn = el('modalClear');
+    var box = el('shareFolderBox');
+    if (box) box.style.display = 'none';
+    if (back) back.classList.remove('open');
+    if (ok) { ok.onclick = null; ok.textContent = 'OK'; }
+    if (cancel) { cancel.onclick = null; cancel.style.display = ''; }
+    if (clearBtn) { clearBtn.onclick = null; clearBtn.style.display = 'none'; clearBtn.textContent = 'Очистить'; }
+    if (input) input.style.display = '';
+  }
+
   /* Опции цели в селекте страницы плана (FR-100): живые задачи в
    * порядке списка + всегда пункт «(не выбрана)» (пустая цель —
    * норма: планы ждут). Тексты — через textContent (заголовки —
@@ -1910,16 +2004,18 @@
       }
     });
     on('shareBtn', 'click', function () {
-      var txt = L.shareText(state.tasks);
-      if (navigator.share) navigator.share({ text: txt }).catch(function () {});
-      else if (navigator.clipboard) navigator.clipboard.writeText(txt).then(function () { lastAction = 'скопировано'; renderStatus(); });
-      else askText(txt, '', false).then(function () {});
+      shareOut(L.shareText(state.tasks));
     });
     on('shareAppBtn', 'click', function () {
-      var url = window.location.href;
-      if (navigator.share) navigator.share({ text: url }).catch(function () {});
-      else if (navigator.clipboard) navigator.clipboard.writeText(url).then(function () { lastAction = 'скопировано'; renderStatus(); });
-      else askText(url, '', false).then(function () {});
+      shareOut(window.location.href);
+    });
+    /* Отправить папку (FR-104): вопрос про метки (каждый раз, до выбора)
+     * → окно выбора папки → текст → общий shareOut. */
+    on('shareFolderBtn', 'click', function () {
+      askShareTimes().then(function (v) {
+        if (v === null) return;
+        askShareFolder(v === true);
+      });
     });
     /* Поиск — модуль src/search.js (этап 1): подписки внутри init,
      * сюда отдаём только контекст (всё изменяемое — через геттеры). */

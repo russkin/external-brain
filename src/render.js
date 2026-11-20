@@ -150,23 +150,16 @@ function makeGrip(arrow) {
  * такая строка между родителем и живыми детьми рвала обход (break)
  * и гасила сумму, хотя на экране ветка цела. Флаг «Суммировать
  * из вложенных» снят (sumKids === false) — родитель показывает своё
- * estMin вручную, как лист, поддерево не считается. */
+ * estMin вручную, как лист, поддерево не считается.
+ * Формула живёт в src/logic.js (estMinAt, FR-104 — её же пользуется
+ * «Поделиться папкой»): здесь только подстановка экранного списка. */
 function lineEstMin(t) {
   if (!t) return 0;
   var live = C.lineTasks();
-  var pi = -1;
   for (var i = 0; i < live.length; i++) {
-    if (live[i].id === t.id) { pi = i; break; }
+    if (live[i].id === t.id) return L.estMinAt(live, i);
   }
-  if (pi === -1 || !L.hasKids(live, pi) || t.sumKids === false) return t.estMin || 0;
-  var pin = C.lineIndent(live[pi]);
-  var sum = 0;
-  for (var j = pi + 1; j < live.length; j++) {
-    var ij = C.lineIndent(live[j]);
-    if (ij <= pin) break;
-    if (ij === pin + 1) sum += lineEstMin(live[j]);
-  }
-  return sum;
+  return t.estMin || 0;
 }
 
 /* Источник строки (ФАЗА 1 планирования, FR-95): opts.src 'plan' — строка

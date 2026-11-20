@@ -18,7 +18,7 @@
 не в russkin/external-brain. Код по умолчанию смотрит в
 russkin/external-brain — дефолты в коде не менять. Репозиторий переключается
 настройкой repo в приложении.
-Текущая версия: v244 (ноябрь 2026). Тестов: 284 (`logic` + `ios` + `sync` + `sync-devices`).
+Текущая версия: v245 (ноябрь 2026). Тестов: 304 (`logic` + `ios` + `sync` + `sync-devices`).
 Тестовые платформы: смартфон Honor 400 Pro, Android 16 + iPhone, Safari 15
 (хозяин репозитория тестирует на iPhone). Планшет НЕ используется.
 
@@ -685,6 +685,35 @@ Docs-only правки версию НЕ bump'ят. Есть регресс-те
 
 ## Состояние сессии (для продолжения в новом чате)
 
+- **АКТУАЛЬНО (19.11.2026):** выпущен **v245** — фича «Поделиться
+  папкой» (FR-104, решение хозяина «А»): пункт ⚙ «📤 Поделиться» —
+  подменю (`#shareMenuBtn`/`#shareMenu` в `index.html`, подписки в
+  `src/settings.js`, закрывается с меню как backup/cleanup), три
+  отправки — общий `shareOut(txt)` в `app.js` (меню → буфер → окно,
+  `lastAction = 'скопировано'`). Флоу: `askShareTimes()` (вопрос
+  «Добавить метки времени?» Да/Нет/Отмена, КАЖДЫЙ раз до выбора,
+  дефолты кнопок восстанавливаются) → `askShareFolder(withTimes)`
+  (`#shareFolderBox`/`#shareFolderSel` в общей модалке, паттерн
+  `#planSetBox`; option через createElement+textContent, slice(0,120);
+  папок нет → `askInfo`; флаг/папка НЕ запоминаются) →
+  `L.shareFolderText` → `shareOut`; `closeShareFolder()` ДО shareOut
+  (сквозной клик v151). Логика в `src/logic.js`: `shareLiveList`/
+  `shareHasTextKids` (внутр.), `shareFolderList` (живые с вложением
+  С текстом — пустые строки граница, не папка), `estMinAt` (единая
+  формула: лист/снятый sumKids → своё, иначе сумма indent+1 с
+  рекурсией), `shareFolderText` (границы по shareLiveList, отступы от
+  корня, метки `fmtDur` в скобках, у 0 нет) + экспорт; `lineEstMin`
+  (`src/render.js`) — обёртка `L.estMinAt(live, i)` (вызовы
+  `estMin: lineEstMin(...)` не тронуты). Версии `v245`/`extbrain-v245`
+  вместе. Тесты: **304** (`fail 0`): logic +17 (describe «отправка
+  папки (FR-104)»: estMinAt ×5, shareFolderList ×5, shareFolderText
+  ×6), ios +3 (describe «v245» A/B/C) + правка блока метки времени
+  (формула теперь в logicSrc: `sum += estMinAt(arr, j)`,
+  `v === base + 1`, `|| t.sumKids === false`), покрытие logic
+  96.97/90.75. Документы: FR-104 новый, FR-74/75/77/78 и NFR-07
+  обновлены, USER_GUIDE (.md+.html — «Отправить папку»), VERSIONS.html
+  (cur на v245), шапка AGENTS. Телеметрия «Жест:» (v232, грабля 50)
+  по-прежнему жива — ждём от хозяина подтверждения «отстрела нет».
 - **СЕССИЯ ЗАКРЫТА (18.11.2026).** Опубликована **v244** — сага бага
   «неправильный порядок в «Поделиться списком»» закрыта ПОЛНОСТЬЮ:
   диагностика (v240–v242, пробники), фикс (v243, компараторы

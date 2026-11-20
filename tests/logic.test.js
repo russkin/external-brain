@@ -305,6 +305,185 @@ describe('списки и фокус', () => {
   });
 });
 
+describe('отправка папки (FR-104): время, список папок, текст', () => {
+  /* Дерево: Папка > (Дело 30м, Влож. > Глубокая 1ч, Пустая-граница);
+   * ниже — соседняя строка, которую грабля перепрыгивания не должна
+   * захватить. */
+  function seed() {
+    const t = L.blankTasks();
+    mk(t, 'Папка', 1000, { id: 'p', indent: 0, estMin: 99 });
+    mk(t, 'Дело', 2000, { id: 'c1', indent: 1, estMin: 30 });
+    mk(t, 'Влож.', 3000, { id: 'c2', indent: 1 });
+    mk(t, 'Глубокая', 4000, { id: 'c3', indent: 2, estMin: 60 });
+    mk(t, '', 5000, { id: 'gap', indent: 1, allowEmpty: true });
+    mk(t, 'Сосед', 6000, { id: 's', indent: 0, estMin: 15 });
+    return t;
+  }
+
+  describe('estMinAt', () => {
+    it('лист: своё estMin; без индекса/пустой массив — 0', () => {
+      const t = seed();
+      const live = L.normalizeTasks(t).filter((x) => !x.deleted && !x.planDate && x.status !== 'done');
+      const iC1 = live.findIndex((x) => x.id === 'c1');
+      assert.equal(L.estMinAt(live, iC1), 30);
+      assert.equal(L.estMinAt(live, 0), 60 + 30, 'родитель: сумма первого вложения');
+      assert.equal(L.estMinAt([], 0), 0);
+      assert.equal(L.estMinAt(live, null), 0);
+      assert.equal(L.estMinAt(undefined, 0), 0);
+    });
+    it('сумма по уровню indent+1 с рекурсией: вложенный родитель даёт итог вложенных', () => {
+      const t = seed();
+      const live = L.normalizeTasks(t).filter((x) => !x.deleted && !x.planDate && x.status !== 'done');
+      const iC2 = live.findIndex((x) => x.id === 'c2');
+      /* Влож. — сумма Глубокой (60), Папка — 30 + 60 = 90, не 99 своя. */
+      assert.equal(L.estMinAt(live, iC2), 60, 'вложенный-родитель: сумма дочки');
+      assert.equal(L.estMinAt(live, 0), 90, 'итог по всем своим, не своё estMin');
+    });
+    it('снятый sumKids: родитель показывает своё estMin, поддерево не считается', () => {
+      const t = seed();
+      L.clarifyTask(t, 'p', { sumKids: false }, 7000);
+      const live = L.normalizeTasks(t).filter((x) => !x.deleted && !x.planDate && x.status !== 'done');
+      assert.equal(L.estMinAt(live, 0), 99, 'свое время при снятом флаге');
+    });
+    it('граница ветки: сосед после пустой-границы в сумму не входит', () => {
+      const t = seed();
+      const live = L.normalizeTasks(t).filter((x) => !x.deleted && !x.planDate && x.status !== 'done');
+      const ids = live.map((x) => x.id);
+      assert.ok(ids.indexOf('s') > ids.indexOf('gap'), 'Сосед живёт после границы');
+      /* Сосед на indent 0 останавливает обход — 15 в сумму Папки не идёт. */
+      assert.equal(L.estMinAt(live, 0), 90);
+    });
+    it('пустая строка-граница: у неё нет детей — возвращает своё (0)', () => {
+      const t = seed();
+      const live = L.normalizeTasks(t).filter((x) => !x.deleted && !x.planDate && x.status !== 'done');
+      const iGap = live.findIndex((x) => x.id === 'gap');
+      assert.equal(L.estMinAt(live, iGap), 0);
+    });
+  });
+
+  describe('shareFolderList', () => {
+    it('папка — живая строка с вложением С текстом; пустые детей папку не делают', () => {
+      const t = seed();
+      /* Родитель только из пустых детей: на экране ▶ стоит, текста нет. */
+      mk(t, 'ТолькоПустые', 6500, { id: 'tp', indent: 0 });
+      mk(t, '', 6600, { id: 'tpk', indent: 1, allowEmpty: true });
+      const ids = L.shareFolderList(t).map((x) => x.id);
+      assert.ok(ids.includes('p'), 'Папка с детьми-текстом должна предлагаться');
+      assert.ok(!ids.includes('c1'), 'лист папкой не является');
+      assert.ok(!ids.includes('s'), 'Сосед без вложений не папка');
+      assert.ok(!ids.includes('tp'), 'папка только из пустых детей не предлагается');
+    });
+    it('нет папок — пустой массив', () => {
+      const t = L.blankTasks();
+      mk(t, 'Одно', 1000, { id: 'a' });
+      mk(t, '', 2000, { id: 'b', indent: 1, allowEmpty: true });
+      /* b пустая — a папкой не считается, других строк нет. */
+      assert.deepEqual(L.shareFolderList(t), []);
+      assert.deepEqual(L.shareFolderList(L.blankTasks()), []);
+    });
+    it('могилы, планы и выполненные в список не идут', () => {
+      const t = seed();
+      mk(t, 'Мертвец', 7000, { id: 'dead' });
+      L.removeTask(t, 'dead', 7100);
+      /* План-лист (без детей): его строка не должна фигурировать. */
+      mk(t, 'План', 8000, { id: 'pl', indent: 0 });
+      L.clarifyTask(t, 'pl', { planDate: '01.01.2030' }, 8200);
+      mk(t, 'Готово', 9000, { id: 'dn' });
+      L.completeTask(t, 'dn', 9100);
+      /* c2 — папка по-настоящему (дочка Глубокая с текстом), s — нет. */
+      const ids = L.shareFolderList(t).map((x) => x.id);
+      assert.deepEqual(ids.sort(), ['c2', 'p'],
+        'папкой считается только живая неплановая с текстовым вложением');
+    });
+    it('порядок — экранный (createdAt), title как у строки', () => {
+      const t = L.blankTasks();
+      mk(t, 'Вторая', 2000, { id: 'b' });
+      mk(t, 'Дочь', 2100, { id: 'bk', indent: 1 });
+      mk(t, 'Первая', 1000, { id: 'a' });
+      mk(t, 'Дочь2', 1100, { id: 'ak', indent: 1 });
+      const list = L.shareFolderList(t);
+      assert.deepEqual(list.map((x) => x.id), ['a', 'b']);
+      assert.equal(list[0].title, 'Первая');
+    });
+    it('глубокие вложения (до MAX_INDENT=8) видят папку', () => {
+      const t = L.blankTasks();
+      mk(t, 'Корень', 1000, { id: 'r', indent: 0 });
+      mk(t, 'Шаг', 1100, { id: 'd1', indent: 1 });
+      for (let i = 2; i <= 8; i++) mk(t, 'Шаг' + i, 1100 + i, { id: 'd' + i, indent: i });
+      mk(t, 'Текст', 1200, { id: 'leaf', indent: 9, allowEmpty: false });
+      /* leaf на уровне 9 — за потолком; вложением считаем текст на 8. */
+      L.clarifyTask(t, 'd8', { title: 'Глубокий текст' }, 1300);
+      const ids = L.shareFolderList(t).map((x) => x.id);
+      assert.ok(ids.includes('r'), 'глубина не прячет корень-папку');
+      assert.ok(ids.includes('d7'), 'папка с дочкой-текстом на глубине видна');
+      assert.ok(!ids.includes('leaf'), 'одиночная глубокая строка не папка');
+    });
+  });
+
+  describe('shareFolderText', () => {
+    it('корень + живые вложения, отступы от корня (2 пробела/уровень)', () => {
+      const txt = L.shareFolderText(seed(), 'p', false);
+      assert.equal(txt, [
+        '- Папка',
+        '  - Дело',
+        '  - Влож.',
+        '    - Глубокая'
+      ].join('\n'), 'пустая граница не печатается, но держит ветку');
+    });
+    it('метки времени: fmtDur в скобках, у 0 скобок нет', () => {
+      const t = seed();
+      /* Между границей (5000) и Соседом (6000) — своя строка папки. */
+      mk(t, 'БезВремени', 5500, { id: 'c4', indent: 1 });
+      const withT = L.shareFolderText(t, 'p', true).split('\n');
+      assert.equal(withT[1], '  - Дело (30м)');
+      assert.equal(withT[2], '  - Влож. (1ч)', 'у родителя авто-сумма 60м = 1ч');
+      assert.equal(withT[3], '    - Глубокая (1ч)');
+      assert.equal(withT[4], '  - БезВремени', '0 — без скобок');
+    });
+    it('без флага — меток нет вообще', () => {
+      const txt = L.shareFolderText(seed(), 'p', false);
+      assert.ok(!/\(\d/.test(txt), 'withTimes=false не должен добавлять скобки');
+    });
+    it('снятый sumKids: у родителя своё время, не сумма', () => {
+      const t = seed();
+      L.clarifyTask(t, 'p', { sumKids: false }, 7000);
+      const line = L.shareFolderText(t, 'p', true).split('\n')[0];
+      assert.equal(line, '- Папка (1ч 39м)', '99 мин по fmtDur, поддерево не суммируется');
+    });
+    it('чужой/мёртвый/плановый id — пустая строка', () => {
+      const t = seed();
+      mk(t, 'Мертвец', 7000, { id: 'dead' });
+      L.removeTask(t, 'dead', 7100);
+      assert.equal(L.shareFolderText(t, 'nope', true), '');
+      assert.equal(L.shareFolderText(t, 'dead', true), '');
+      assert.equal(L.shareFolderText(t, null, true), '');
+      mk(t, 'План', 8000, { id: 'pl' });
+      L.clarifyTask(t, 'pl', { planDate: '01.01.2030' }, 8200);
+      assert.equal(L.shareFolderText(t, 'pl', true), '');
+    });
+    it('граница-пустая не пускает чужих детей: текст обрывается у соседа', () => {
+      const t = seed();
+      const txt = L.shareFolderText(t, 'p', false);
+      assert.ok(!txt.includes('Сосед'), 'сосед папки не попадает в текст');
+      assert.ok(txt.includes('Глубокая'), 'свои вложения внутри');
+      /* Сосед сам — папкой не является, но его собственный текст отдаётся. */
+      const sTxt = L.shareFolderText(t, 's', false);
+      assert.equal(sTxt, '- Сосед');
+    });
+    it('пустые строки-терминаторы печатаются как текст (свой смысл ветки)', () => {
+      const t = L.blankTasks();
+      mk(t, 'Папка', 1000, { id: 'p' });
+      mk(t, '', 2000, { id: 'inner', indent: 1, allowEmpty: true });
+      mk(t, 'Вторая', 3000, { id: 'p2' });
+      /* inner — пустая, у неё title '' — не печатается (фильтр как shareText),
+       * но её ветка в текст не попадает: после неё — новый уровень 0. */
+      const txt = L.shareFolderText(t, 'p', false);
+      assert.equal(txt, '- Папка');
+      assert.ok(!txt.includes('Вторая'), 'граница-пустая удержала чужую строку');
+    });
+  });
+});
+
 describe('поиск', () => {
   function seed() {
     const t = L.blankTasks();

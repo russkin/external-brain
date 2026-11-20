@@ -95,6 +95,8 @@ function init(ctx) {
       if (bm) bm.classList.remove('open');
       var cm = el('cleanupMenu');
       if (cm) cm.classList.remove('open');
+      var sm = el('shareMenu');
+      if (sm) sm.classList.remove('open');
     }
   });
   /* Подменю «Резервная копия»: три пункта-копии в одном. */
@@ -106,6 +108,11 @@ function init(ctx) {
   ctx.on('cleanupBtn', 'click', function () {
     var cm = el('cleanupMenu');
     if (cm) cm.classList.toggle('open');
+  });
+  /* Подменю «Поделиться» (FR-104, v245): список + папка. */
+  ctx.on('shareMenuBtn', 'click', function () {
+    var sm = el('shareMenu');
+    if (sm) sm.classList.toggle('open');
   });
   /* Репозиторий и токен — только для администратора: сначала предупреждение,
    * затем модальное окно по центру с двумя полями и кнопками

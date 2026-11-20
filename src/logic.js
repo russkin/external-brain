@@ -464,6 +464,105 @@ function shareText(tasks) {
   return lines.join('\n');
 }
 
+/* --- Отправка папки (FR-104): поддерево одной группы отдельным текстом --- */
+
+/* Живые строки для отправки — как их видит экран: normalizeTasks (ТОЛЬКО
+ * он, не свои сортировки — могилы без createdAt ломали бы порядок, v243)
+ * с фильтром мимо могил/планов/выполненных. ПУСТЫЕ title СОХРАНЯЮТСЯ:
+ * на экране пустая строка — полноценная граница ветки (v237); убрав её
+ * до обхода, отправка перепрыгивала бы за пределы папки. В сам текст
+ * пустые не идут — фильтр при печати (как в shareText). Внутренняя. */
+function shareLiveList(tasks) {
+  return normalizeTasks(tasks).filter(function (t) {
+    return !t.deleted && !isPlanned(t) && t.status !== 'done';
+  });
+}
+
+/* Есть ли у строки idx вложение С НЕПУСТЫМ текстом (Q7-Б): скан вперёд
+ * до границы indentOf ≤ base; титлованная строка глубже — да. Пустые
+ * строки границу держат, но папку не делают — hasKids здесь не годится
+ * (у папки только из пустых детей на экране стоит ▶, а текста она не
+ * даст). Внутренняя. */
+function shareHasTextKids(arr, idx) {
+  if (!arr || idx == null || !arr[idx]) return false;
+  var base = indentOf(arr[idx]);
+  for (var j = idx + 1; j < arr.length; j++) {
+    var v = indentOf(arr[j]);
+    if (v <= base) return false;
+    if (arr[j].title) return true;
+  }
+  return false;
+}
+
+/* Список папок для выбора (Q7-Б): живые непустые строки, у которых есть
+ * вложение с текстом; порядок — экранный. [] если папок нет. */
+function shareFolderList(tasks) {
+  var all = shareLiveList(tasks);
+  var out = [];
+  for (var i = 0; i < all.length; i++) {
+    if (!all[i].title) continue;
+    if (shareHasTextKids(all, i)) out.push({ id: all[i].id, title: all[i].title });
+  }
+  return out;
+}
+
+/* Единая формула «экранного» времени (база lineEstMin в src/render.js):
+ * лист ИЛИ снятый sumKids → своё estMin; иначе сумма estMinAt по строкам
+ * уровня indent+1 до границы indentOf ≤ base (рекурсия по вложенным
+ * родителям). Статусы НЕ фильтрует — фильтр на вызывающем (экран —
+ * lineTasks, текст папки — обход поддерева в shareLiveList). */
+function estMinAt(arr, idx) {
+  if (!arr || idx == null || !arr[idx]) return 0;
+  var t = arr[idx];
+  if (!hasKids(arr, idx) || t.sumKids === false) return t.estMin || 0;
+  var base = indentOf(t);
+  var sum = 0;
+  for (var j = idx + 1; j < arr.length; j++) {
+    var v = indentOf(arr[j]);
+    if (v <= base) break;
+    if (v === base + 1) sum += estMinAt(arr, j);
+  }
+  return sum;
+}
+
+/* Текст папки (FR-104): как shareText, только корень + живые вложения
+ * одного поддерева. Границы ветки — по экранному списку (shareLiveList),
+ * пустые строки держат границу, но в текст не идут. Отступы пересчитаны
+ * от корня папки (2 пробела/уровень), строки вида «- текст»; withTimes —
+ * метки времени fmtDur в скобках (у 0 скобок нет), у родителя время
+ * расчётное (estMinAt: авто-сумма, пока sumKids не снят). Папка не
+ * найдена (могила/план/чужой id/null) — ''. */
+function shareFolderText(tasks, folderId, withTimes) {
+  var all = shareLiveList(tasks);
+  var fid = String(folderId == null ? '' : folderId);
+  var fi = -1, i;
+  for (i = 0; i < all.length; i++) {
+    if (all[i].id === fid) { fi = i; break; }
+  }
+  if (fi === -1) return '';
+  var base = indentOf(all[fi]);
+  var sub = [all[fi]];
+  for (i = fi + 1; i < all.length; i++) {
+    var v = indentOf(all[i]);
+    if (v <= base) break;
+    sub.push(all[i]);
+  }
+  var lines = [];
+  for (i = 0; i < sub.length; i++) {
+    if (!sub[i].title) continue;
+    var pad = '';
+    var rel = indentOf(sub[i]) - base;
+    for (var k = 0; k < rel; k++) pad += '  ';
+    var s = pad + '- ' + sub[i].title;
+    if (withTimes) {
+      var d = fmtDur(estMinAt(sub, i));
+      if (d) s += ' (' + d + ')';
+    }
+    lines.push(s);
+  }
+  return lines.join('\n');
+}
+
 /* --- Нормализация (защита от битых данных старых версий/синка) --- */
 
 /* Оценка времени в минутах: целое 0..59999 (99ч 59м — потолок модалки). */
@@ -1202,6 +1301,9 @@ var api = {
   todoCount: todoCount,
   stats: stats,
   shareText: shareText,
+  estMinAt: estMinAt,
+  shareFolderList: shareFolderList,
+  shareFolderText: shareFolderText,
   searchTasks: searchTasks,
   fmtDur: fmtDur,
   normTokenExp: normTokenExp,

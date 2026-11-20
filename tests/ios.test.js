@@ -717,8 +717,15 @@ describe('логика вызывается с state.tasks', () => {
       'родителю не открыта установка времени при снятом флаге суммы');
     assert.ok(rendSrc.includes('function lineEstMin') && rendSrc.includes('estMin: lineEstMin(t)'),
       'метка родителя не считается автоматически');
-    assert.ok(rendSrc.includes('sum += lineEstMin(live[j])') && rendSrc.includes('ij === pin + 1'),
+    /* Формула — в src/logic.js (estMinAt, FR-104): lineEstMin — подстановка
+     * экранных строк. Считаем по живому списку (arr[idx]), а не по живому
+     * порядку дочерних: первое вложение — уровень indent+1. */
+    assert.ok(logicSrc.includes('function estMinAt'), 'нет estMinAt в src/logic.js');
+    assert.ok(logicSrc.includes('sum += estMinAt(arr, j)') &&
+      logicSrc.includes('v === base + 1'),
       'сумма идёт не по первому вложению');
+    assert.ok(rendSrc.includes('L.estMinAt(live, i)'),
+      'lineEstMin не считает через estMinAt по экранным строкам');
     /* v71: выполненные вложения не входят в авто-сумму родителя — теперь
      * структурно: сумма идёт по живому порядку, выполненных там нет. */
     assert.ok(rendSrc.includes('var live = C.lineTasks()') &&
@@ -739,7 +746,7 @@ describe('логика вызывается с state.tasks', () => {
       appSrc.includes('sumBox.checked = durSum') &&
       appSrc.includes("if (parent) patch.sumKids = res.sum;"),
       'флаг суммы не ходит из модалки в задачу');
-    assert.ok(rendSrc.includes('|| t.sumKids === false'),
+    assert.ok(logicSrc.includes('|| t.sumKids === false'),
       'снятый флаг не возвращает родителю ручную метку');
     assert.ok(rendSrc.includes('estMin: lineEstMin(t)') &&
       rendSrc.includes('estMin: lineEstMin(doneVis[dv])'),
@@ -1394,6 +1401,100 @@ describe('PWA-оболочка', () => {
     assert.ok(html.includes('id="shareAppBtn"'), 'нет shareAppBtn в меню');
     assert.ok(appSrc.includes("on('shareAppBtn'"), 'нет подписки shareAppBtn');
     assert.ok(appSrc.includes('location.href'), 'шарится не ссылка страницы');
+  });
+});
+
+describe('v245: поделиться папкой (FR-104)', () => {
+  it('A. подменю «Поделиться» в меню и окно выбора папки', () => {
+    assert.ok(html.includes('id="shareMenuBtn"') && html.includes('id="shareMenu"'),
+      'нет пункта и подменю «Поделиться»');
+    assert.ok(html.includes('id="shareBtn"') && html.includes('id="shareFolderBtn"'),
+      'в подменю нет списка/папки');
+    assert.ok(html.indexOf('id="shareMenuBtn"') < html.indexOf('id="shareAppBtn"'),
+      'подменю не на месте бывшей кнопки списка');
+    assert.ok(html.includes('#shareMenu { display: none;'),
+      'подменю видно сразу');
+    assert.ok(settingsSrc.includes("on('shareMenuBtn'"),
+      'подменю не открывается (settings)');
+    assert.ok(html.includes('id="shareFolderBox"') && html.includes('id="shareFolderSel"'),
+      'нет контейнера/селекта выбора папки');
+    assert.ok(html.includes('#shareFolderBox { display: none;'),
+      'окно папки скрыто по умолчанию');
+    /* Закрытие меню прячет и подменю — как backup/cleanup. */
+    var iG = settingsSrc.indexOf("on('gearBtn'");
+    var gBody = settingsSrc.slice(iG, settingsSrc.indexOf('on(\'backupBtn\''));
+    assert.ok(gBody.includes("el('shareMenu')"),
+      'закрытие меню не прячет подменю «Поделиться»');
+    /* Токен/настройки не трогаем: флагов меток и папки в storage нет. */
+    assert.ok(!appSrc.includes('shareFolderTimes') && !appSrc.includes('shareWithTimes'),
+      'флаг меток не запоминается (Q8-А)');
+    assert.ok(!/localStorage\.(get|set)Item\([^)]*share/.test(appSrc),
+      'папка/флаг не пишутся в localStorage');
+  });
+  it('B. общий канал shareOut у всех трёх отправок', () => {
+    assert.ok(appSrc.includes('function shareOut('), 'нет shareOut');
+    var iS = appSrc.indexOf('function shareOut(');
+    var sBody = appSrc.slice(iS, iS + 700);
+    assert.ok(sBody.includes('navigator.share') && sBody.includes('clipboard.writeText') &&
+      sBody.includes("askText(txt, '', false)") && sBody.includes("lastAction = 'скопировано'"),
+      'shareOut не ведёт по каналам (меню/буфер/окно)');
+    assert.ok(sBody.includes('renderStatus()'), 'буфер не пишет статус');
+    var iShare = appSrc.indexOf("on('shareBtn'");
+    var shareBody = appSrc.slice(iShare, appSrc.indexOf("on('shareFolderBtn'"));
+    assert.ok(shareBody.includes('shareOut(L.shareText(state.tasks))'),
+      'список не идёт через shareOut');
+    var iApp = appSrc.indexOf("on('shareAppBtn'");
+    var appBody = appSrc.slice(iApp, appSrc.indexOf("on('shareFolderBtn'"));
+    assert.ok(appBody.includes('shareOut(window.location.href)'),
+      'приложение не идёт через shareOut');
+    /* Обработчик папки: вопрос → окно, отмена вопроса не открывает окно. */
+    var iF = appSrc.indexOf("on('shareFolderBtn'");
+    var fBody = appSrc.slice(iF, iF + 500);
+    assert.ok(fBody.includes('askShareTimes()') && fBody.includes('askShareFolder(v === true)'),
+      'флоу папки не такой (вопрос → выбор)');
+    assert.ok(fBody.includes('if (v === null) return;'), 'отмена не выходит из флоу');
+  });
+  it('C. askShareTimes/askShareFolder/closeShareFolder с восстановлением модалки', () => {
+    for (const fn of ['function askShareTimes', 'function askShareFolder', 'function closeShareFolder']) {
+      assert.ok(appSrc.includes(fn), 'нет ' + fn);
+    }
+    var iT = appSrc.indexOf('function askShareTimes');
+    var tBody = appSrc.slice(iT, appSrc.indexOf('function askShareFolder'));
+    assert.ok(tBody.includes('Добавить метки времени к тексту папки'),
+      'нет вопроса про метки');
+    assert.ok(tBody.includes("clearBtn.textContent = 'Нет'") && tBody.includes("ok.textContent = 'Да'"),
+      'нет кнопок Да/Нет');
+    assert.ok(tBody.includes('if (input) input.style.display = \'none\''),
+      'поле ввода не скрыто');
+    assert.ok(tBody.includes("clearBtn.textContent = 'Очистить'") &&
+      tBody.includes("ok.textContent = 'OK'"),
+      'дефолты кнопок не восстанавливаются');
+    var iF = appSrc.indexOf('function askShareFolder');
+    var fBody = appSrc.slice(iF, appSrc.indexOf('function closeShareFolder'));
+    assert.ok(fBody.includes('L.shareFolderList(state.tasks)'), 'список не из логики');
+    assert.ok(fBody.includes('Нет папок'), 'нет инфо при пустом списке');
+    assert.ok(fBody.includes('document.createElement(\'option\')') &&
+      fBody.includes('op.textContent = String(folders[i].title).slice(0, 120)'),
+      'option не через createElement+textContent / без обрезки');
+    assert.ok(fBody.includes('L.shareFolderText(state.tasks, id, withTimes)'),
+      'текст не из логики');
+    assert.ok(fBody.includes('closeShareFolder();') &&
+      fBody.indexOf('closeShareFolder();') < fBody.indexOf('shareOut(txt)'),
+      'закрытие не до shareOut (сквозной клик v151)');
+    assert.ok(fBody.includes("ok.textContent = 'Отправить'") &&
+      fBody.includes("cancel.style.display = ''") &&
+      fBody.includes("clearBtn.style.display = 'none'"),
+      'кнопки модалки не перестроены/не восстановлены');
+    assert.ok(!/\bprompt\(/.test(appSrc.slice(iF, iF + 3000)) &&
+      !/\bconfirm\(/.test(appSrc.slice(iT, iF + 3000)),
+      'использованы prompt/confirm (iOS-блокировка)');
+    var iC = appSrc.indexOf('function closeShareFolder');
+    var cBody = appSrc.slice(iC, iC + 900);
+    assert.ok(cBody.includes("el('shareFolderBox')") &&
+      cBody.includes("box.style.display = 'none'"),
+      'контейнер не прячется при закрытии');
+    /* Подписка на закрытие: gearBtn закрывает подменю, как backup/cleanup. */
+    assert.ok(settingsSrc.includes("el('shareMenu')"), 'gearBtn не гасит подменю');
   });
 });
 

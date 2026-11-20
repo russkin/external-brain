@@ -105,6 +105,15 @@
     #durCtl { display: none; flex-direction: column; gap: 10px; margin-bottom: 12px; }
     /* Настройки планов в модалке (v207): прячется/показывается как durCtl. */
     #planSetBox { display: none; margin-bottom: 4px; }
+    /* Выбор папки для отправки (FR-104, v245): прячется/показывается
+     * как planSetBox, селект — как у целевой планов. */
+    #shareFolderBox { display: none; margin-bottom: 4px; }
+    #shareFolderRow { display: flex; align-items: center; gap: 8px;
+      font-size: 15px; color: #666; }
+    #shareFolderRow label { flex: none; }
+    #shareFolderSel { flex: 1 1 auto; min-width: 0; font-size: 15px;
+      font-family: inherit; padding: 6px 8px; border: 1px solid #ccc;
+      border-radius: 8px; background: #fff; color: #333; }
     .durrow { display: flex; align-items: center; gap: 10px; }
     .durrow span { flex: 1; font-size: 14px; color: #555; }
     .durrow b { min-width: 64px; text-align: center; font-size: 22px; }
@@ -148,6 +157,12 @@
       border-radius: 8px; margin: 2px 6px; }
     #cleanupMenu.open { display: block; }
     #cleanupMenu button { padding-left: 28px; font-size: 15px; }
+    /* Подменю «Поделиться» (FR-104, v245): список и папка — те же
+     * правила, третий оттенок. */
+    #shareMenu { display: none; background: rgba(255,152,0,.12);
+      border-radius: 8px; margin: 2px 6px; }
+    #shareMenu.open { display: block; }
+    #shareMenu button { padding-left: 28px; font-size: 15px; }
     /* Пункт-ссылка (инструкция): как кнопка меню, но нативный переход —
      * window.open + запасной location давали ДВЕ страницы (open возвращает
      * null, когда вкладка уходит во внешний браузер). */
@@ -339,7 +354,11 @@
     <button id="diagBtn">ⓘ Информация для диагностики</button>
     <button id="syncNowBtn">⇅ Синхронизировать</button>
     <button id="installBtn">📲 Установить приложение</button>
-    <button id="shareBtn">📤 Поделиться списком</button>
+    <button id="shareMenuBtn">📤 Поделиться</button>
+    <div id="shareMenu">
+      <button id="shareBtn">Поделиться списком</button>
+      <button id="shareFolderBtn">Поделиться папкой</button>
+    </div>
     <button id="shareAppBtn">🔗 Поделиться приложением</button>
     <a id="guideBtn" href="./docs/USER_GUIDE.html" target="_blank" rel="noopener">📖 Инструкция пользователя</a>
     <a id="versionsBtn" href="./docs/VERSIONS.html" target="_blank" rel="noopener">📋 Информация о версиях</a>
@@ -482,6 +501,15 @@
           <label for="planHourInput">Срабатывает в:</label>
           <input id="planHourInput" autocomplete="off" inputmode="numeric" maxlength="2" aria-label="Час срабатывания планов" />
           <span id="planHourHint">ч (0–23, по умолчанию 5)</span>
+        </div>
+      </div>
+      <!-- Выбор папки для «Поделиться папкой» (FR-104, v245): контейнер
+           рядом с #planSetBox, вопрос про метки — отдельная модалка до
+           выбора (флаг и папка не запоминаются). -->
+      <div id="shareFolderBox">
+        <div id="shareFolderRow">
+          <label for="shareFolderSel">Папка:</label>
+          <select id="shareFolderSel" aria-label="Папка для отправки"></select>
         </div>
       </div>
       <!-- Повтор плана (v213): второй комплект тех же контролов (префикс
