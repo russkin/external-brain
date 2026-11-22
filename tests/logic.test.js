@@ -1403,3 +1403,266 @@ describe('планирование ФАЗА 2: дочка — заголовок
       'дочка влезает целиком');
   });
 });
+
+describe('целостность (FR-105)', () => {
+  function sample() {
+    /* a — живая, b — выполненная, c — могила, p — план, e — пустая живая */
+    const tasks = [
+      { id: 'a', title: 'Живая', status: 'todo', indent: 0, createdAt: 1, updatedAt: 1, ts: 1 },
+      { id: 'b', title: 'Готово', status: 'done', indent: 0, createdAt: 2, updatedAt: 2, ts: 2, doneAt: 2 },
+      { id: 'c', title: 'Мертвая', status: 'todo', indent: 0, createdAt: 3, updatedAt: 3, ts: 3, deleted: true },
+      { id: 'p', title: 'План', status: 'todo', indent: 0, createdAt: 4, updatedAt: 4, ts: 4, planDate: '01.01.2027' },
+      { id: 'e', title: '', status: 'todo', indent: 0, createdAt: 5, updatedAt: 5, ts: 5 },
+      { id: 'f', title: 'Сработал', status: 'todo', indent: 0, createdAt: 6, updatedAt: 6, ts: 6, planDate: '01.01.2027', planFired: 99 },
+      { id: 'm', title: 'Сжата', status: 'todo', indent: 0, createdAt: 7, updatedAt: 7, ts: 7, deleted: true, min: true }
+    ];
+    return tasks;
+  }
+  function clone(t) { return JSON.parse(JSON.stringify(t)); }
+
+  it('integrityCounts: живые/могилы/выполненные/планы, пустые считаются', () => {
+    const c = L.integrityCounts(sample());
+    /* alive: a,b,p,e,f = 5 (c,m — tomb); done: b,f = 2 (f — planFired) */
+    assert.equal(c.alive, 5, 'alive включает пустую и планы');
+    assert.equal(c.tomb, 2, 'tomb: c + сжатая m');
+    assert.equal(c.done, 2, 'done: b + сработавший план f');
+    assert.equal(c.planAlive, 2, 'p и f — планы');
+    assert.equal(c.planTomb, 0, 'сжатая без planDate');
+    assert.equal(c.planDone, 1, 'f показан выполненным');
+    assert.equal(c.fired, 1, 'f с planFired');
+  });
+  it('integritySnapshot: карта статусов по id', () => {
+    const s = L.integritySnapshot(sample());
+    assert.equal(s.byId.a, 'alive');
+    assert.equal(s.byId.b, 'done');
+    assert.equal(s.byId.c, 'tomb');
+    assert.equal(s.byId.p, 'plan');
+    assert.equal(s.byId.e, 'alive', 'пустая строка — живая');
+    assert.equal(s.byId.f, 'plan-done', 'план с planFired');
+    assert.equal(s.byId.m, 'tomb');
+  });
+  it('check edit: правка без смены статусов — null', () => {
+    const before = L.integritySnapshot(sample());
+    const afterTasks = sample();
+    afterTasks[0].title = 'Новое имя';
+    const after = L.integritySnapshot(afterTasks);
+    assert.equal(L.integrityCheck(before, after, 'edit'), null);
+  });
+  it('check edit: чужая ушла в tomb — тревога', () => {
+    const before = L.integritySnapshot(sample());
+    const afterTasks = sample();
+    afterTasks[1].deleted = true; /* b — не цель правки */
+    const after = L.integritySnapshot(afterTasks);
+    const bad = L.integrityCheck(before, after, 'edit');
+    assert.ok(bad, 'должна быть тревога');
+    assert.ok(bad.sampleIds.indexOf('b') !== -1, 'id жертвы в sample');
+  });
+  it('check edit: id исчез из массива — тревога', () => {
+    const before = L.integritySnapshot(sample());
+    const afterTasks = sample().filter(t => t.id !== 'a');
+    const after = L.integritySnapshot(afterTasks);
+    const bad = L.integrityCheck(before, after, 'edit');
+    assert.ok(bad);
+    assert.ok(/Пропало/.test(bad.reason), bad.reason);
+  });
+  it('check delete: одна в tomb + стартер — null', () => {
+    const before = L.integritySnapshot(sample());
+    const afterTasks = sample();
+    /* удаляем a */
+    afterTasks[0].deleted = true;
+    /* ensureStarter не нужен — живые ещё есть */
+    const after = L.integritySnapshot(afterTasks);
+    assert.equal(L.integrityCheck(before, after, 'delete'), null);
+  });
+  it('check delete: задета чужая дочка — тревога', () => {
+    const before = L.integritySnapshot(sample());
+    const afterTasks = sample();
+    afterTasks[0].deleted = true; /* цель */
+    afterTasks[4].deleted = true; /* чужая e — лишняя */
+    const after = L.integritySnapshot(afterTasks);
+    const bad = L.integrityCheck(before, after, 'delete');
+    assert.ok(bad, 'две могилы при op=delete — тревога');
+    assert.ok(bad.sampleIds.indexOf('e') !== -1, 'лишний id найден');
+  });
+  it('check delete: последняя живая + стартер — null', () => {
+    const one = [{ id: 'solo', title: 'Одна', status: 'todo', indent: 0, createdAt: 1, updatedAt: 1, ts: 1 }];
+    const before = L.integritySnapshot(one);
+    const afterTasks = clone(one);
+    afterTasks[0].deleted = true;
+    afterTasks.push({ id: 'starter', title: '', status: 'todo', indent: 0, createdAt: 2, updatedAt: 2, ts: 2 });
+    const after = L.integritySnapshot(afterTasks);
+    assert.equal(L.integrityCheck(before, after, 'delete'), null, 'стартер легален');
+  });
+  it('check delete-many: все done-shoven в tomb — null', () => {
+    const before = L.integritySnapshot(sample());
+    const afterTasks = sample();
+    afterTasks[1].deleted = true; /* b done */
+    afterTasks[5].deleted = true; /* f plan-done */
+    const after = L.integritySnapshot(afterTasks);
+    assert.equal(L.integrityCheck(before, after, 'delete-many'), null);
+  });
+  it('check done: ветка (несколько flip в done) — null; обратный flip — тревога', () => {
+    const before = L.integritySnapshot(sample());
+    const okTasks = sample();
+    okTasks[0].status = 'done'; /* a */
+    okTasks[4].status = 'done'; /* e — ветка, два flip легальны */
+    assert.equal(L.integrityCheck(before, L.integritySnapshot(okTasks), 'done'), null,
+      'completeBranch меняет несколько — это норма');
+    const badTasks = sample();
+    badTasks[1].status = 'todo'; /* b done → todo при op=done */
+    assert.ok(L.integrityCheck(before, L.integritySnapshot(badTasks), 'done'),
+      'снятие выполнения при op=done — тревога');
+  });
+  it('check done: удаление живой при op=done — тревога', () => {
+    const before = L.integritySnapshot(sample());
+    const afterTasks = sample();
+    afterTasks[0].status = 'done';
+    afterTasks[0].deleted = true;
+    const bad = L.integrityCheck(before, L.integritySnapshot(afterTasks), 'done');
+    assert.ok(bad, 'tomb при op=done — тревога');
+  });
+  it('check done: стартер (пустая alive) легален', () => {
+    const one = [{ id: 'solo', title: 'Одна', status: 'todo', indent: 0, createdAt: 1, updatedAt: 1, ts: 1 }];
+    const before = L.integritySnapshot(one);
+    const afterTasks = clone(one);
+    afterTasks[0].status = 'done';
+    afterTasks.push({ id: 'starter', title: '', status: 'todo', indent: 0, createdAt: 2, updatedAt: 2, ts: 2 });
+    assert.equal(L.integrityCheck(before, L.integritySnapshot(afterTasks), 'done'), null);
+  });
+  it('check undone: снятие выполнения — null', () => {
+    const before = L.integritySnapshot(sample());
+    const afterTasks = sample();
+    afterTasks[1].status = 'todo';
+    assert.equal(L.integrityCheck(before, L.integritySnapshot(afterTasks), 'undone'), null);
+  });
+  it('check move: без смен статусов — null; со сменой — тревога', () => {
+    const before = L.integritySnapshot(sample());
+    const ok = sample();
+    ok[0].createdAt = 100;
+    assert.equal(L.integrityCheck(before, L.integritySnapshot(ok), 'move'), null);
+    const bad = sample();
+    bad[0].status = 'done';
+    assert.ok(L.integrityCheck(before, L.integritySnapshot(bad), 'move'));
+  });
+  it('check plan: дочка добавлена, план стал fired — null', () => {
+    const before = L.integritySnapshot(sample());
+    const afterTasks = sample();
+    /* p сработала: planFired + дочка */
+    afterTasks[3].planFired = 1000;
+    afterTasks.push({ id: 'ch', title: 'План (01.01.2027)', status: 'todo', indent: 1, createdAt: 8, updatedAt: 8, ts: 8 });
+    const after = L.integritySnapshot(afterTasks);
+    assert.equal(L.integrityCheck(before, after, 'plan'), null);
+    assert.equal(after.counts.alive, before.counts.alive + 1, 'alive +1');
+    assert.equal(after.counts.planDone, before.counts.planDone + 1, 'planDone +1');
+  });
+  it('check plan: дочка не создалась, ничего не изменилось — null', () => {
+    const before = L.integritySnapshot(sample());
+    assert.equal(L.integrityCheck(before, L.integritySnapshot(sample()), 'plan'), null);
+  });
+  it('check plan: чужая ушла в tomb — тревога', () => {
+    const before = L.integritySnapshot(sample());
+    const afterTasks = sample();
+    afterTasks[3].planFired = 1000;
+    afterTasks[0].deleted = true;
+    const bad = L.integrityCheck(before, L.integritySnapshot(afterTasks), 'plan');
+    assert.ok(bad);
+  });
+  it('check restore: пропавшие в tomb — null (id сохранены)', () => {
+    const before = L.integritySnapshot(sample());
+    const afterTasks = sample();
+    afterTasks[0].deleted = true; /* a ушла в tomb при restore */
+    assert.equal(L.integrityCheck(before, L.integritySnapshot(afterTasks), 'restore'), null);
+  });
+  it('check purge: tomb остаются tomb — null', () => {
+    const before = L.integritySnapshot(sample());
+    const afterTasks = sample();
+    /* сжимаем c */
+    afterTasks[2] = { id: 'c', deleted: true, ts: 3, updatedAt: 3, min: true };
+    assert.equal(L.integrityCheck(before, L.integritySnapshot(afterTasks), 'purge'), null);
+  });
+  it('check purge: живая сжата — тревога', () => {
+    const before = L.integritySnapshot(sample());
+    const afterTasks = sample();
+    afterTasks[0] = { id: 'a', deleted: true, ts: 1, updatedAt: 1, min: true };
+    assert.ok(L.integrityCheck(before, L.integritySnapshot(afterTasks), 'purge'));
+  });
+  it('check undo/redo: только сохранность id', () => {
+    const before = L.integritySnapshot(sample());
+    const afterTasks = sample();
+    afterTasks[1].status = 'todo';
+    afterTasks[0].deleted = true;
+    assert.equal(L.integrityCheck(before, L.integritySnapshot(afterTasks), 'undo'), null);
+    const dropped = sample().filter(t => t.id !== 'a');
+    assert.ok(L.integrityCheck(before, L.integritySnapshot(dropped), 'redo'));
+  });
+  it('check create: additions легальны, статусы не тронуты — null', () => {
+    const before = L.integritySnapshot(sample());
+    const afterTasks = sample();
+    afterTasks.push({ id: 'n', title: 'Новая', status: 'todo', indent: 0, createdAt: 9, updatedAt: 9, ts: 9 });
+    assert.equal(L.integrityCheck(before, L.integritySnapshot(afterTasks), 'create'), null);
+  });
+  it('check edit: неожиданное появление — тревога', () => {
+    const before = L.integritySnapshot(sample());
+    const afterTasks = sample();
+    afterTasks.push({ id: 'n', title: 'Левая', status: 'todo', indent: 0, createdAt: 9, updatedAt: 9, ts: 9 });
+    assert.ok(L.integrityCheck(before, L.integritySnapshot(afterTasks), 'edit'));
+  });
+  it('check done: живая исчезла — тревога', () => {
+    const before = L.integritySnapshot(sample());
+    const afterTasks = sample().filter(t => t.id !== 'a');
+    assert.ok(L.integrityCheck(before, L.integritySnapshot(afterTasks), 'done'));
+  });
+
+  it('integritySyncCheck: LWW remote свежее — null', () => {
+    const local = sample();
+    const before = L.integritySnapshot(local);
+    const afterTasks = clone(local);
+    /* a выполнена на сервере с более свежим ts */
+    afterTasks[0].status = 'done';
+    afterTasks[0].ts = 500;
+    const remote = clone(afterTasks);
+    remote[0].ts = 500;
+    const after = L.integritySnapshot(afterTasks);
+    assert.equal(L.integritySyncCheck(before, after, remote, local), null);
+  });
+  it('integritySyncCheck: смена без свежего remote — тревога', () => {
+    const local = sample();
+    const before = L.integritySnapshot(local);
+    const afterTasks = clone(local);
+    afterTasks[0].status = 'done'; /* локальный сброс без remote */
+    const remote = clone(local); /* remote не менял a */
+    const after = L.integritySnapshot(afterTasks);
+    const bad = L.integritySyncCheck(before, after, remote, local);
+    assert.ok(bad, 'изменение без remote — тревога');
+    assert.ok(bad.sampleIds.indexOf('a') !== -1);
+  });
+  it('integritySyncCheck: remote с тем же ts (равные — локальное) — тревога', () => {
+    const local = sample();
+    const before = L.integritySnapshot(local);
+    const afterTasks = clone(local);
+    afterTasks[0].status = 'done';
+    const remote = clone(local);
+    remote[0].status = 'done';
+    remote[0].ts = local[0].ts; /* равные ts: merge оставил бы локальное */
+    const after = L.integritySnapshot(afterTasks);
+    assert.ok(L.integritySyncCheck(before, after, remote, local));
+  });
+  it('integritySyncCheck: id исчез — всегда тревога', () => {
+    const local = sample();
+    const before = L.integritySnapshot(local);
+    const afterTasks = local.filter(t => t.id !== 'a');
+    const after = L.integritySnapshot(afterTasks);
+    const bad = L.integritySyncCheck(before, after, clone(afterTasks), local);
+    assert.ok(bad);
+    assert.ok(/Пропало|удалил/.test(bad.reason), bad.reason);
+  });
+  it('integritySyncCheck: remote добавил новую — null', () => {
+    const local = sample();
+    const before = L.integritySnapshot(local);
+    const afterTasks = clone(local);
+    afterTasks.push({ id: 'r1', title: 'С сервера', status: 'todo', indent: 0, createdAt: 10, updatedAt: 10, ts: 700 });
+    const remote = clone(afterTasks);
+    const after = L.integritySnapshot(afterTasks);
+    assert.equal(L.integritySyncCheck(before, after, remote, local), null);
+  });
+});

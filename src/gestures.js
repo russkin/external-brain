@@ -271,7 +271,7 @@ function toggleDoneSlide(taskId) {
   if (!row || (row.classList && row.classList.contains('sliding-done'))) {
     if (!row) {
       dragActive = false;
-      C.mutate(function () { C.toggleDoneNow(taskId, toDone); });
+      C.mutate(function () { C.toggleDoneNow(taskId, toDone); }, toDone ? 'done' : 'undone');
     }
     return;
   }
@@ -288,7 +288,7 @@ function toggleDoneSlide(taskId) {
       var aeB = document.activeElement;
       if (aeB && aeB.blur && (aeB.tagName === 'TEXTAREA' || aeB.tagName === 'INPUT')) aeB.blur();
     } catch (x) {}
-    C.mutate(function () { C.toggleDoneNow(taskId, toDone); });
+    C.mutate(function () { C.toggleDoneNow(taskId, toDone); }, toDone ? 'done' : 'undone');
     /* Курсор не должен остаться в поле: фокус могла увести кнопка. */
     try {
       var ae = document.activeElement;
@@ -323,6 +323,21 @@ function toggleDoneSlide(taskId) {
  * вызывает persist уже после неё, и свежий snapFull() нёс бы новый отступ —
  * отмена возвращала бы порядок, но не отступ. */
 function persistLineOrder(beforeOverride, boxOverride) {
+  /* Целостность (FR-105): перенос порядка — op move (только createdAt/
+   * порядок, статусы не меняются). Ранние выходы — через finally. */
+  if (typeof window !== 'undefined' && window.EBIntegrity) {
+    window.EBIntegrity.begin('move');
+  }
+  try {
+    return persistLineOrderInner(beforeOverride, boxOverride);
+  } finally {
+    if (typeof window !== 'undefined' && window.EBIntegrity) {
+      window.EBIntegrity.end();
+    }
+  }
+}
+
+function persistLineOrderInner(beforeOverride, boxOverride) {
   var state = C.getState();
   /* Коробку даёт финиш жеста (boxOf): план переупорядочивается в своём
    * порядке planTasks, основной список — как было в lineTasks. */
@@ -940,7 +955,7 @@ function wireLineDrag(div, grip, inp) {
               var kt = kidId ? L.getTask(state.tasks, kidId) : null;
               if (kt) L.setIndent(state.tasks, kidId, C.lineIndent(kt) + delta);
             }
-          });
+          }, 'indent');
         })(task.id, lvl, lvl - bou.cur);
       }
       expandParentAbove(lvl);

@@ -65,7 +65,7 @@ describe('service worker: методика кэша', () => {
     assert.ok(trigSrc.includes('caches.delete'), 'нет чистки кэша при обновлении');
   });
   it('в кэш положены все части оболочки', () => {
-    for (const u of ["'./'", 'index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'src/triggers.js', 'src/gestures.js', 'src/render.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'docs/USER_GUIDE.html', 'docs/VERSIONS.html']) {
+    for (const u of ["'./'", 'index.html', 'app.js', 'store.js', 'sync.js', 'src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'src/integrity.js', 'src/triggers.js', 'src/gestures.js', 'src/render.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'docs/USER_GUIDE.html', 'docs/VERSIONS.html']) {
       assert.ok(swSrc.includes(u), 'нет ' + u + ' в ASSETS');
     }
   });
@@ -1349,6 +1349,70 @@ describe('синк: триггеры и протокол', () => {
   });
 });
 
+describe('v247: целостность данных (FR-105)', () => {
+  const integritySrc = fs.readFileSync(path.join(root, 'src/integrity.js'), 'utf8');
+  const histSrc = historySrc;
+  const syncTestable = syncSrc;
+
+  it('модуль подключён: index, SW ASSETS, сборка Pages', () => {
+    assert.ok(html.includes('src/integrity.js'), 'нет скрипта в index.html');
+    assert.ok(swSrc.includes("'./src/integrity.js'"), 'нет в ASSETS sw.js');
+    assert.ok(pagesYml.includes('src/integrity.js'), 'нет копирования в pages.yml');
+  });
+  it('APP_VERSION и CACHE — v247 вместе', () => {
+    assert.ok(/APP_VERSION\s*=\s*'v247'/.test(appSrc), 'APP_VERSION не v247');
+    assert.ok(/CACHE\s*=\s*'extbrain-v247'/.test(swSrc), 'CACHE не extbrain-v247');
+  });
+  it('без новых localStorage-ключей (грабля 53)', () => {
+    /* Слово в комментариях — ок; настоящие вызовы — нет. */
+    assert.ok(!/(localStorage|sessionStorage)\s*\./.test(integritySrc) &&
+      !/\.(getItem|setItem|removeItem)\s*\(/.test(integritySrc),
+      'integrity.js трогает хранилище — сессионный бюджет съест');
+  });
+  it('хуки mutateWithHistory/applySnapshot: begin/end', () => {
+    assert.ok(histSrc.includes("window.EBIntegrity.begin(op || 'edit')"),
+      'нет begin в mutateWithHistory');
+    assert.ok(histSrc.includes('window.EBIntegrity.end()'), 'нет end в mutateWithHistory');
+    assert.ok(histSrc.includes("applySnapshotInner(s)"), 'applySnapshot не обёрнут');
+    assert.ok(/doUndo: doUndo/.test(histSrc), 'doUndo не экспортирован для отмены из окна');
+  });
+  it('окно askIntegrity: «↩ Отменить»/«Понятно», дефолты восстанавливаются', () => {
+    assert.ok(appSrc.includes('function askIntegrity(title)'), 'нет askIntegrity');
+    assert.ok(appSrc.includes("'↩ Отменить'") && appSrc.includes("'Понятно'"),
+      'не те кнопки окна');
+    assert.ok(/EBIntegrity\.init\(\{[\s\S]{0,400}askIntegrity: askIntegrity/.test(appSrc),
+      'askIntegrity не отдан в контекст integrity');
+    assert.ok(/EBIntegrity\.init\(\{[\s\S]{0,400}doUndo:/.test(appSrc),
+      'doUndo не отдан в контекст integrity');
+  });
+  it('синк: _remote/_localBefore и begin/endSync', () => {
+    assert.ok(syncTestable.includes('_remote = remoteTasks') &&
+      syncTestable.includes('_localBefore = localBefore'),
+      'attempt не отдаёт снимки для integritySyncCheck');
+    assert.ok(trigSrc.includes("window.EBIntegrity.begin('sync')"),
+      'нет begin(sync) в doSync');
+    assert.ok(trigSrc.includes('endIntegrity(res)') && trigSrc.includes('endIntegrity(null)'),
+      'нет endIntegrity в путях doSync');
+  });
+  it('жесты: done/undone/indent/move', () => {
+    assert.ok(gestSrc.includes("toDone ? 'done' : 'undone'"),
+      'toggleDoneSlide не передаёт op done/undone');
+    assert.ok(gestSrc.includes("}, 'indent')"), 'indent-сдвиг без op');
+    assert.ok(gestSrc.includes("window.EBIntegrity.begin('move')"),
+      'persistLineOrder без begin(move)');
+    assert.ok(gestSrc.includes('persistLineOrderInner'), 'persist не обёрнут в try/finally');
+  });
+  it('строка «Целостность:» в диагностике', () => {
+    assert.ok(diagSrc.includes("'Целостность: '"), 'нет строки в diagText');
+    assert.ok(diagSrc.includes('EBIntegrity.info'), 'не вызывает info()');
+  });
+  it('чистые функции экспортированы из logic', () => {
+    for (const n of ['integrityCounts', 'integritySnapshot', 'integrityCheck', 'integritySyncCheck']) {
+      assert.ok(logicSrc.includes(n + ': ' + n), 'нет экспорта ' + n);
+    }
+  });
+});
+
 describe('PWA-оболочка', () => {
   it('манифест и иконки подключены', () => {
     assert.ok(html.includes('manifest.webmanifest'), 'нет манифеста');
@@ -1357,14 +1421,14 @@ describe('PWA-оболочка', () => {
     assert.ok(fs.existsSync(path.join(root, 'icon-512.png')), 'нет icon-512.png');
   });
   it('все скрипты подключены', () => {
-    for (const s of ['src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'src/triggers.js', 'src/gestures.js', 'src/render.js', 'store.js', 'sync.js', 'app.js']) {
+    for (const s of ['src/logic.js', 'src/search.js', 'src/diag.js', 'src/settings.js', 'src/history.js', 'src/integrity.js', 'src/triggers.js', 'src/gestures.js', 'src/render.js', 'store.js', 'sync.js', 'app.js']) {
       assert.ok(html.includes(s), 'нет ' + s + ' в index.html');
     }
   });
   it('все модули грузятся в Node (синтаксис браузерных скриптов)', () => {
     /* v154: правка комментария снесла `(function () {` в render.js —
      * строковые тесты зелёные, а приложение белый экран. require ловит. */
-    for (const m of ['logic', 'search', 'diag', 'settings', 'history', 'triggers', 'gestures', 'render']) {
+    for (const m of ['logic', 'search', 'diag', 'settings', 'history', 'integrity', 'triggers', 'gestures', 'render']) {
       assert.ok(require('../src/' + m + '.js'), 'не грузится src/' + m + '.js');
     }
   });

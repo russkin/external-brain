@@ -330,6 +330,13 @@ function diagText() {
       lines.push('Последнее срабатывание: ' + (lastF ? fmtDT(lastF) : 'нет'));
     }
   } catch (x) {}
+  /* Целостность (FR-105, v247): последняя тревога/проверка из памяти
+   * сессии (без localStorage — грабля 53). */
+  try {
+    if (typeof window !== 'undefined' && window.EBIntegrity && window.EBIntegrity.info) {
+      lines.push('Целостность: ' + window.EBIntegrity.info());
+    }
+  } catch (x) {}
   var lastAction = C.getLastAction();
   if (lastAction) lines.push('Последнее действие: ' + lastAction);
   /* Только непойманные JS-ошибки (window.onerror); ошибки синка живут

@@ -163,6 +163,10 @@
       }
       var remoteState = (remote.state && typeof remote.state === 'object') ? remote.state : {};
       var remoteTasks = L.normalizeTasks(remoteState.tasks);
+      /* Целостность (FR-105): снимок ДО merge — локальные задачи (ссылка
+       * не мутируется, mergeTasks собирает новый массив) и удалённый файл —
+       * для integritySyncCheck в endSync (только при pulled/merged). */
+      var localBefore = state.tasks;
       var mergedTasks = L.mergeTasks(state.tasks, remoteTasks);
       var localChanged = !L.tasksEqual(mergedTasks, state.tasks);
       var remoteChanged = !L.tasksEqual(mergedTasks, remoteTasks);
@@ -171,7 +175,12 @@
         state.updatedAt = Date.now();
       }
       if (!remoteChanged) {
-        return { status: localChanged ? 'pulled' : 'in-sync', state: state, sha: remote.sha };
+        var resPull = { status: localChanged ? 'pulled' : 'in-sync', state: state, sha: remote.sha };
+        if (localChanged) {
+          resPull._remote = remoteTasks;
+          resPull._localBefore = localBefore;
+        }
+        return resPull;
       }
       var payload = {
         updatedAt: Math.max(state.updatedAt, remoteState.updatedAt || 0, Date.now()),
@@ -180,7 +189,12 @@
       return putRemote(repo, token, payload, remote.sha)
         .then(function () {
           state.updatedAt = payload.updatedAt;
-          return { status: localChanged ? 'merged' : 'pushed', state: state };
+          var resM = { status: localChanged ? 'merged' : 'pushed', state: state };
+          if (localChanged) {
+            resM._remote = remoteTasks;
+            resM._localBefore = localBefore;
+          }
+          return resM;
         })
         .catch(function (e) {
           var msg = String(e && e.message || e);

@@ -42,6 +42,7 @@ jobs:
           cp src/diag.js _site/src/diag.js
           cp src/settings.js _site/src/settings.js
           cp src/history.js _site/src/history.js
+          cp src/integrity.js _site/src/integrity.js
           cp src/triggers.js _site/src/triggers.js
           cp src/gestures.js _site/src/gestures.js
           cp src/render.js _site/src/render.js

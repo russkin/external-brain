@@ -1279,6 +1279,350 @@ function mergeDecision(localState, remoteState) {
   return 'in-sync';
 }
 
+/* --- Целостность данных (FR-105) ---
+ * Свои счётчики (НЕ stats/todoCount — те исключают пустые строки и планы):
+ *   alive  — живые записи (!deleted), включая пустые и планы;
+ *   tomb   — удалённые (deleted, включая сжатые маркеры min:true);
+ *   done   — показанные выполнением (isAlive && planDoneShown);
+ *   plan*  — то же среди планов (isPlanned / deleted-планы / fired).
+ * Слепок: счётчики + карта id → статус; сравнение — по op-таблице. */
+function integrityCounts(tasks) {
+  var c = { alive: 0, tomb: 0, done: 0, planAlive: 0, planTomb: 0, planDone: 0, fired: 0 };
+  if (!Array.isArray(tasks)) return c;
+  for (var i = 0; i < tasks.length; i++) {
+    var t = tasks[i];
+    if (!t || !t.id) continue;
+    if (t.deleted) {
+      c.tomb++;
+      if (normPlanDate(t.planDate) !== '') c.planTomb++;
+      continue;
+    }
+    c.alive++;
+    var planned = normPlanDate(t.planDate) !== '';
+    if (planned) c.planAlive++;
+    if (planDoneShown(t)) {
+      c.done++;
+      if (planned) c.planDone++;
+    }
+    if (planned && toInt(t.planFired, 0) !== 0) c.fired++;
+  }
+  return c;
+}
+
+function integrityStatusOf(t) {
+  if (!t || !t.id) return '';
+  if (t.deleted) return 'tomb';
+  var planned = normPlanDate(t.planDate) !== '';
+  var doneShown = planDoneShown(t);
+  if (planned) return doneShown ? 'plan-done' : (toInt(t.planFired, 0) !== 0 ? 'plan-fired' : 'plan');
+  return doneShown ? 'done' : 'alive';
+}
+
+/* Слепок: counts + byId (id → статус). Набор id включает могилы. */
+function integritySnapshot(tasks) {
+  var byId = {};
+  if (Array.isArray(tasks)) {
+    for (var i = 0; i < tasks.length; i++) {
+      var t = tasks[i];
+      if (t && t.id) byId[t.id] = integrityStatusOf(t);
+    }
+  }
+  return { counts: integrityCounts(tasks), byId: byId };
+}
+
+function integritySampleIds(ids, max) {
+  var out = [];
+  var n = max || 5;
+  for (var i = 0; i < ids.length && i < n; i++) out.push(String(ids[i]));
+  return out;
+}
+
+function integrityBad(why, ids) {
+  return { reason: why, sampleIds: integritySampleIds(ids || []) };
+}
+
+/* Статус «помечен выполненным/удалённым/пропал» — общий путь. */
+function integrityUnexpectedStatus(before, after, op, allowDoneFlip, allowTombFlip) {
+  var ids = Object.keys(before.byId);
+  var dropped = [];
+  var badDone = [];
+  var badTomb = [];
+  for (var i = 0; i < ids.length; i++) {
+    var id = ids[i];
+    var b = before.byId[id];
+    var a = after.byId[id];
+    if (a === undefined) { dropped.push(id); continue; }
+    if (b === a) continue;
+    var bDone = b === 'done' || b === 'plan-done';
+    var aDone = a === 'done' || a === 'plan-done';
+    var bTomb = b === 'tomb';
+    var aTomb = a === 'tomb';
+    if (!bTomb && aTomb && !allowTombFlip) badTomb.push(id);
+    else if (bTomb && !aTomb && !allowTombFlip) badTomb.push(id);
+    else if (bDone !== aDone && !allowDoneFlip) badDone.push(id);
+  }
+  if (dropped.length) {
+    return integrityBad('Пропало задач: ' + dropped.length + ' (id исчез из списка)', dropped);
+  }
+  if (badTomb.length) {
+    return integrityBad(op === 'delete' || op === 'delete-many'
+      ? 'Удаление задело чужие задачи'
+      : 'Задача неожиданно помечена удалённой', badTomb);
+  }
+  if (badDone.length) {
+    return integrityBad('Задача неожиданно помечена выполненной', badDone);
+  }
+  return null;
+}
+
+/* Проверка локальной операции. op — тип (см. таблицу); неизвестный → edit. */
+function integrityCheck(before, after, op) {
+  if (!before || !after || !before.byId || !after.byId) return null;
+  var operation = String(op || 'edit');
+  var ids = Object.keys(before.byId);
+  var i, id, b, a;
+
+  /* Любой op: id не должен исчезать (tomb остаётся в массиве). */
+  var dropped = [];
+  for (i = 0; i < ids.length; i++) {
+    id = ids[i];
+    if (after.byId[id] === undefined) dropped.push(id);
+  }
+  if (dropped.length) {
+    return integrityBad('Пропало задач: ' + dropped.length + ' (id исчез из списка)', dropped);
+  }
+
+  if (operation === 'move' || operation === 'indent') {
+    /* Только порядок/отступ: статусы и наборы не меняются. */
+    for (i = 0; i < ids.length; i++) {
+      id = ids[i];
+      if (before.byId[id] !== after.byId[id]) {
+        return integrityBad('Перемещение изменило статус задачи', [id]);
+      }
+    }
+    var addedMove = Object.keys(after.byId);
+    for (i = 0; i < addedMove.length; i++) {
+      if (before.byId[addedMove[i]] === undefined) {
+        return integrityBad('Перемещение добавило задачу', [addedMove[i]]);
+      }
+    }
+    return null;
+  }
+
+  if (operation === 'undo' || operation === 'redo') {
+    /* Откат: статусы могут меняться (applySnapshot), исчезновений нет — уже проверено. */
+    return null;
+  }
+
+  if (operation === 'delete' || operation === 'delete-many') {
+    /* Ушедшие в tomb: легальны; появление живых — только стартер (пустой). */
+    var toTomb = [];
+    var fromTomb = [];
+    var doneFlip = [];
+    for (i = 0; i < ids.length; i++) {
+      id = ids[i];
+      b = before.byId[id];
+      a = after.byId[id];
+      if (b === a) continue;
+      var bT = b === 'tomb';
+      var aT = a === 'tomb';
+      if (!bT && aT) toTomb.push(id);
+      else if (bT && !aT) fromTomb.push(id);
+      else {
+        var bd = b === 'done' || b === 'plan-done';
+        var ad = a === 'done' || a === 'plan-done';
+        if (bd !== ad) doneFlip.push(id);
+      }
+    }
+    if (fromTomb.length) {
+      return integrityBad('Удаление воскресило удалённые задачи', fromTomb);
+    }
+    if (doneFlip.length) {
+      return integrityBad('Удаление изменило выполнение чужих задач', doneFlip);
+    }
+    /* Цели: delete — 1 id (или 0, если уже был tomb); delete-many — все done-shown до. */
+    if (operation === 'delete' && toTomb.length > 1) {
+      /* Один вызов мог удалить ветку? removeTask — одна задача. Больше одного — баг
+       * (или ensureStarter не в счёт). Лишние живые, ставшие tomb, — тревога. */
+      return integrityBad('После удаления пропало задач: ' + toTomb.length, toTomb);
+    }
+    /* Новые живые: только пустой стартер. */
+    var added = Object.keys(after.byId);
+    for (i = 0; i < added.length; i++) {
+      if (before.byId[added[i]] !== undefined) continue;
+      /* Новый id — проверим, что он «пустой живой» (стартер). */
+      /* Статус в after: 'alive' или 'plan' — планы в delete не рождаются. */
+      if (after.byId[added[i]] !== 'alive') {
+        return integrityBad('Удаление добавило не-пустую задачу', [added[i]]);
+      }
+    }
+    /* Проверим, что новые действительно пустые — по counts: done не вырос. */
+    if (after.counts.done > before.counts.done) {
+      return integrityBad('Удаление увеличило число выполненных', []);
+    }
+    return null;
+  }
+
+  if (operation === 'done' || operation === 'undone') {
+    /* Ветка: completeBranch/reopenBranch меняют НЕСКОЛЬКО задач (родитель
+     * + вложенные) — один flip не требуем. Легально: любое число переходов
+     * done-ness В НУЖНУЮ сторону; additions — только пустой стартер;
+     * tomb не двигается; исчезновений нет (проверено выше). */
+    var badFlip = [];
+    for (i = 0; i < ids.length; i++) {
+      id = ids[i];
+      b = before.byId[id];
+      a = after.byId[id];
+      if (b === a) continue;
+      var bD = b === 'done' || b === 'plan-done';
+      var aD = a === 'done' || a === 'plan-done';
+      if (operation === 'done' && !aD) badFlip.push(id);
+      if (operation === 'undone' && aD) badFlip.push(id);
+      /* Переключение могилами/прочим (tomb ↔ живой) — уже ловится ниже
+       * по счётчикам; здесь только направление done-ness. */
+      if (b === 'tomb' || a === 'tomb') badFlip.push(id);
+    }
+    if (badFlip.length) {
+      return integrityBad(operation === 'done'
+        ? 'Задача неожиданно помечена выполненной'
+        : 'Задача неожиданно снята с выполнения', badFlip);
+    }
+    if (after.counts.tomb !== before.counts.tomb) {
+      return integrityBad('Отметка выполнением изменила состав списка', []);
+    }
+    /* additions — только пустой живой стартер (ensureStarter в toggleDoneNow). */
+    var addedDu = Object.keys(after.byId);
+    for (i = 0; i < addedDu.length; i++) {
+      if (before.byId[addedDu[i]] === undefined &&
+          after.byId[addedDu[i]] !== 'alive') {
+        return integrityBad('Отметка выполнением добавила чужую задачу', [addedDu[i]]);
+      }
+    }
+    if (after.counts.done < before.counts.done && operation === 'done') {
+      return integrityBad('Отметка выполнением уменьшила число выполненных', []);
+    }
+    if (after.counts.done > before.counts.done && operation === 'undone') {
+      return integrityBad('Снятие выполнения увеличило число выполненных', []);
+    }
+    return null;
+  }
+
+  if (operation === 'plan') {
+    /* Срабатывание: additions (дочки) легальны; у плана — переход к fired/done;
+     * исчезновений и чужих переходов в tomb — нет. */
+    var planBad = [];
+    for (i = 0; i < ids.length; i++) {
+      id = ids[i];
+      b = before.byId[id];
+      a = after.byId[id];
+      if (b === a) continue;
+      if (b === 'tomb' || a === 'tomb') { planBad.push(id); continue; }
+      /* План мог стать plan-fired/plan-done; живая задача — не трогаем. */
+      var bPlanned = b === 'plan' || b === 'plan-fired' || b === 'plan-done';
+      var aPlanned = a === 'plan' || a === 'plan-fired' || a === 'plan-done';
+      if (bPlanned && aPlanned) continue;
+      /* Дочка могла… нет, дочка — addition. Смена живой не-плана — баг. */
+      planBad.push(id);
+    }
+    if (planBad.length) {
+      return integrityBad('Срабатывание плана изменило чужие задачи', planBad);
+    }
+    if (after.counts.tomb !== before.counts.tomb) {
+      return integrityBad('Срабатывание плана пометило задачи удалёнными', []);
+    }
+    return null;
+  }
+
+  if (operation === 'restore') {
+    /* Пропавшие живые уходят в tomb — легально; additions из копии легальны;
+     * из tomb в живые — легально (копия старше могил?). Нет: restoreWithTombstones
+     * кладёт свежие ts, входящие могут воскрешать — легально. Главное — id не пропадают. */
+    return null;
+  }
+
+  if (operation === 'purge') {
+    /* Сжатие: id обязаны сохраниться (проверено), статусы tomb → tomb. */
+    for (i = 0; i < ids.length; i++) {
+      id = ids[i];
+      if (before.byId[id] !== 'tomb' && after.byId[id] !== before.byId[id]) {
+        return integrityBad('Сжатие изменило живую задачу', [id]);
+      }
+      if (after.byId[id] !== 'tomb' && before.byId[id] === 'tomb') {
+        return integrityBad('Сжатие воскресило удалённую', [id]);
+      }
+    }
+    return null;
+  }
+
+  /* create / edit / неизвестный: статусы существующих не меняются;
+   * additions — только у create (edit не добавляет). */
+  var allowAdd = operation === 'create';
+  var unexpected = [];
+  for (i = 0; i < ids.length; i++) {
+    id = ids[i];
+    if (before.byId[id] !== after.byId[id]) unexpected.push(id);
+  }
+  if (unexpected.length) {
+    return integrityBad(operation === 'create'
+      ? 'Создание изменило существующие задачи'
+      : 'Правка неожиданно изменила статус задачи', unexpected);
+  }
+  if (!allowAdd) {
+    var extra = Object.keys(after.byId);
+    var extras = [];
+    for (i = 0; i < extra.length; i++) {
+      if (before.byId[extra[i]] === undefined) extras.push(extra[i]);
+    }
+    if (extras.length) {
+      return integrityBad('Неожиданное появление задач: ' + extras.length, extras);
+    }
+  }
+  return null;
+}
+
+/* Синк (Q1-Б): изменение deleted/status легально только по LWW — у remote
+ * свежее ts. Исчезновение id — всегда тревога. localBefore — массив до merge. */
+function integritySyncCheck(beforeSnap, afterSnap, remoteTasks, localBefore) {
+  if (!beforeSnap || !afterSnap || !beforeSnap.byId || !afterSnap.byId) return null;
+  var remoteById = {};
+  if (Array.isArray(remoteTasks)) {
+    for (var r = 0; r < remoteTasks.length; r++) {
+      var rt = remoteTasks[r];
+      if (rt && rt.id) remoteById[rt.id] = rt;
+    }
+  }
+  var localById = {};
+  if (Array.isArray(localBefore)) {
+    for (var l = 0; l < localBefore.length; l++) {
+      var lt = localBefore[l];
+      if (lt && lt.id) localById[lt.id] = lt;
+    }
+  }
+  var ids = Object.keys(beforeSnap.byId);
+  var dropped = [];
+  var illegal = [];
+  for (var i = 0; i < ids.length; i++) {
+    var id = ids[i];
+    var b = beforeSnap.byId[id];
+    var a = afterSnap.byId[id];
+    if (a === undefined) { dropped.push(id); continue; }
+    if (b === a) continue;
+    /* Статус изменился: легально, если remote нёс более свежий ts. */
+    var rem = remoteById[id];
+    var loc = localById[id];
+    var remTs = rem ? toInt(rem.ts, 0) : -1;
+    var locTs = loc ? toInt(loc.ts, 0) : 0;
+    if (!rem || remTs <= locTs) illegal.push(id);
+  }
+  if (dropped.length) {
+    return integrityBad('Синк удалил задачи из списка: ' + dropped.length, dropped);
+  }
+  if (illegal.length) {
+    return integrityBad('Синк изменил задачи без свежей копии на сервере', illegal);
+  }
+  return null;
+}
+
 var api = {
   blankTasks: blankTasks,
   getTask: getTask,
@@ -1341,7 +1685,11 @@ var api = {
   mergeTasks: mergeTasks,
   tasksEqual: tasksEqual,
   isTasksEmpty: isTasksEmpty,
-  mergeDecision: mergeDecision
+  mergeDecision: mergeDecision,
+  integrityCounts: integrityCounts,
+  integritySnapshot: integritySnapshot,
+  integrityCheck: integrityCheck,
+  integritySyncCheck: integritySyncCheck
 };
 
 if (typeof module !== 'undefined' && module.exports) {

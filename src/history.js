@@ -148,12 +148,25 @@ function snapFull() {
   };
 }
 
-function mutateWithHistory(fn) {
+function mutateWithHistory(fn, op) {
   if (!C) return null;
   var state = C.getState();
   if (!state) return null;
   var before = snapFull();
-  var r = fn();
+  /* Целостность (FR-105): слепок до fn, сравнение после (op — тип
+   * операции для таблицы allowed-переходов; вложенные mutate держат
+   * внешний begin/end — depth в integrity.js). */
+  if (typeof window !== 'undefined' && window.EBIntegrity) {
+    window.EBIntegrity.begin(op || 'edit');
+  }
+  var r;
+  try {
+    r = fn();
+  } finally {
+    if (typeof window !== 'undefined' && window.EBIntegrity) {
+      window.EBIntegrity.end();
+    }
+  }
   if (snapTasks() !== before.tasks) {
     pushUndo(before);
     state.updatedAt = Date.now();
@@ -164,7 +177,20 @@ function mutateWithHistory(fn) {
   return r;
 }
 
-function applySnapshot(s) {
+function applySnapshot(s, op) {
+  if (typeof window !== 'undefined' && window.EBIntegrity) {
+    window.EBIntegrity.begin(op || 'undo');
+  }
+  try {
+    applySnapshotInner(s);
+  } finally {
+    if (typeof window !== 'undefined' && window.EBIntegrity) {
+      window.EBIntegrity.end();
+    }
+  }
+}
+
+function applySnapshotInner(s) {
   var state = C.getState();
   var tasksJson = (s && typeof s === 'object') ? s.tasks : s;
   var now = Date.now(), snap = [];
@@ -216,7 +242,7 @@ function doUndo() {
   if (redoStack.length > HISTORY_MAX) redoStack.shift();
   var us = undoStack.pop();
   histSave();
-  applySnapshot(us);
+  applySnapshot(us, 'undo');
   C.focusAfterHistory(us, false);
 }
 
@@ -228,7 +254,7 @@ function doRedo() {
   if (undoStack.length > HISTORY_MAX) undoStack.shift();
   var rs = redoStack.pop();
   histSave();
-  applySnapshot(rs);
+  applySnapshot(rs, 'redo');
   C.focusAfterHistory(rs, true);
 }
 
@@ -259,6 +285,8 @@ var api = {
   pushUndo: pushUndo,
   updateHistoryButtons: updateHistoryButtons,
   mutateWithHistory: mutateWithHistory,
+  doUndo: doUndo,
+  doRedo: doRedo,
   /* v228: бюджет стека — { at, dropped } или null (память сессии);
    * последняя неудачная запись истории — { t, who, name } или null. */
   trimInfo: function () { return trimInfo; },

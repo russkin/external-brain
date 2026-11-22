@@ -1,4 +1,4 @@
-const CACHE = 'extbrain-v246';
+const CACHE = 'extbrain-v247';
 const ASSETS = [
   './',
   './index.html',
@@ -10,6 +10,7 @@ const ASSETS = [
   './src/diag.js',
   './src/settings.js',
   './src/history.js',
+  './src/integrity.js',
   './src/triggers.js',
   './src/gestures.js',
   './src/render.js',

@@ -124,8 +124,20 @@ function doSync(force) {
   if (syncFlying) { syncQueued = true; return Promise.resolve('queued'); }
   syncFlying = true;
   setLight('yellow', true);
+  /* Целостность (FR-105): слепок до pull, сравнение после — изменения
+   * легальны только по LWW (remote.ts > localBefore.ts), исчезновение
+   * id — всегда тревога. endSync сам читает res._remote/_localBefore. */
+  if (typeof window !== 'undefined' && window.EBIntegrity) {
+    window.EBIntegrity.begin('sync');
+  }
+  function endIntegrity(res) {
+    if (typeof window !== 'undefined' && window.EBIntegrity) {
+      window.EBIntegrity.endSync(res || null);
+    }
+  }
   return window.EBSync.syncNow(state).then(function (res) {
     syncFlying = false;
+    endIntegrity(res);
     syncStatus = res.status;
     if (res.status === 'error') {
       lastErrAt = Date.now();
@@ -168,6 +180,7 @@ function doSync(force) {
     return res.status;
   }).catch(function (e) {
     syncFlying = false;
+    endIntegrity(null);
     syncStatus = 'error: ' + String(e && e.message || e).slice(0, 120);
     lastErrAt = Date.now();
     lastErrMsg = errHint(e && e.message || e);

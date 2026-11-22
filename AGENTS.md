@@ -18,7 +18,7 @@
 не в russkin/external-brain. Код по умолчанию смотрит в
 russkin/external-brain — дефолты в коде не менять. Репозиторий переключается
 настройкой repo в приложении.
-Текущая версия: v246 (ноябрь 2026). Тестов: 304 (`logic` + `ios` + `sync` + `sync-devices`).
+Текущая версия: v247 (ноябрь 2026). Тестов: 342 (`logic` + `ios` + `sync` + `sync-devices`).
 Тестовые платформы: смартфон Honor 400 Pro, Android 16 + iPhone, Safari 15
 (хозяин репозитория тестирует на iPhone). Планшет НЕ используется.
 
@@ -690,6 +690,29 @@ Docs-only правки версию НЕ bump'ят. Есть регресс-те
 
 ## Состояние сессии (для продолжения в новом чате)
 
+- **АКТУАЛЬНО (22.11.2026):** выпущена **v247** — система проверки
+  целостности данных (FR-105, решение по Q1–Q4: Б/А/А/А). Чистые
+  функции в `src/logic.js` (`integrityCounts`/`integritySnapshot`/
+  `integrityCheck`/`integritySyncCheck` + экспорт), оболочка
+  `src/integrity.js` (UMD, `window.EBIntegrity`: begin/end/endSync,
+  depth, defer при drag/модалке 400мс, дедуп 5 мин / макс 3 окна,
+  сводное окно, слепок ТОЛЬКО в памяти — без localStorage). Хуки:
+  `mutateWithHistory(fn, op)`/`applySnapshot(..., op)` (history.js,
+  `doUndo` экспортирован), op в вызовах `mutate` (create/delete/
+  delete-many/purge/restore/plan/undone), gestures (done/undone,
+  indent, persistLineOrder→move через persistLineOrderInner),
+  triggers `begin('sync')`/`endIntegrity`, sync.js `_remote`/
+  `_localBefore` при pulled/merged. Окно `askIntegrity` («↩ Отменить»/
+  «Понятно») + init контекста в wire(). Строка «Целостность:» в
+  `src/diag.js`. Версии `v247`/`extbrain-v247` вместе; integrity.js
+  в index.html, ASSETS sw.js, pages.yml. Тесты: **342** (`fail 0`):
+  logic +154 (describe «целостность (FR-105)»), ios describe «v247:
+  целостность данных (FR-105)» (ASSETS/scripts/require/huки/окно/
+  синк/жесты/строка/экспорты/без localStorage). Покрытие logic
+  93.88/89.02, sync 98.58/91.40. Документы: шапка AGENTS, FR-78,
+  FR-105 (новый), FR-53/FR-77/FR-81, NFR-07, VERSIONS.html (cur на
+  v247), USER_GUIDE (.md+.html — раздел «Проверка целостности»).
+  Push/публикация — только по команде хозяина.
 - **СЕССИЯ ЗАКРЫТА (20.11.2026).** За сессию выпущены две версии:
   **v245** — фича «Поделиться папкой» (FR-104, PM → architect → developer,
   ответы хозяина Q0–Q9 записаны в FR-104) и **v246** — выпил телеметрии

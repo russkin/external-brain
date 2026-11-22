@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v246';
+  var APP_VERSION = 'v247';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -399,8 +399,8 @@
     });
   }
 
-  function mutate(fn) {
-    return mutateWithHistory(fn);
+  function mutate(fn, op) {
+    return mutateWithHistory(fn, op);
   }
 
   /* --- История изменений (undo/redo стрелками в шапке, локально) ---
@@ -417,7 +417,7 @@
   function snapFull() { return window.EBHistory.snapFull(); }
   function pushUndo(entry) { return window.EBHistory.pushUndo(entry); }
   function updateHistoryButtons() { return window.EBHistory.updateHistoryButtons(); }
-  function mutateWithHistory(fn) { return window.EBHistory.mutateWithHistory(fn); }
+  function mutateWithHistory(fn, op) { return window.EBHistory.mutateWithHistory(fn, op); }
   try { if (window.EBHistory) window.EBHistory.load(); } catch (x) {}
 
   /* doUndo/doRedo/applySnapshot — в модуле (вызываются из его init);
@@ -860,7 +860,7 @@
     var created = null;
     mutate(function () {
       created = insertTaskAfter(prevId, title0, indent, now, allowEmpty);
-    });
+    }, 'create');
     return created;
   }
 
@@ -871,7 +871,7 @@
     var created = null;
     mutate(function () {
       created = insertTaskTop(title0, now, allowEmpty);
-    });
+    }, 'create');
     return created;
   }
 
@@ -882,7 +882,7 @@
     var t = L.getTask(state.tasks, taskId);
     if (!t || t.deleted) return;
     if (lineTasks().length <= 1) return;
-    mutate(function () { L.removeTask(state.tasks, taskId); });
+    mutate(function () { L.removeTask(state.tasks, taskId); }, 'delete');
     /* Строка перестроена синхронно — следом придёт click того же тапа
      * уже по новому дому: глушим его (см. clickBlocked в render.js). */
     try { window._ebUIClickBlocked = Date.now() + 400; } catch (x) {}
@@ -922,7 +922,7 @@
        * предыдущей. Отложенное сохранение удаляемой — no-op. */
       mutate(function () {
         L.removeTask(state.tasks, cur.id);
-      });
+      }, 'delete');
       focusTaskEnd(prev.id);
       return;
     }
@@ -932,7 +932,7 @@
     mutate(function () {
       L.clarifyTask(state.tasks, prev.id, { title: joined });
       L.removeTask(state.tasks, cur.id);
-    });
+    }, 'delete');
     /* Курсор — на стык: конец текста верхней, пробел, дальше перенесённый.
      * Длину верхней запоминаем ДО mutate (после — там уже склейка). */
     focusTaskEnd(prev.id, prevLen + 1);
@@ -1063,7 +1063,7 @@
         mutate(function () {
           L.clarifyTask(state.tasks, taskId, { title: splitLeft });
           madeSplit = insertTaskAfter(taskId, splitTail, spIndent, Date.now());
-        });
+        }, 'create');
         if (madeSplit) focusLineStart(madeSplit.id);
         return;
       }
@@ -1224,7 +1224,7 @@
         if (!ok2 || !state) return;
         /* mutate возвращает результат fn — число сжатых (v167): видно,
          * что чистка реально сделала, а не просто «сжаты». */
-        var squeezed = mutate(function () { return L.purgeTombstones(state.tasks, Date.now()); });
+        var squeezed = mutate(function () { return L.purgeTombstones(state.tasks, Date.now()); }, 'purge');
         lastAction = 'сжато удалённых: ' + (squeezed || 0);
         renderStatus();
       });
@@ -1245,7 +1245,7 @@
       mutate(function () {
         L.removeTask(state.tasks, taskId);
         ensureStarter();
-      });
+      }, 'delete');
       try { window._ebUIClickBlocked = Date.now() + 400; } catch (x) {}
       lastAction = 'строка удалена';
       renderStatus();
@@ -1256,7 +1256,7 @@
       mutate(function () {
         L.removeTask(state.tasks, taskId);
         ensureStarter();
-      });
+      }, 'delete');
       /* Модалка подтверждения съела исходный тап (нового click уже не
        * будет), но глушим на всякий случай — строка перестроена. */
       try { window._ebUIClickBlocked = Date.now() + 400; } catch (x) {}
@@ -1285,7 +1285,7 @@
       if (!ok) return;
       mutate(function () {
         L.doneShownList(state.tasks).forEach(function (t) { L.removeTask(state.tasks, t.id); });
-      });
+      }, 'delete-many');
     });
   }
 
@@ -1373,7 +1373,7 @@
     var rp = formRepeatCtl ? formRepeatCtl.get() : null;
     mutate(function () {
       made = L.createPlan(state.tasks, title, dateStr, Date.now(), { repeat: rp });
-    });
+    }, 'create');
     if (!made) {
       lastAction = 'план: нужны название и дата ДД.ММ.ГГГГ';
       renderStatus();
@@ -1601,7 +1601,7 @@
       if (collapsed[target.id]) { delete collapsed[target.id]; saveCollapsed(); }
       expandForAnchor(target.id, tInd);
       render();
-    });
+    }, 'plan');
     if (!created.length) return;
     lastAction = created.length === 1 ?
       'план сработал' : 'планов сработало: ' + created.length;
@@ -1644,6 +1644,36 @@
       ok.textContent = 'OK';
       schedulePlanCheck(0);
     };
+  }
+
+  /* Окно тревоги целостности (FR-105, v247): «↩ Отменить» (ok) /
+   * «Понятно» (cancel). Дефолты кнопок восстанавливаются — иначе
+   * следующий askText/askConfirm показал бы наши подписи. */
+  function askIntegrity(title) {
+    return new Promise(function (resolve) {
+      var back = el('modalBack'), text = el('modalText'), input = el('modalInput');
+      var ok = el('modalOk'), cancel = el('modalCancel'), clearBtn = el('modalClear');
+      if (!back || !text || !ok || !cancel) { resolve(false); return; }
+      text.textContent = String(title == null ? '' : title);
+      if (input) input.style.display = 'none';
+      if (clearBtn) clearBtn.style.display = 'none';
+      cancel.style.display = '';
+      ok.textContent = '↩ Отменить';
+      cancel.textContent = 'Понятно';
+      back.classList.add('open');
+      function done(v) {
+        back.classList.remove('open');
+        ok.onclick = null;
+        cancel.onclick = null;
+        ok.textContent = 'OK';
+        cancel.textContent = 'Отмена';
+        if (input) input.style.display = '';
+        if (clearBtn) clearBtn.style.display = 'none';
+        resolve(v);
+      }
+      ok.onclick = function () { done(true); };
+      cancel.onclick = function () { done(false); };
+    });
   }
 
   /* --- Краевые целевой (фаза 3, FR-99) ---
@@ -1726,7 +1756,7 @@
       if (!t || t.deleted || t.status !== 'done') return;
       planGateKey = '';
       lastAction = 'целевая восстановлена';
-      mutate(function () { L.clarifyTask(state.tasks, tid, { status: 'todo' }); });
+      mutate(function () { L.clarifyTask(state.tasks, tid, { status: 'todo' }); }, 'undone');
       renderStatus();
       schedulePlanCheck(0);
     };
@@ -2108,10 +2138,10 @@
           if (!restored) return;
           mutate(function () {
             /* Пропавшие хоронятся tombstone'ом, иначе синк воскресит их. */
-            state.tasks = L.restoreWithTombstones(state.tasks, restored.tasks, Date.now());
-            state.updatedAt = Date.now();
-            ensureStarter();
-          });
+          state.tasks = L.restoreWithTombstones(state.tasks, restored.tasks, Date.now());
+          state.updatedAt = Date.now();
+          ensureStarter();
+          }, 'restore');
           lastAction = 'копия восстановлена';
           renderStatus();
         });
@@ -2143,10 +2173,10 @@
           if (!restored) return;
           mutate(function () {
             /* Пропавшие хоронятся tombstone'ом, иначе синк воскресит их. */
-            state.tasks = L.restoreWithTombstones(state.tasks, restored.tasks, Date.now());
-            state.updatedAt = Date.now();
-            ensureStarter();
-          });
+          state.tasks = L.restoreWithTombstones(state.tasks, restored.tasks, Date.now());
+          state.updatedAt = Date.now();
+          ensureStarter();
+          }, 'restore');
           lastAction = 'постоянная копия восстановлена';
           renderStatus();
         });
@@ -2187,6 +2217,16 @@
       updateHistoryButtons: updateHistoryButtons,
       INDENT_STEP: INDENT_STEP,
       LINES_GAP: LINES_GAP
+    });
+    /* Целостность данных (FR-105, v247): окно тревоги + отмена. */
+    if (window.EBIntegrity) window.EBIntegrity.init({
+      getState: function () { return state; },
+      L: L,
+      isDragActive: isDragActive,
+      askIntegrity: askIntegrity,
+      doUndo: function () {
+        if (window.EBHistory && window.EBHistory.doUndo) window.EBHistory.doUndo();
+      }
     });
     /* Отрисовка списка — модуль src/render.js (этап 7): строки, порядок,
      * секция выполненных, статус. Сюда отдаём только контекст. */
