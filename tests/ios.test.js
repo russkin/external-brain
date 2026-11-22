@@ -1359,9 +1359,9 @@ describe('v247: целостность данных (FR-105)', () => {
     assert.ok(swSrc.includes("'./src/integrity.js'"), 'нет в ASSETS sw.js');
     assert.ok(pagesYml.includes('src/integrity.js'), 'нет копирования в pages.yml');
   });
-  it('APP_VERSION и CACHE — v247 вместе', () => {
-    assert.ok(/APP_VERSION\s*=\s*'v247'/.test(appSrc), 'APP_VERSION не v247');
-    assert.ok(/CACHE\s*=\s*'extbrain-v247'/.test(swSrc), 'CACHE не extbrain-v247');
+  it('APP_VERSION и CACHE — v248 вместе', () => {
+    assert.ok(/APP_VERSION\s*=\s*'v248'/.test(appSrc), 'APP_VERSION не v248');
+    assert.ok(/CACHE\s*=\s*'extbrain-v248'/.test(swSrc), 'CACHE не extbrain-v248');
   });
   it('без новых localStorage-ключей (грабля 53)', () => {
     /* Слово в комментариях — ок; настоящие вызовы — нет. */
@@ -1377,13 +1377,31 @@ describe('v247: целостность данных (FR-105)', () => {
     assert.ok(/doUndo: doUndo/.test(histSrc), 'doUndo не экспортирован для отмены из окна');
   });
   it('окно askIntegrity: «↩ Отменить»/«Понятно», дефолты восстанавливаются', () => {
-    assert.ok(appSrc.includes('function askIntegrity(title)'), 'нет askIntegrity');
+    assert.ok(appSrc.includes('function askIntegrity(title, allowUndo)'), 'нет askIntegrity(title, allowUndo)');
     assert.ok(appSrc.includes("'↩ Отменить'") && appSrc.includes("'Понятно'"),
       'не те кнопки окна');
+    assert.ok(appSrc.includes('var canUndo = allowUndo !== false'), 'canUndo не по allowUndo');
     assert.ok(/EBIntegrity\.init\(\{[\s\S]{0,400}askIntegrity: askIntegrity/.test(appSrc),
       'askIntegrity не отдан в контекст integrity');
     assert.ok(/EBIntegrity\.init\(\{[\s\S]{0,400}doUndo:/.test(appSrc),
       'doUndo не отдан в контекст integrity');
+  });
+  it('v248: синк — только «Понятно» (вариант А), локально — с отменой', () => {
+    assert.ok(integritySrc.includes('fromSync') && integritySrc.includes("items[si].op === 'sync'"),
+      'нет детекта op === sync в showWindow');
+    assert.ok(integritySrc.includes('C.askIntegrity(title, !fromSync)'),
+      'askIntegrity не получает allowUndo=false для синка');
+    assert.ok(integritySrc.includes('Это результат синхронизации'), 'нет текста без отмены для синка');
+    assert.ok(appSrc.includes("cancel.style.display = 'none'"), 'в askIntegrity не скрыта кнопка при allowUndo=false');
+    assert.ok(appSrc.includes("ok.textContent = 'Понятно'"), 'нет single «Понятно» для синка');
+  });
+  it('v248: окно показывает что именно изменилось (details)', () => {
+    assert.ok(integritySrc.includes('Что изменилось:'), 'нет заголовка деталей');
+    assert.ok(integritySrc.includes('integrityStatusLabel'), 'нет ссылки на метки статусов');
+    assert.ok(logicSrc.includes('integrityWithDetails'), 'нет обогащения details в logic');
+    assert.ok(logicSrc.includes('titles[t.id]'), 'snapshot не хранит titles');
+    assert.ok(logicSrc.includes('function integrityStatusLabel'), 'нет integrityStatusLabel');
+    assert.ok(logicSrc.includes('integrityStatusLabel: integrityStatusLabel'), 'integrityStatusLabel не экспортирован');
   });
   it('синк: _remote/_localBefore и begin/endSync', () => {
     assert.ok(syncTestable.includes('_remote = remoteTasks') &&

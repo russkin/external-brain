@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v247';
+  var APP_VERSION = 'v248';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -1647,19 +1647,27 @@
   }
 
   /* Окно тревоги целостности (FR-105, v247): «↩ Отменить» (ok) /
-   * «Понятно» (cancel). Дефолты кнопок восстанавливаются — иначе
-   * следующий askText/askConfirm показал бы наши подписи. */
-  function askIntegrity(title) {
+   * «Понятно» (cancel). allowUndo=false (синк, вариант А v248) — только
+   * «Понятно» (ok), кнопка отмены скрыта. Дефолты кнопок восстанавливаются —
+   * иначе следующий askText/askConfirm показал бы наши подписи. */
+  function askIntegrity(title, allowUndo) {
     return new Promise(function (resolve) {
       var back = el('modalBack'), text = el('modalText'), input = el('modalInput');
       var ok = el('modalOk'), cancel = el('modalCancel'), clearBtn = el('modalClear');
       if (!back || !text || !ok || !cancel) { resolve(false); return; }
+      var canUndo = allowUndo !== false;
       text.textContent = String(title == null ? '' : title);
       if (input) input.style.display = 'none';
       if (clearBtn) clearBtn.style.display = 'none';
-      cancel.style.display = '';
-      ok.textContent = '↩ Отменить';
-      cancel.textContent = 'Понятно';
+      if (canUndo) {
+        cancel.style.display = '';
+        ok.textContent = '↩ Отменить';
+        cancel.textContent = 'Понятно';
+      } else {
+        /* Вариант А: один «Понятно» — откат pull не в истории. */
+        cancel.style.display = 'none';
+        ok.textContent = 'Понятно';
+      }
       back.classList.add('open');
       function done(v) {
         back.classList.remove('open');
@@ -1667,11 +1675,12 @@
         cancel.onclick = null;
         ok.textContent = 'OK';
         cancel.textContent = 'Отмена';
+        cancel.style.display = '';
         if (input) input.style.display = '';
         if (clearBtn) clearBtn.style.display = 'none';
         resolve(v);
       }
-      ok.onclick = function () { done(true); };
+      ok.onclick = function () { done(canUndo); };
       cancel.onclick = function () { done(false); };
     });
   }

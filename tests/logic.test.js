@@ -1440,6 +1440,33 @@ describe('целостность (FR-105)', () => {
     assert.equal(s.byId.e, 'alive', 'пустая строка — живая');
     assert.equal(s.byId.f, 'plan-done', 'план с planFired');
     assert.equal(s.byId.m, 'tomb');
+    assert.equal(typeof s.titles.a, 'string', 'snapshot хранит titles для окна');
+    assert.ok(s.titles.a.length > 0, 'title не пуст');
+  });
+  it('v248: integrityStatusLabel — русские метки статусов', () => {
+    assert.equal(L.integrityStatusLabel('alive'), 'живая');
+    assert.equal(L.integrityStatusLabel('done'), 'выполнена');
+    assert.equal(L.integrityStatusLabel('tomb'), 'удалена');
+    assert.equal(L.integrityStatusLabel('plan'), 'план');
+    assert.equal(L.integrityStatusLabel('plan-fired'), 'план сработал');
+    assert.equal(L.integrityStatusLabel('plan-done'), 'план выполнен');
+    assert.equal(L.integrityStatusLabel(undefined), 'нет');
+    assert.equal(L.integrityStatusLabel('—'), 'нет');
+  });
+  it('v248: check даёт details — название + было/стало', () => {
+    const before = L.integritySnapshot(sample());
+    const afterTasks = sample();
+    /* b: done → alive (неожиданный undone без op undone) */
+    const b = afterTasks.find(t => t.id === 'b');
+    const st = b.status; b.status = 'todo';
+    const bad = L.integrityCheck(before, L.integritySnapshot(afterTasks), 'edit');
+    assert.ok(bad, 'должна быть тревога');
+    assert.ok(Array.isArray(bad.details) && bad.details.length > 0, 'нет details');
+    const d = bad.details.find(x => x.id === 'b') || bad.details[0];
+    assert.equal(typeof d.title, 'string', 'details несёт title');
+    assert.ok(d.from && d.to, 'details несёт from/to');
+    assert.equal(L.integrityStatusLabel(d.from), 'выполнена');
+    assert.equal(L.integrityStatusLabel(d.to), 'живая');
   });
   it('check edit: правка без смены статусов — null', () => {
     const before = L.integritySnapshot(sample());

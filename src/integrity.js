@@ -108,6 +108,7 @@ function note(bad, op) {
   deferred.push({
     reason: String(bad && bad.reason || 'Неизвестная ошибка'),
     ids: (bad && bad.sampleIds) || [],
+    details: (bad && bad.details) || null,
     op: String(op || '?')
   });
   /* Сводка массовых: не плодим строки — уже в очереди. */
@@ -154,7 +155,11 @@ function tryShow() {
   showWindow(items);
 }
 
-/* Одно сводное окно на порцию тревог (массовые операции). */
+/* Одно сводное окно на порцию тревог (массовые операции).
+ * Вариант А (22.11.2026): при тревоге СИНКА кнопки «↩ Отменить» нет —
+ * pull не в стеке истории, откатил бы чужой локальный шаг; только «Понятно».
+ * Локальные операции — «↩ Отменить» + «Понятно». В тексте — что именно
+ * изменилось (название + «было → стало»), если check дал details. */
 function showWindow(items) {
   if (!items || !items.length) return;
   var LB = L();
@@ -166,15 +171,45 @@ function showWindow(items) {
       title += '\n— ' + items[i].reason;
     }
   }
-  var ids = items[0].ids || [];
-  if (ids.length) {
-    title += '\nЗатронуты id: ' + ids.slice(0, 5).join(', ') +
-      (ids.length > 5 ? '…' : '');
+  /* Что именно изменилось: детали из integrityCheck (название + статусы). */
+  var anyDetails = false;
+  for (var di = 0; di < items.length; di++) {
+    var det = items[di].details;
+    if (!det || !det.length) continue;
+    if (!anyDetails) {
+      title += '\n\nЧто изменилось:';
+      anyDetails = true;
+    }
+    for (var dj = 0; dj < det.length && dj < 5; dj++) {
+      var d = det[dj];
+      var name = d.title || ('id ' + d.id);
+      var fromL = LB && LB.integrityStatusLabel ? LB.integrityStatusLabel(d.from) : d.from;
+      var toL = LB && LB.integrityStatusLabel ? LB.integrityStatusLabel(d.to) : d.to;
+      title += '\n— «' + name + '»: ' + fromL + ' → ' + toL;
+    }
   }
-  title += '\n\nДанные могли измениться не так, как ожидали. ' +
-    'Отменить последнее действие?';
+  if (!anyDetails) {
+    var ids = items[0].ids || items[0].sampleIds || [];
+    if (ids.length) {
+      title += '\nЗатронуты id: ' + ids.slice(0, 5).join(', ') +
+        (ids.length > 5 ? '…' : '');
+    }
+  }
+  /* Вариант А: синк без «Отменить» (откат не отменит pull). */
+  var fromSync = false;
+  for (var si = 0; si < items.length; si++) {
+    if (items[si].op === 'sync') { fromSync = true; break; }
+  }
+  if (fromSync) {
+    title += '\n\nЭто результат синхронизации: список уже обновлён. ' +
+      'Отмена здесь не поможет — проверьте список и при необходимости ' +
+      'верните стрелкой ↩ нужный шаг вручную.';
+  } else {
+    title += '\n\nДанные могли измениться не так, как ожидали. ' +
+      'Отменить последнее действие?';
+  }
   if (!C || typeof C.askIntegrity !== 'function') return;
-  C.askIntegrity(title).then(function (undo) {
+  C.askIntegrity(title, !fromSync).then(function (undo) {
     if (undo && typeof C.doUndo === 'function') {
       try { C.doUndo(); } catch (x) {}
     }

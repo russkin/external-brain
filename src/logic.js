@@ -1318,16 +1318,21 @@ function integrityStatusOf(t) {
   return doneShown ? 'done' : 'alive';
 }
 
-/* Слепок: counts + byId (id → статус). Набор id включает могилы. */
+/* Слепок: counts + byId (id → статус) + titles (id → короткий текст).
+ * Набор id включает могилы. titles — для окна тревоги (память сессии). */
 function integritySnapshot(tasks) {
   var byId = {};
+  var titles = {};
   if (Array.isArray(tasks)) {
     for (var i = 0; i < tasks.length; i++) {
       var t = tasks[i];
-      if (t && t.id) byId[t.id] = integrityStatusOf(t);
+      if (t && t.id) {
+        byId[t.id] = integrityStatusOf(t);
+        titles[t.id] = String(t.title == null ? '' : t.title).replace(/\s+/g, ' ').slice(0, 60);
+      }
     }
   }
-  return { counts: integrityCounts(tasks), byId: byId };
+  return { counts: integrityCounts(tasks), byId: byId, titles: titles };
 }
 
 function integritySampleIds(ids, max) {
@@ -1339,6 +1344,43 @@ function integritySampleIds(ids, max) {
 
 function integrityBad(why, ids) {
   return { reason: why, sampleIds: integritySampleIds(ids || []) };
+}
+
+/* Человеческая расшифровка статуса для окна тревоги. */
+function integrityStatusLabel(st) {
+  switch (String(st == null ? '' : st)) {
+    case 'alive': return 'живая';
+    case 'done': return 'выполнена';
+    case 'tomb': return 'удалена';
+    case 'plan': return 'план';
+    case 'plan-fired': return 'план сработал';
+    case 'plan-done': return 'план выполнен';
+    case '': case '—': return 'нет';
+    default: return String(st);
+  }
+}
+
+/* Детали для окна: по sampleIds — название + «было → стало».
+ * Обогащается в конце integrityCheck / integritySyncCheck. */
+function integrityWithDetails(bad, before, after) {
+  if (!bad || !bad.sampleIds || !bad.sampleIds.length) return bad;
+  if (!before || !after || !before.byId || !after.byId) return bad;
+  var details = [];
+  for (var i = 0; i < bad.sampleIds.length; i++) {
+    var id = bad.sampleIds[i];
+    var from = before.byId[id];
+    var to = after.byId[id];
+    var title = (after.titles && after.titles[id]) ||
+      (before.titles && before.titles[id]) || '';
+    details.push({
+      id: id,
+      title: title,
+      from: from === undefined ? '—' : from,
+      to: to === undefined ? '—' : to
+    });
+  }
+  bad.details = details;
+  return bad;
 }
 
 /* Статус «помечен выполненным/удалённым/пропал» — общий путь. */
@@ -1377,6 +1419,11 @@ function integrityUnexpectedStatus(before, after, op, allowDoneFlip, allowTombFl
 
 /* Проверка локальной операции. op — тип (см. таблицу); неизвестный → edit. */
 function integrityCheck(before, after, op) {
+  var bad = integrityCheckRaw(before, after, op);
+  return bad ? integrityWithDetails(bad, before, after) : null;
+}
+
+function integrityCheckRaw(before, after, op) {
   if (!before || !after || !before.byId || !after.byId) return null;
   var operation = String(op || 'edit');
   var ids = Object.keys(before.byId);
@@ -1583,6 +1630,11 @@ function integrityCheck(before, after, op) {
 /* Синк (Q1-Б): изменение deleted/status легально только по LWW — у remote
  * свежее ts. Исчезновение id — всегда тревога. localBefore — массив до merge. */
 function integritySyncCheck(beforeSnap, afterSnap, remoteTasks, localBefore) {
+  var bad = integritySyncCheckRaw(beforeSnap, afterSnap, remoteTasks, localBefore);
+  return bad ? integrityWithDetails(bad, beforeSnap, afterSnap) : null;
+}
+
+function integritySyncCheckRaw(beforeSnap, afterSnap, remoteTasks, localBefore) {
   if (!beforeSnap || !afterSnap || !beforeSnap.byId || !afterSnap.byId) return null;
   var remoteById = {};
   if (Array.isArray(remoteTasks)) {
@@ -1689,7 +1741,8 @@ var api = {
   integrityCounts: integrityCounts,
   integritySnapshot: integritySnapshot,
   integrityCheck: integrityCheck,
-  integritySyncCheck: integritySyncCheck
+  integritySyncCheck: integritySyncCheck,
+  integrityStatusLabel: integrityStatusLabel
 };
 
 if (typeof module !== 'undefined' && module.exports) {
