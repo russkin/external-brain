@@ -113,8 +113,12 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'нет кнопки восстановления копии');
     assert.ok(diagSrc.includes('Локальная копия: ') && diagSrc.includes('backupInfo'),
       'копия не видна в диагностике');
-    /* Диагностика v72: сжатая статистика + синк/размер/сеть/устройство/SW. */
-    assert.ok(diagSrc.includes("'Задач: ' + alive + ' · готово '"), 'нет строки «Задач: N · готово M»');
+    /* Диагностика v72: сжатая статистика + синк/размер/сеть/устройство/SW.
+     * v249: строка «Задач» несёт расклад (планов + живых всего) — иначе
+     * «живых 225» при «Задач: 82» читается как рассинхрон счётчиков. */
+    assert.ok(diagSrc.includes("'Задач: ' + alive + ' · готово '") &&
+      diagSrc.includes("' · планов ' + plN + ' (живых всего ' + liveN + ')'"),
+      'нет строки «Задач: N · готово M · планов P (живых всего L)»');
     assert.ok(!diagSrc.includes('Лягушка: '), 'строка диагностики про удалённое поле не удалена');
     assert.ok(diagSrc.includes("'Обновление: SW '"), 'нет строки SW/кэша');
     assert.ok(diagSrc.includes('external-brain-synclog-v1'), 'нет времени последнего синка');
@@ -1359,9 +1363,9 @@ describe('v247: целостность данных (FR-105)', () => {
     assert.ok(swSrc.includes("'./src/integrity.js'"), 'нет в ASSETS sw.js');
     assert.ok(pagesYml.includes('src/integrity.js'), 'нет копирования в pages.yml');
   });
-  it('APP_VERSION и CACHE — v248 вместе', () => {
-    assert.ok(/APP_VERSION\s*=\s*'v248'/.test(appSrc), 'APP_VERSION не v248');
-    assert.ok(/CACHE\s*=\s*'extbrain-v248'/.test(swSrc), 'CACHE не extbrain-v248');
+  it('APP_VERSION и CACHE — v249 вместе', () => {
+    assert.ok(/APP_VERSION\s*=\s*'v249'/.test(appSrc), 'APP_VERSION не v249');
+    assert.ok(/CACHE\s*=\s*'extbrain-v249'/.test(swSrc), 'CACHE не extbrain-v249');
   });
   it('без новых localStorage-ключей (грабля 53)', () => {
     /* Слово в комментариях — ок; настоящие вызовы — нет. */
@@ -2276,7 +2280,9 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     var iC = diagSrc.indexOf("'Постоянная копия: '");
     assert.ok(iC !== -1 && iC < iP && iP < iA,
       'строки планирования не между «Постоянная копия» и «Последнее действие» (FR-53)');
-    assert.ok(/C\.L\.isPlanned\(pt\)/.test(diagSrc) && /pt\.planFired/.test(diagSrc),
+    /* v249: цикл счётчиков переехал наверх (строка «Задач») — проверяем
+     * по тем же isPlanned/planFired, но на новых именах arr[ti]. */
+    assert.ok(/C\.L\.isPlanned\(arr\[ti\]\)/.test(diagSrc) && /arr\[ti\]\.planFired/.test(diagSrc),
       'счётчики не по планам/planFired');
   });
 });

@@ -225,6 +225,10 @@ function diagText() {
     : { todo: 0, done: 0 };
   var alive = (st.todo || 0);
   var recs = 0, bytes = 0, liveN = 0, deadN = 0, deadFull = 0, deadMin = 0;
+  /* Счётчики планов считаем здесь же (v249): строка «Задач» показывает
+   * расклад, а не только неплановые — иначе «живых 225» при «Задач: 82»
+   * читается как рассинхрон. Раньше цикл жил в блоке «Планирование». */
+  var plN = 0, plW = 0, plF = 0, lastF = 0;
   try {
     recs = state ? state.tasks.length : 0;
     bytes = JSON.stringify(state ? state.tasks : []).length;
@@ -237,7 +241,16 @@ function diagText() {
         deadN++;
         if (arr[ti].min === true) deadMin++;
         else deadFull++;
-      } else liveN++;
+      } else {
+        liveN++;
+        if (C.L.isPlanned(arr[ti])) {
+          plN++;
+          if (arr[ti].planFired) {
+            plF++;
+            if (arr[ti].planFired > lastF) lastF = arr[ti].planFired;
+          } else plW++;
+        }
+      }
     }
   } catch (x) {}
   var collapsed = C.getCollapsed();
@@ -245,7 +258,8 @@ function diagText() {
   for (var id in collapsed) if (collapsed[id]) collapsedN++;
   var lines = [
     'Внешний мозг ' + C.getVersion(),
-    'Задач: ' + alive + ' · готово ' + (st.done || 0),
+    'Задач: ' + alive + ' · готово ' + (st.done || 0) +
+      ' · планов ' + plN + ' (живых всего ' + liveN + ')',
     'Размер: ' + recs + ' записей (живых ' + liveN + ' · удалённых ' + deadN +
       ' (с текстом ' + deadFull + ' · сжатых ' + deadMin + ')) · ' +
       (bytes < 1024 ? bytes + ' Б' : (bytes / 1024).toFixed(1) + ' КБ'),
@@ -304,20 +318,11 @@ function diagText() {
     (pubAt ? fmtDT(pubAt) + ' · ' + pubStatus + pubNote : 'ещё не было'));
   lines.push('Локальная копия: ' + backupLabel(C.fmtWhen));
   lines.push('Постоянная копия: ' + pinLabel(C.fmtWhen));
-  /* Планирование (фаза 3, FR-101): цель, счётчики и последнее
-   * срабатывание (макс planFired; план живёт и после удаления дочки). */
+  /* Планирование (фаза 3, FR-101): цель, счётчики (считаны выше вместе
+   * со строкой «Задач», v249) и последнее срабатывание (макс planFired;
+   * план живёт и после удаления дочки). */
   try {
     if (state && state.settings && state.tasks) {
-      var plN = 0, plW = 0, plF = 0, lastF = 0, pl;
-      for (pl = 0; pl < state.tasks.length; pl++) {
-        var pt = state.tasks[pl];
-        if (!pt || pt.deleted || !C.L.isPlanned(pt)) continue;
-        plN++;
-        if (pt.planFired) {
-          plF++;
-          if (pt.planFired > lastF) lastF = pt.planFired;
-        } else plW++;
-      }
       var tgId = String(state.settings.planTargetId || '');
       var tg = tgId ? C.L.getTask(state.tasks, tgId) : null;
       var tgLabel = !tgId ? '(не выбрана)'
