@@ -4,7 +4,7 @@
 'use strict';
 
 (function () {
-  var APP_VERSION = 'v249';
+  var APP_VERSION = 'v250';
   var INDENT_STEP = 28;
   var LINES_GAP = 8;
   var COLLAPSED_KEY = 'external-brain-collapsed-v1';
@@ -41,6 +41,8 @@
     try { renderStatus(); } catch (err) {
       var s = document.getElementById('status');
       if (s) s.textContent = bootError;
+      var ps = document.getElementById('planStatus');
+      if (ps) ps.textContent = bootError;
     }
   });
 
@@ -2325,6 +2327,8 @@
       bootError = 'ОШИБКА загрузки: ' + String(e && e.message || e);
       var s = el('status');
       if (s) s.textContent = bootError;
+      var ps = el('planStatus');
+      if (ps) ps.textContent = bootError;
     });
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {

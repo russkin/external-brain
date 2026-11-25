@@ -1363,9 +1363,9 @@ describe('v247: целостность данных (FR-105)', () => {
     assert.ok(swSrc.includes("'./src/integrity.js'"), 'нет в ASSETS sw.js');
     assert.ok(pagesYml.includes('src/integrity.js'), 'нет копирования в pages.yml');
   });
-  it('APP_VERSION и CACHE — v249 вместе', () => {
-    assert.ok(/APP_VERSION\s*=\s*'v249'/.test(appSrc), 'APP_VERSION не v249');
-    assert.ok(/CACHE\s*=\s*'extbrain-v249'/.test(swSrc), 'CACHE не extbrain-v249');
+  it('APP_VERSION и CACHE — v250 вместе', () => {
+    assert.ok(/APP_VERSION\s*=\s*'v250'/.test(appSrc), 'APP_VERSION не v250');
+    assert.ok(/CACHE\s*=\s*'extbrain-v250'/.test(swSrc), 'CACHE не extbrain-v250');
   });
   it('без новых localStorage-ключей (грабля 53)', () => {
     /* Слово в комментариях — ок; настоящие вызовы — нет. */
@@ -1789,6 +1789,38 @@ describe('планирование ФАЗА 1: страница плана (FR-9
       'setLight/тап не обновляют светофор плана');
     assert.ok(/nodes\.forEach/.test(trigSrc) && /filter\(function \(n\) \{ return n; \}\)/.test(trigSrc),
       'setLight не рассчитан на два узла');
+  });
+  it('v250: неподвижная строка статуса #planStatus на странице планирования', () => {
+    assert.ok(html.includes('id="planStatus"'), 'нет #planStatus');
+    var open = '<div id="planLines"></div>';
+    var iPage = html.indexOf('<div id="planPage">');
+    var iLines = html.indexOf(open);
+    var iPS = html.indexOf('id="planStatus"');
+    var iMain = html.indexOf('<footer id="status">');
+    assert.ok(iPage !== -1 && iLines > iPage && iPS > iLines && iPS < iMain,
+      'planStatus не между списком плана и основным подвалом');
+    /* Между planLines и открытием footer — ровно закрытие planScroll:
+     * footer прямой ребёнок planPage после скроллера (вне его, как planHead). */
+    var iFt = html.lastIndexOf('<footer id="planStatus">');
+    var seg = html.slice(iLines + open.length, iFt)
+      .replace(/<!--[\s\S]*?-->/g, '');
+    assert.ok(iFt !== -1 && iFt < iMain &&
+      (seg.match(/<\/div>/g) || []).length === 1 && !seg.includes('<footer'),
+      'planStatus не прямой ребёнок planPage после planScroll');
+    assert.ok(/<footer id="planStatus">[^<]+<\/footer>/.test(html),
+      'planStatus пуст или не footer');
+    /* Общий селектор footer (fixed снизу) обслуживает оба узла. */
+    assert.ok(/\n\s*footer \{[^}]*position: fixed/.test(html),
+      'нет общего стиля footer');
+    assert.ok(!/#planStatus\s*\{/.test(html), 'planStatus переопределяет стиль footer');
+    /* Обновление — тем же проходом, что и основной подвал. */
+    assert.ok(rendSrc.includes("var ps = el('planStatus')") &&
+      rendSrc.includes('if (ps) ps.textContent = txt'),
+      'renderStatus не пишет в planStatus');
+    /* Ошибки загрузки видны и на странице плана. */
+    assert.ok(appSrc.includes("document.getElementById('planStatus')") &&
+      appSrc.includes("el('planStatus')"),
+      'ошибки boot не пишут в planStatus');
   });
   it('форма плана в две строки, название с переносом (v196)', () => {
     assert.ok(/<textarea[^>]*id="planInput"/.test(html), 'название не textarea (нет переноса)');

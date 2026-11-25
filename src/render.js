@@ -775,7 +775,11 @@ function renderStatus() {
   var state = C.getState();
   C.renderNet();
   var s = el('status');
-  if (!s || !state) return;
+  /* Строка статуса и на странице планирования (v250): #planStatus внутри
+   * #planPage — основной #status уходит под полноэкранный план (z 44).
+   * Пишем в оба, как setLight в оба светофора. */
+  var ps = el('planStatus');
+  if ((!s && !ps) || !state) return;
   var st = L.stats(state.tasks);
   var parts = [
     'Задач: ' + (st.todo || 0),
@@ -802,7 +806,9 @@ function renderStatus() {
   } catch (x) {}
   var be = C.getBoot().error;
   if (be) parts.push(be);
-  s.textContent = parts.join(' · ');
+  var txt = parts.join(' · ');
+  if (s) s.textContent = txt;
+  if (ps) ps.textContent = txt;
 }
 
 function init(ctx) {

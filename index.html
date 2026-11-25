@@ -445,6 +445,11 @@
       </div>
       <div id="planLines"></div>
     </div>
+    <!-- Неподвижная строка статуса страницы планирования (v250): тот же
+         <footer>, что и #status у списка (общий селектор footer — fixed
+         снизу), обновляется renderStatus вместе с #status. Внутри
+         #planPage (z 44) — основной подвал уходит под страницу плана. -->
+    <footer id="planStatus">Загрузка…</footer>
   </div>
 
     <footer id="status">Загрузка…</footer>
