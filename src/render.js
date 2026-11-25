@@ -777,38 +777,37 @@ function renderStatus() {
   var s = el('status');
   /* Строка статуса и на странице планирования (v250): #planStatus внутри
    * #planPage — основной #status уходит под полноэкранный план (z 44).
-   * Пишем в оба, как setLight в оба светофора. */
+   * Головы разные (v251): у списка — задачи, у плана — планы; хвост
+   * (синхр, действие, срок токена, ошибка) общий. */
   var ps = el('planStatus');
   if ((!s && !ps) || !state) return;
   var st = L.stats(state.tasks);
-  var parts = [
-    'Задач: ' + (st.todo || 0),
-    'выполненных: ' + (st.done || 0),
-    'синхр: ' + (C.getSyncInfo().status || '—')
-  ];
+  var pst = L.planStats(state.tasks);
+  var tail = ['синхр: ' + (C.getSyncInfo().status || '—')];
   var la = C.getLastAction();
-  if (la) parts.push(la);
+  if (la) tail.push(la);
   /* Срок токена (v144): за 7 дней — мягко в статус, за 3 и после — громко.
    * Без токена или без даты молчим (выключенный синк — норма). */
   try {
-    var st = state.settings || {};
-    if (st.token && st.tokenExp) {
-      var lvl = L.tokenWarnLevel(st.tokenExp, Date.now());
+    var set = state.settings || {};
+    if (set.token && set.tokenExp) {
+      var lvl = L.tokenWarnLevel(set.tokenExp, Date.now());
       if (lvl === 1) {
-        parts.push('Токен до ' + st.tokenExp + ' (' +
-          L.tokenDaysLeft(st.tokenExp, Date.now()) + ' дн.)');
+        tail.push('Токен до ' + set.tokenExp + ' (' +
+          L.tokenDaysLeft(set.tokenExp, Date.now()) + ' дн.)');
       } else if (lvl === 2) {
-        var left = L.tokenDaysLeft(st.tokenExp, Date.now());
-        parts.push(left < 0 ? 'Токен истёк ' + st.tokenExp + ' — синк встал'
+        var left = L.tokenDaysLeft(set.tokenExp, Date.now());
+        tail.push(left < 0 ? 'Токен истёк ' + set.tokenExp + ' — синк встал'
           : 'Токен истекает! Осталось ' + left + ' дн.');
       }
     }
   } catch (x) {}
   var be = C.getBoot().error;
-  if (be) parts.push(be);
-  var txt = parts.join(' · ');
-  if (s) s.textContent = txt;
-  if (ps) ps.textContent = txt;
+  if (be) tail.push(be);
+  if (s) s.textContent = ['Задач: ' + (st.todo || 0),
+    'выполненных: ' + (st.done || 0)].concat(tail).join(' · ');
+  if (ps) ps.textContent = ['Планов: ' + (pst.todo || 0),
+    'выполненных: ' + (pst.done || 0)].concat(tail).join(' · ');
 }
 
 function init(ctx) {

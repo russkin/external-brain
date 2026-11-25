@@ -1125,6 +1125,21 @@ describe('планирование ФАЗА 0: модель и изоляция 
     assert.deepEqual(L.doneShownList([]), []);
     assert.ok(t.length >= 6, 'массив не тронут');
   });
+  it('planStats: живые и выполненные планы для футера (v251)', () => {
+    const t = L.blankTasks();
+    assert.deepEqual(L.planStats(t), { todo: 0, done: 0 }, 'пусто');
+    assert.deepEqual(L.planStats(null), { todo: 0, done: 0 }, 'не-массив');
+    mk(t, 'Обычная', 1000, { id: 'a' });
+    mkPlan(t, 'Ждёт', '16.10.2026', 1000, 'p1');
+    mkPlan(t, 'Сработал', '16.10.2026', 1000, 'p2');
+    L.getTask(t, 'p2').planFired = 555;
+    mkPlan(t, 'Готов', '16.10.2026', 1000, 'p3');
+    L.completeTask(t, 'p3', 2000);
+    mkPlan(t, 'Мёртв', '16.10.2026', 1000, 'p4');
+    L.removeTask(t, 'p4', 2000);
+    assert.deepEqual(L.planStats(t), { todo: 1, done: 2 },
+      'ждущий — живой, сработавший+готовый — выполненные, могила и обычная — мимо');
+  });
   it('planDueTasks: свой planFireHour, битый → 5', () => {
     const t = L.blankTasks();
     mkPlan(t, 'Сегодня', '16.10.2026', 1000, 'p');

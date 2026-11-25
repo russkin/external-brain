@@ -1363,9 +1363,9 @@ describe('v247: целостность данных (FR-105)', () => {
     assert.ok(swSrc.includes("'./src/integrity.js'"), 'нет в ASSETS sw.js');
     assert.ok(pagesYml.includes('src/integrity.js'), 'нет копирования в pages.yml');
   });
-  it('APP_VERSION и CACHE — v250 вместе', () => {
-    assert.ok(/APP_VERSION\s*=\s*'v250'/.test(appSrc), 'APP_VERSION не v250');
-    assert.ok(/CACHE\s*=\s*'extbrain-v250'/.test(swSrc), 'CACHE не extbrain-v250');
+  it('APP_VERSION и CACHE — v251 вместе', () => {
+    assert.ok(/APP_VERSION\s*=\s*'v251'/.test(appSrc), 'APP_VERSION не v251');
+    assert.ok(/CACHE\s*=\s*'extbrain-v251'/.test(swSrc), 'CACHE не extbrain-v251');
   });
   it('без новых localStorage-ключей (грабля 53)', () => {
     /* Слово в комментариях — ок; настоящие вызовы — нет. */
@@ -1815,12 +1815,28 @@ describe('планирование ФАЗА 1: страница плана (FR-9
     assert.ok(!/#planStatus\s*\{/.test(html), 'planStatus переопределяет стиль footer');
     /* Обновление — тем же проходом, что и основной подвал. */
     assert.ok(rendSrc.includes("var ps = el('planStatus')") &&
-      rendSrc.includes('if (ps) ps.textContent = txt'),
+      rendSrc.includes('if (ps) ps.textContent ='),
       'renderStatus не пишет в planStatus');
     /* Ошибки загрузки видны и на странице плана. */
     assert.ok(appSrc.includes("document.getElementById('planStatus')") &&
       appSrc.includes("el('planStatus')"),
       'ошибки boot не пишут в planStatus');
+  });
+  it('v251: футер плана считает планы, а не задачи', () => {
+    assert.ok(logicSrc.includes('function planStats') &&
+      logicSrc.includes('planStats: planStats'),
+      'planStats не в logic/экспорте');
+    assert.ok(rendSrc.includes('L.planStats(state.tasks)'),
+      'renderStatus не зовёт planStats');
+    /* Головы разные: у плана — плановые счётчики, у списка — задачи. */
+    assert.ok(rendSrc.includes("'Планов: ' + (pst.todo || 0)") &&
+      rendSrc.includes("if (ps) ps.textContent"),
+      'в planStatus не плановые счётчики');
+    assert.ok(rendSrc.includes("'Задач: ' + (st.todo || 0)"),
+      '#status потерял счётчик задач');
+    /* Хвост (синхр/действие/токен/ошибка) общий — одна сборка tail. */
+    assert.ok((rendSrc.match(/concat\(tail\)/g) || []).length === 2,
+      'подвалы не собираются из общего хвоста tail');
   });
   it('форма плана в две строки, название с переносом (v196)', () => {
     assert.ok(/<textarea[^>]*id="planInput"/.test(html), 'название не textarea (нет переноса)');

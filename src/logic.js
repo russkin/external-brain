@@ -1091,6 +1091,21 @@ function planTasks(tasks) {
   return active.concat(done);
 }
 
+/* Счётчики планов для футера страницы планирования (v251): живые
+ * (ждущие) и показанные выполненным (planDoneShown — та же метрика, что
+ * секции на экране). Мёртвые и неплановые мимо. */
+function planStats(tasks) {
+  var out = { todo: 0, done: 0 };
+  if (!Array.isArray(tasks)) return out;
+  for (var i = 0; i < tasks.length; i++) {
+    var t = tasks[i];
+    if (!t || t.deleted || !isPlanned(t)) continue;
+    if (planDoneShown(t)) out.done++;
+    else out.todo++;
+  }
+  return out;
+}
+
 function planChildIndent(indent) {
   var v = parseInt(indent, 10);
   if (!(v >= 0)) v = 0;
@@ -1729,6 +1744,7 @@ var api = {
   planChildTitle: planChildTitle,
   planChildIndent: planChildIndent,
   planTasks: planTasks,
+  planStats: planStats,
   normalizeTask: normalizeTask,
   normalizeTasks: normalizeTasks,
   cloneTask: cloneTask,
