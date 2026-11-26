@@ -228,7 +228,7 @@ function diagText() {
   /* Счётчики планов считаем здесь же (v249): строка «Задач» показывает
    * расклад, а не только неплановые — иначе «живых 225» при «Задач: 82»
    * читается как рассинхрон. Раньше цикл жил в блоке «Планирование». */
-  var plN = 0, plW = 0, plF = 0, lastF = 0;
+  var plN = 0, plW = 0, plF = 0, lastF = 0, plDone = 0;
   try {
     recs = state ? state.tasks.length : 0;
     bytes = JSON.stringify(state ? state.tasks : []).length;
@@ -245,6 +245,9 @@ function diagText() {
         liveN++;
         if (C.L.isPlanned(arr[ti])) {
           plN++;
+          /* Выполненные планы — та же метрика, что секции на экране
+           * (v252): status done ИЛИ сработавший planFired. */
+          if (C.L.planDoneShown(arr[ti])) plDone++;
           if (arr[ti].planFired) {
             plF++;
             if (arr[ti].planFired > lastF) lastF = arr[ti].planFired;
@@ -258,8 +261,9 @@ function diagText() {
   for (var id in collapsed) if (collapsed[id]) collapsedN++;
   var lines = [
     'Внешний мозг ' + C.getVersion(),
-    'Задач: ' + alive + ' · готово ' + (st.done || 0) +
-      ' · планов ' + plN + ' (живых всего ' + liveN + ')',
+    'Задач: ' + alive + ' · выполненных ' + (st.done || 0) +
+      ' · планов ' + (plN - plDone) + ' · выполненных ' + plDone +
+      ' (живых всего ' + liveN + ')',
     'Размер: ' + recs + ' записей (живых ' + liveN + ' · удалённых ' + deadN +
       ' (с текстом ' + deadFull + ' · сжатых ' + deadMin + ')) · ' +
       (bytes < 1024 ? bytes + ' Б' : (bytes / 1024).toFixed(1) + ' КБ'),

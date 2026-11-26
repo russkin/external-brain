@@ -115,10 +115,12 @@ describe('устойчивость к рассинхрону кэшей', () => 
       'копия не видна в диагностике');
     /* Диагностика v72: сжатая статистика + синк/размер/сеть/устройство/SW.
      * v249: строка «Задач» несёт расклад (планов + живых всего) — иначе
-     * «живых 225» при «Задач: 82» читается как рассинхрон счётчиков. */
-    assert.ok(diagSrc.includes("'Задач: ' + alive + ' · готово '") &&
-      diagSrc.includes("' · планов ' + plN + ' (живых всего ' + liveN + ')'"),
-      'нет строки «Задач: N · готово M · планов P (живых всего L)»');
+     * «живых 225» при «Задач: 82» читается как рассинхрон счётчиков.
+     * v252: «готово» → «выполненных», планы разбиты на живые/выполненные. */
+    assert.ok(diagSrc.includes("'Задач: ' + alive + ' · выполненных '") &&
+      diagSrc.includes("' · планов ' + (plN - plDone) + ' · выполненных ' + plDone +") &&
+      diagSrc.includes("' (живых всего ' + liveN + ')'"),
+      'нет строки «Задач: N · выполненных M · планов P · выполненных K (живых всего L)»');
     assert.ok(!diagSrc.includes('Лягушка: '), 'строка диагностики про удалённое поле не удалена');
     assert.ok(diagSrc.includes("'Обновление: SW '"), 'нет строки SW/кэша');
     assert.ok(diagSrc.includes('external-brain-synclog-v1'), 'нет времени последнего синка');
@@ -1363,9 +1365,9 @@ describe('v247: целостность данных (FR-105)', () => {
     assert.ok(swSrc.includes("'./src/integrity.js'"), 'нет в ASSETS sw.js');
     assert.ok(pagesYml.includes('src/integrity.js'), 'нет копирования в pages.yml');
   });
-  it('APP_VERSION и CACHE — v251 вместе', () => {
-    assert.ok(/APP_VERSION\s*=\s*'v251'/.test(appSrc), 'APP_VERSION не v251');
-    assert.ok(/CACHE\s*=\s*'extbrain-v251'/.test(swSrc), 'CACHE не extbrain-v251');
+  it('APP_VERSION и CACHE — v252 вместе', () => {
+    assert.ok(/APP_VERSION\s*=\s*'v252'/.test(appSrc), 'APP_VERSION не v252');
+    assert.ok(/CACHE\s*=\s*'extbrain-v252'/.test(swSrc), 'CACHE не extbrain-v252');
   });
   it('без новых localStorage-ключей (грабля 53)', () => {
     /* Слово в комментариях — ок; настоящие вызовы — нет. */
